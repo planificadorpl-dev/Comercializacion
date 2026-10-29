@@ -1,0 +1,179 @@
+{
+  "checklists": [
+    {
+      "id": "chk_1793172472820_qy6u7",
+      "asesor": "Administrador General",
+      "fecha": "2026-10-28",
+      "items": {
+        "afluencia": true,
+        "barridos": true,
+        "competencia": true,
+        "ubicacion": true,
+        "lideres": true,
+        "prospectos": true,
+        "lectura": true,
+        "mangas": true,
+        "conceptos": true,
+        "routers": true,
+        "dispositivos": true,
+        "modelaje": true,
+        "conexion": true,
+        "abordaje": true,
+        "obstaculos": true,
+        "adaptabilidad": true,
+        "postventa": true,
+        "metodologia": true,
+        "beneficios": true,
+        "costo_beneficio": true,
+        "justificacion": true,
+        "tiempos": true,
+        "requerimientos": true,
+        "factibilidad": true,
+        "formatos": true,
+        "reporte": true,
+        "informe": true,
+        "servicios": true,
+        "contactos": true,
+        "canales": true
+      },
+      "cumplimientoPct": 100,
+      "itemsCumplidos": 30,
+      "itemsTotal": 30,
+      "factorScores": {
+        "territorial": {
+          "cumplidos": 6,
+          "total": 6,
+          "pct": 100
+        },
+        "tecnologico": {
+          "cumplidos": 5,
+          "total": 5,
+          "pct": 100
+        },
+        "tactico": {
+          "cumplidos": 7,
+          "total": 7,
+          "pct": 100
+        },
+        "argumentativo": {
+          "cumplidos": 6,
+          "total": 6,
+          "pct": 100
+        },
+        "organizacional": {
+          "cumplidos": 6,
+          "total": 6,
+          "pct": 100
+        }
+      },
+      "createdAt": "2026-10-28T07:27:52.820Z"
+    },
+    {
+      "id": "chk_1793054264308_96k9z",
+      "asesor": "Yeilis Puentes",
+      "fecha": "2026-10-26",
+      "items": {
+        "afluencia": true
+      },
+      "cumplimientoPct": 3,
+      "itemsCumplidos": 1,
+      "itemsTotal": 30,
+      "factorScores": {
+        "territorial": {
+          "cumplidos": 1,
+          "total": 6,
+          "pct": 17
+        },
+        "tecnologico": {
+          "cumplidos": 0,
+          "total": 5,
+          "pct": 0
+        },
+        "tactico": {
+          "cumplidos": 0,
+          "total": 7,
+          "pct": 0
+        },
+        "argumentativo": {
+          "cumplidos": 0,
+          "total": 6,
+          "pct": 0
+        },
+        "organizacional": {
+          "cumplidos": 0,
+          "total": 6,
+          "pct": 0
+        }
+      },
+      "createdAt": "2026-10-26T22:37:44.308Z"
+    },
+    {
+      "id": "chk_1793050385625_17kql",
+      "asesor": "Carlos Ruiz",
+      "fecha": "2026-10-26",
+      "items": {
+        "afluencia": true,
+        "barridos": true,
+        "competencia": true,
+        "ubicacion": true,
+        "lideres": true,
+        "prospectos": true,
+        "lectura": true,
+        "mangas": true,
+        "conceptos": true,
+        "routers": true,
+        "dispositivos": true,
+        "modelaje": true,
+        "conexion": true,
+        "abordaje": true,
+        "obstaculos": true,
+        "adaptabilidad": true,
+        "postventa": true,
+        "metodologia": true,
+        "beneficios": true,
+        "costo_beneficio": true,
+        "justificacion": true,
+        "tiempos": true,
+        "requerimientos": true,
+        "factibilidad": true,
+        "formatos": true,
+        "reporte": true,
+        "informe": true,
+        "servicios": true,
+        "contactos": true,
+        "canales": true
+      },
+      "cumplimientoPct": 100,
+      "itemsCumplidos": 30,
+      "itemsTotal": 30,
+      "factorScores": {
+        "territorial": {
+          "cumplidos": 6,
+          "total": 6,
+          "pct": 100
+        },
+        "tecnologico": {
+          "cumplidos": 5,
+          "total": 5,
+          "pct": 100
+        },
+        "tactico": {
+          "cumplidos": 7,
+          "total": 7,
+          "pct": 100
+        },
+        "argumentativo": {
+          "cumplidos": 6,
+          "total": 6,
+          "pct": 100
+        },
+        "organizacional": {
+          "cumplidos": 6,
+          "total": 6,
+          "pct": 100
+        }
+      },
+      "createdAt": "2026-10-26T21:33:05.625Z"
+    }
+  ]
+}

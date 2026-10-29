@@ -1,0 +1,215 @@
+[
+  {
+    "id": "usr-sup-01",
+    "email": "hmoreno@powerlink.com",
+    "nombre": "Harry Moreno",
+    "rol": "supervisor",
+    "colaboradorId": "Harry Moreno",
+    "activo": true,
+    "passwordHash": "52934f3f4f4549276b750e515b7efadc:d98b79ecf558c6257ced295f1a5ec449f48f8cc02f74edb916e2b7de8a18d550d2fa51975099a288767bd97f10d085d4a082940f54c7716f38683e8a066a9149",
+    "createdAt": "2026-10-27T10:00:00.000Z"
+  },
+  {
+    "id": "usr-28330213",
+    "email": "emarrero@powerlink.com",
+    "nombre": "Emmennis Gabriela Marrero Gonzalez",
+    "rol": "asesor",
+    "colaboradorId": "Gabriela Marrero",
+    "activo": true,
+    "passwordHash": "89fcf807b4e2f0539a005c0f25185ea4:68d49b2a2fc7f345e5126f0abe148bac19fc5c284a578a68d26649f8c3954eb30120c233bb5f4989631989c3ae25a0274feb84e842f60a186762564277882ffe",
+    "createdAt": "2026-10-27T10:00:00.000Z",
+    "lastLogin": "2026-10-27T18:46:47.496Z"
+  },
+  {
+    "id": "usr-admin-01",
+    "email": "admin@powerlink.com",
+    "nombre": "Administrador General",
+    "rol": "admin",
+    "colaboradorId": "Administrador General",
+    "activo": true,
+    "passwordHash": "09ed55413768bbac48feb593539441c7:6b7ffe1dc5a22726b16667db3ee2d055a7fe15aadb2534d1af70264921d6eaa3ff81f1c0acfaf317e17863a6fa12df1cf02b26bc867e1b1543ff2b829f353912",
+    "createdAt": "2026-10-27T10:00:00.000Z",
+    "lastLogin": "2026-10-27T21:14:50.220Z"
+  },
+  {
+    "id": "usr-12880862",
+    "email": "yherrera@powerlink.com",
+    "nombre": "Yaisen Herrera",
+    "rol": "impulsador",
+    "colaboradorId": "Yaisen Herrera",
+    "activo": true,
+    "passwordHash": "10d82d6eaa79d986c1a71497b614dfc6:10eb2f330798309dd5bc40ce940cffac21398d71824d704dd77fa072b70284aa4dca1266baf396b52fa1a3818a5b29cd281faf08e9be75f4ab781035959c74c7",
+    "createdAt": "2026-10-27T16:09:33.329Z",
+    "lastLogin": "2026-10-27T16:59:52.694Z"
+  },
+  {
+    "id": "usr-12415206",
+    "email": "lesqueda@powerlink.com",
+    "nombre": "Lorena Esqueda",
+    "rol": "asesor",
+    "colaboradorId": "Lorena Esqueda",
+    "activo": true,
+    "passwordHash": "6bf99ffaeee669749abb23da388bbef6:335509a7c7f8e89c349f41ec3821335975862b5959fe78a43b62d93e4fa46ec679f9fd0f98169917640147b6cc83f1b0c9fd87054b88f116e1815a7568188c58",
+    "createdAt": "2026-10-27T17:13:24.641Z"
+  },
+  {
+    "id": "usr-27669570",
+    "email": "jmendoza@powerlink.com",
+    "nombre": "Josmeiby Patricia Mendoza Oropeza",
+    "rol": "asesor",
+    "colaboradorId": "Patricia Mendoza",
+    "activo": true,
+    "passwordHash": "ad21bbb1b6a08cdf00f49f4e48fb60de:281033594401092d2be7514e5a18787890bcd9a21eca3928b0299e1b6e7ddc67cfd17c9d47615ed25b845f987a81f011e012314de92484b301aa300f28801f32",
+    "createdAt": "2026-10-27T17:13:30.346Z"
+  },
+  {
+    "id": "usr-19586788",
+    "email": "gochoa@powerlink.com",
+    "nombre": "Genesis Joliana Ochoa Rodriguez",
+    "rol": "asesor",
+    "colaboradorId": "Génesis Ochoa",
+    "activo": true,
+    "passwordHash": "ed744707aa79d63cec0c59dc5ba5012c:42222458873eb7dbd3166887c22333c58a8722fe3176568549cfb33fa0953c713fe0cb2f55e093d29b7a723fc90aefb7c2bd3a84dfebe44956de173ebfe4e0b2",
+    "createdAt": "2026-10-27T17:13:37.490Z"
+  },
+  {
+    "id": "usr-16146572",
+    "email": "yteran@powerlink.com",
+    "nombre": "Yesenia Yusmary Terán Parisca",
+    "rol": "asesor",
+    "colaboradorId": "Yesenia Terán",
+    "activo": true,
+    "passwordHash": "bd64a882c1c8be2f32b033a57309898a:7d8267f7f8020d6bbbf532d5fd212cd28b1050637aedd14d90f599f73e165c0224db77b0db4abd99907bbd02ccd3b8151195f33046ce0d77d4f09ad5c4fb6907",
+    "createdAt": "2026-10-27T17:13:40.839Z"
+  },
+  {
+    "id": "usr-18313894",
+    "email": "bberroteran@powerlink.com",
+    "nombre": "Branin Enrique Berroteran Alvarez",
+    "rol": "asesor",
+    "colaboradorId": "Branin Berroteran",
+    "activo": true,
+    "passwordHash": "681caa1dcdba5424a9e9391128921022:d8be534ca1f74f8b6c7453ff522e1abf7493eeafd90ac569d9a095e01a8060f690cd57e745439a58cad2ff47dae7914b50a94e0523e98e330fe9f2120b7e7d6a",
+    "createdAt": "2026-10-27T17:13:42.401Z"
+  },
+  {
+    "id": "usr-25386013",
+    "email": "dtorres@powerlink.com",
+    "nombre": "Daiana Del Carmen Torres Coronado",
+    "rol": "asesor",
+    "colaboradorId": "Daiana Torres",
+    "activo": true,
+    "passwordHash": "612d9e15e97faa916dd0b044a679fe1c:30d9a6fa7ce399f412d9cca81bb6b7edf2c1cc1aa440965382d31e9a7785babe1782ac3454bb7f47ae409edf98360fcee5c09e56484e281991a7325e5779814b",
+    "createdAt": "2026-10-27T17:13:42.878Z"
+  },
+  {
+    "id": "usr-27805308",
+    "email": "smanrique@powerlink.com",
+    "nombre": "Stephany José Manrique",
+    "rol": "asesor",
+    "colaboradorId": "Stephany Manrique",
+    "activo": true,
+    "passwordHash": "b129bee7c7ed3953ff5d70ffea9a818c:f23654193ca22ba2f93f87b9821722b4fe83cc13975b7552529ec929cd4b913bd3fd85eb36495552671ef778d0731d471081cd7dfa03f78e94edde0c0c11d5bb",
+    "createdAt": "2026-10-27T17:13:43.389Z"
+  },
+  {
+    "id": "usr-12111509",
+    "email": "cinfante@powerlink.com",
+    "nombre": "Cindy Infante",
+    "rol": "asesor",
+    "colaboradorId": "Cindy Infante",
+    "activo": true,
+    "passwordHash": "124ca3b704a75ced2e17c3321fd9e2a4:1253bc78d6d46a7a64559e40d3ee0c7b372a4058c66a96853ba89f41efbab88482699bcbec12b12916bf7bc7c53203f409d0ee647bbfe7b4a63ecc364e71aaff",
+    "createdAt": "2026-10-27T17:13:44.530Z"
+  },
+  {
+    "id": "usr-30667576",
+    "email": "ycarvajal@powerlink.com",
+    "nombre": "Yuliana Armelih Carvajal Suarez",
+    "rol": "asesor",
+    "colaboradorId": "Yuliana Carvajal",
+    "activo": true,
+    "passwordHash": "0e1dc28236154d7e9c0e711062884be2:954fbb9d159c6e69fdccc4efd7b16f518fc64286c8e853b584ba4d45ad23ea52d430e073eec9064a8d0cee0ddf62d2e8fecf02237c5540b97a836e368af55976",
+    "createdAt": "2026-10-27T17:13:45.335Z"
+  },
+  {
+    "id": "usr-28463353",
+    "email": "mazuaje@powerlink.com",
+    "nombre": "María Alejandra Azuaje Araujo",
+    "rol": "asesor",
+    "colaboradorId": "María Azuaje",
+    "activo": true,
+    "passwordHash": "f15f4007e55b494055cf74658917b2f2:8f3f8440fc2e52414bb5447cc1bdf44911b856f43eeb6cb244ec9230398a3895ad515d5bdce797b3447d42bc2f6c089c75114170a4df9aca51c695a12d3effc5",
+    "createdAt": "2026-10-27T17:13:45.621Z"
+  },
+  {
+    "id": "usr-25948398",
+    "email": "ygonzalez@powerlink.com",
+    "nombre": "Yilda Samantha González Rujano",
+    "rol": "asesor",
+    "colaboradorId": "Yilda González",
+    "activo": true,
+    "passwordHash": "a79917351beb0b4875f7883b030a6420:d88c02979f902ebeea385017e1efc57a20642ebd396476dc7c04ea91203e36229a67da439b5566918eda3cdb757a9dd2b4565fff092879464fc1785c0892fa5d",
+    "createdAt": "2026-10-27T17:13:46.009Z"
+  },
+  {
+    "id": "usr-19931012",
+    "email": "yrodriguez@powerlink.com",
+    "nombre": "Yamery de los Angeles Rodríguez Mezones",
+    "rol": "asesor",
+    "colaboradorId": "Yamery Rodríguez",
+    "activo": true,
+    "passwordHash": "e7c3522c204cafd923be4ed1b240b7c8:f982ef34ebd974cb1754c606992f3c3bb605d1d2267cf8f288312c175ef96c94fedcbb6446145308ba9b3d6538bbdc78333f3091372fa7c6ac6b23218c59bb3c",
+    "createdAt": "2026-10-27T17:13:47.478Z"
+  },
+  {
+    "id": "usr-32412499",
+    "email": "amontana@powerlink.com",
+    "nombre": "Arianna Estefania Montaña Hernández",
+    "rol": "asesor",
+    "colaboradorId": "Arianna Montaña",
+    "activo": true,
+    "passwordHash": "45cc563cb2cb5af3c5c44fe37c680309:fbe49d00f1ce40ef68d6f7cca3cfecf773d40b01101794f07d22edf3449ca1bb48c59dea459232f163961815641fe43207c0eec2c0f2fd9457a4299d6e9e8201",
+    "createdAt": "2026-10-27T17:14:04.076Z"
+  },
+  {
+    "id": "usr-33510353",
+    "email": "dmendoza@powerlink.com",
+    "nombre": "Diarnelis Paola Mendoza Mérida",
+    "rol": "asesor",
+    "colaboradorId": "Diarnelis Mendoza",
+    "activo": true,
+    "passwordHash": "345496e69e658350c34a0af769f6cb4d:75daa747e62907972d4987e70a6bf1bdaa876c7aef2552cbb08057e67dcbb41cdeaecb4a11c737a1587ca15fd6506afb01f5f72b73e2b0c25f4423e2d0344b0f",
+    "createdAt": "2026-10-27T17:14:06.007Z"
+  },
+  {
+    "id": "usr-29751755",
+    "email": "aplaza@powerlink.com",
+    "nombre": "Andrea Danyelit Plaza Seijas",
+    "rol": "asesor",
+    "colaboradorId": "Andrea Plaza",
+    "activo": true,
+    "passwordHash": "bb07913e03d369ddb4bfb2bd415790d5:98bc59ca7939e5e57877b25624da9909efaee0b3ed3f2d684e7620c5c1eb3e45778e40d433535c3af26ae299a9274a9d31cdbb960406ffd7ecf33af3d15f5cd5",
+    "createdAt": "2026-10-27T17:14:07.186Z"
+  },
+  {
+    "id": "usr-28330486",
+    "email": "dmunoz@powerlink.com",
+    "nombre": "Danyelis Nicleimy Muñoz Yedra",
+    "rol": "asesor",
+    "colaboradorId": "Danyelis Muñoz",
+    "activo": true,
+    "passwordHash": "8050c64d6953f512206bbbf98e7b3b15:d579a83aaab40bace31b49a0b0dc0db00587b2bebe49a0615392554902bf4efbd1ffd83dafeb84d62be2dfa8fb64c03c013723f9cc09abee856dba4e50f51771",
+    "createdAt": "2026-10-27T17:14:08.068Z"
+  },
+  {
+    "id": "usr-27908614",
+    "email": "ntovar@powerlink.com",
+    "nombre": "Naomi Carolina Tovar Gauna",
+    "rol": "asesor",
+    "colaboradorId": "Naomi Tovar",
+    "activo": true,
+    "passwordHash": "22941835dbb257e4f41be179253cb643:e50ac91109060eddfeeed04863fc309a7511254639a1438e1765c99677a2a62440204625ba61e75bf53b56a4fc581d7574fac12aa52a2ff63c2bf851bef7ec17",
+    "createdAt": "2026-10-27T17:14:08.475Z"
+  }
+]

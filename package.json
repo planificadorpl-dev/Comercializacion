@@ -1,0 +1,52 @@
+{
+  "name": "dashboard-ventas",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3001",
+    "tunnel": "npx localtunnel --port 3001",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3001",
+    "lint": "eslint",
+    "db:migrate": "node scripts/migrate-to-postgres.js",
+    "db:import-sheets": "node scripts/import-sheets-to-postgres.js",
+    "db:sync-sheets": "node scripts/sync-sheets.js"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@radix-ui/react-dropdown-menu": "^2.1.25",
+    "@radix-ui/react-slot": "^1.4.0",
+    "@radix-ui/react-switch": "^1.3.8",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "file-saver": "^2.0.5",
+    "framer-motion": "^14.0.0",
+    "googleapis": "^185.0.0",
+    "lucide-react": "^1.54.0",
+    "motion": "^14.0.0",
+    "next": "^16.4.3",
+    "pg": "^8.23.1",
+    "postcss": "^8.5.29",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "recharts": "^3.10.1",
+    "tailwind-merge": "^3.7.0",
+    "tw-animate-css": "^1.4.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "26.6.4",
+    "@types/pg": "^8.23.1",
+    "@types/react": "19.3.0",
+    "eslint": "^9",
+    "eslint-config-next": "^16.4.3",
+    "tailwindcss": "^4"
+  }
+}

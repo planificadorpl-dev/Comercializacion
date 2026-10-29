@@ -1,0 +1,160 @@
+{
+  "departamentos": [
+    {
+      "id": "ventas",
+      "nombre": "Comercialización",
+      "descripcion": "Gestión comercial, asesores de campo y prospección.",
+      "color": "emerald",
+      "responsable": "Harry Moreno"
+    },
+    {
+      "id": "tecnico",
+      "nombre": "Instalaciones ",
+      "descripcion": "Equipos técnicos, instalaciones.",
+      "color": "sky",
+      "responsable": "Jesús Lima"
+    },
+    {
+      "id": "administracion",
+      "nombre": "Administración",
+      "descripcion": "Gestión financiera, facturación, recursos y soporte interno",
+      "color": "purple",
+      "responsable": "Delia Moniz"
+    },
+    {
+      "id": "atencion_cliente",
+      "nombre": "Atención al Cliente / Soporte",
+      "descripcion": "Recepción de solicitudes, taquillas presenciales y call center",
+      "color": "amber",
+      "responsable": "Ceciret Giron "
+    },
+    {
+      "id": "planificaci_n_6883",
+      "nombre": "Planificación",
+      "descripcion": "Logística, Instalaciones y rutas.",
+      "color": "emerald",
+      "responsable": "Jesús Lima"
+    },
+    {
+      "id": "soporte_t_cnico_3046",
+      "nombre": "Soporte Técnico",
+      "descripcion": "Asistencia técnica y Fallas",
+      "color": "emerald",
+      "responsable": "Roberto Santos"
+    },
+    {
+      "id": "distribuci_n_6504",
+      "nombre": "Distribución",
+      "descripcion": "Infraestructura",
+      "color": "emerald",
+      "responsable": "Francisco Reyes"
+    },
+    {
+      "id": "afectaciones__9818",
+      "nombre": "Afectaciones",
+      "descripcion": "Fallas",
+      "color": "emerald",
+      "responsable": "Roberto Santos"
+    }
+  ],
+  "sedesTaquilla": [
+    {
+      "id": "ali-primera",
+      "nombre": "Alí Primera",
+      "direccion": "Estación Alí Primera, Módulo de Atención",
+      "ciudad": "Los Teques",
+      "telefono": "+58 212-0000006",
+      "activo": true
+    },
+    {
+      "id": "call-center",
+      "nombre": "Call Center / Virtual",
+      "direccion": "Atención Remota y WhatsApp Corporativo",
+      "ciudad": "Digital / Remoto",
+      "telefono": "+58 800-0000000",
+      "activo": true
+    },
+    {
+      "id": "colinas",
+      "nombre": "Colinas",
+      "direccion": "Colinas de Bello Monte, Av. Miguel Ángel",
+      "ciudad": "Caracas",
+      "telefono": "+58 212-0000005",
+      "activo": true
+    },
+    {
+      "id": "independencia",
+      "nombre": "Independencia",
+      "direccion": "Av. Independencia, Edif. Torre Central",
+      "ciudad": "Caracas",
+      "telefono": "+58 212-0000002",
+      "activo": true
+    },
+    {
+      "id": "las-tejerias",
+      "nombre": "Las Tejerías",
+      "direccion": "Sector Casco Central, Calle Principal",
+      "ciudad": "Aragua",
+      "telefono": "+58 244-0000003",
+      "activo": true
+    },
+    {
+      "id": "propatria",
+      "nombre": "Propatria",
+      "direccion": "Centro Comercial Propatria, Nivel 1",
+      "ciudad": "Caracas",
+      "telefono": "+58 212-0000004",
+      "activo": true
+    },
+    {
+      "id": "valle",
+      "nombre": "Valle",
+      "direccion": "Av. Intercomunal de El Valle, Centro Comercial",
+      "ciudad": "Caracas",
+      "telefono": "+58 212-0000001",
+      "activo": true
+    }
+  ],
+  "canalesComerciales": [
+    {
+      "id": "externo-aliados",
+      "nombre": "Aliados Comerciales y Externos",
+      "tipo": "externo",
+      "descripcion": "Promotores autorizados, distribuidores y aliados comerciales",
+      "comisionPct": 4,
+      "activo": true
+    },
+    {
+      "id": "call-center-inbound",
+      "nombre": "Call Center / Ventas Digitales",
+      "tipo": "virtual",
+      "descripcion": "Cierres por WhatsApp Bot, campañas de redes y llamadas inbound",
+      "comisionPct": 3,
+      "activo": true
+    },
+    {
+      "id": "planificacion",
+      "nombre": "Planificación y Agenda",
+      "tipo": "planificacion",
+      "descripcion": "Agendamiento centralizado, gestión de citas e incidencias",
+      "comisionPct": 0,
+      "activo": true
+    },
+    {
+      "id": "taquilla-sede",
+      "nombre": "Taquilla / Sede Física",
+      "tipo": "taquilla",
+      "descripcion": "Recepción presencial de usuarios y clientes en agencias",
+      "comisionPct": 2.5,
+      "activo": true
+    },
+    {
+      "id": "ventas-calle",
+      "nombre": "Ventas de Calle (Comercial)",
+      "tipo": "comercial",
+      "descripcion": "Fuerza de ventas externa, puerta a puerta y eventos zonales",
+      "comisionPct": 5,
+      "activo": true
+    }
+  ]
+}

@@ -1,0 +1,512 @@
+{
+  "overrides": {
+    "Gina": {
+      "type": "planificacion",
+      "updatedAt": "2026-10-14T02:16:21.398Z"
+    },
+    "Dixon": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T03:40:58.627Z"
+    },
+    "Xaori": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Johanna": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Yosmery": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Carlos Ruiz": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-27T14:24:41.727Z",
+      "isExCollaborator": true
+    },
+    "Ivoon Viana": {
+      "type": "taquilla",
+      "office": "Alí Primera",
+      "updatedAt": "2026-10-14T03:40:41.600Z"
+    },
+    "Jafet Mauro": {
+      "type": "taquilla",
+      "office": "Call Center / Virtual",
+      "updatedAt": "2026-10-14T02:17:43.922Z"
+    },
+    "Junior Orta": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T03:57:21.273Z",
+      "isExCollaborator": false
+    },
+    "Karla Reyes": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T03:43:30.029Z"
+    },
+    "Rosny Reyna": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Xaori Gomez": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Accel Moreno": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Andrea Plaza": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Devi Alayón": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Harry Moreno": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T03:43:07.790Z"
+    },
+    "Johana Parra": {
+      "type": "externo",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "José Mujica": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T02:19:34.834Z"
+    },
+    "Juan Mijares": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Lis Figueira": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Michel Ochoa": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Ronal Vargas": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Abel Mousello": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Andres Moreno": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Cindy Infante": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "César Aponte": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T03:43:17.236Z"
+    },
+    "Daiana Torres": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Dayhomy Vivas": {
+      "type": "planificacion",
+      "updatedAt": "2026-10-14T02:16:25.872Z"
+    },
+    "Haymar Barros": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Johanna Parra": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Maryori Abreu": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T03:43:03.055Z"
+    },
+    "María Azuaje": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Paola Mendoza": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T02:16:19.095Z"
+    },
+    "Roxana Yépez": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Salem Caldera": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Xahory Gómez": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Yairlin Rojas": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T02:18:56.488Z"
+    },
+    "Yeylis Puente": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Angely Milazzo": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T03:43:19.243Z"
+    },
+    "Carla Figueroa": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Daniel Figuera": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Gracie Cruzado": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-27T14:24:41.729Z",
+      "isExCollaborator": true
+    },
+    "Génesis Ochoa": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Lorena Esqueda": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-28T18:25:00.089Z",
+      "isExCollaborator": false
+    },
+    "Maria Quintero": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Mariangel Soto": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Yaisen Herrera": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Yanely Dávila": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Yeilis Puentes": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Yesenia Terán": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Francisco Reyes": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T02:18:07.388Z"
+    },
+    "Greacie Cruzado": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-27T14:24:41.729Z",
+      "isExCollaborator": true
+    },
+    "Héctor Mendoza": {
+      "type": "taquilla",
+      "office": "Valle",
+      "updatedAt": "2026-10-14T04:36:24.537Z",
+      "isExCollaborator": false
+    },
+    "Jefferson Plaza": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T02:18:54.864Z"
+    },
+    "Karla Rodriguez": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T02:18:39.953Z"
+    },
+    "Lisbray Suárez": {
+      "type": "taquilla",
+      "office": "Colinas",
+      "updatedAt": "2026-10-14T02:19:38.069Z"
+    },
+    "Mauricio Sayago": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Yilda González": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Ariadne Manrique": {
+      "type": "taquilla",
+      "office": "Call Center / Virtual",
+      "updatedAt": "2026-10-14T02:17:48.160Z"
+    },
+    "Arianna Montaña": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Barbara Montilla": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T03:43:11.265Z"
+    },
+    "Diego Rodríguez": {
+      "type": "externo",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Gabriel Sánchez": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T02:18:19.749Z"
+    },
+    "Gabriela Marrero": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Jose Machillanda": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Patricia Mendoza": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Viviana Carreño": {
+      "type": "taquilla",
+      "office": "Alí Primera",
+      "updatedAt": "2026-10-14T03:41:56.996Z"
+    },
+    "Yanery Rodriguez": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Yaselle Sánchez": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Yuliana Carvajal": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Alejandro Camacho": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T03:43:25.335Z"
+    },
+    "Brainin Berrotera": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Branin Berroteran": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Bárbara Márquez": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Diarnelis Mendoza": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Esmeralda Delgado": {
+      "type": "taquilla",
+      "office": "Colinas",
+      "updatedAt": "2026-10-14T02:18:53.413Z"
+    },
+    "Gabriela Termotto": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Neisbeth Prazuela": {
+      "type": "taquilla",
+      "office": "Valle",
+      "updatedAt": "2026-10-14T02:18:24.593Z"
+    },
+    "Stephany Manrique": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Yamery Rodríguez": {
+      "type": "comercial",
+      "status": "fijo",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": false
+    },
+    "Yezabel Fernandez": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Aurimar Solórzano": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Brainin Berroteran": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Hernán Fernández": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T02:17:52.520Z"
+    },
+    "Yosmery Hernández": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Brayerlin Rodriguez": {
+      "type": "comercial",
+      "status": "ex",
+      "updatedAt": "2026-10-15T19:38:45.473Z",
+      "isExCollaborator": true
+    },
+    "Daleska Berroterán": {
+      "type": "planificacion",
+      "updatedAt": "2026-10-14T02:16:19.585Z"
+    },
+    "Stephanie Contreras": {
+      "type": "taquilla",
+      "office": "Valle",
+      "updatedAt": "2026-10-14T02:18:03.725Z"
+    },
+    "Brayerlyn Rodríguez": {
+      "type": "externo",
+      "updatedAt": "2026-10-14T02:18:37.631Z"
+    },
+    "Sebastián Rodríguez": {
+      "type": "taquilla",
+      "office": "Call Center / Virtual",
+      "updatedAt": "2026-10-14T03:42:22.300Z"
+    }
+  },
+  "aliases": {
+    "Arianna": "Arianna Montaña",
+    "Stephanie": "Stephanie Contreras",
+    "Xaori Gomez": "Xahory Gómez",
+    "Lis Figueira": "Lisbray Suárez",
+    "Johanna Parra": "Johana Parra",
+    "Yeilis Puente": "Yeilis Puentes",
+    "Yeylis Puente": "Yeilis Puentes",
+    "Yeylis Puentes": "Yeilis Puentes",
+    "Dianelis Mendoza": "Diarnelis Mendoza",
+    "Yanery Rodriguez": "Yamery Rodríguez",
+    "Brainin Berrotera": "Branin Berroteran",
+    "Brainin Berroteran": "Branin Berroteran",
+    "Brayerlin Rodriguez": "Brayerlyn Rodríguez",
+    "Daleska Berroterán": "Endely Vegas"
+  },
+  "technicianOverrides": {},
+  "technicianAliases": {}
+}
