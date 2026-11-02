@@ -142,6 +142,11 @@ export const MONTH_ORDER = [
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
 ];
 
+export function getCurrentSpanishMonth(): string {
+    const currentMonthIdx = new Date().getMonth();
+    return MONTH_ORDER[currentMonthIdx] || "Noviembre";
+}
+
 export function getMonthIndex(month: string): number {
     const norm = String(month || "").trim().toUpperCase();
     const idx = MONTH_ORDER.findIndex(m => m.toUpperCase() === norm);

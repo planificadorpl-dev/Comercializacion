@@ -25,15 +25,83 @@ import { getPlanes, getSolicitudes, saveSolicitud, deleteSolicitud } from "@/app
 import { cn } from "@/lib/utils";
 
 const FUENTES_CAPTACION = [
+  "Vía Telefónica",
   "Recorrido Comercial",
   "Punto Fijo / Stand",
   "Visita Puerta a Puerta",
   "Referido",
   "Redes Sociales",
-  "Llamada Telefónica",
   "Reunión de Condominio",
   "Evento",
 ];
+
+const CONTRATO_ANTERIOR_OPTIONS = ["NO", "SI"];
+const ROUTER_OPTIONS = ["SI", "NO"];
+
+function formatToDDMMYYYY(val: string | null | undefined): string {
+  if (!val) return "";
+  const clean = String(val).trim();
+  const parts = clean.split(/[\/\-]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      // YYYY-MM-DD
+      const [y, m, d] = parts;
+      return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+    } else {
+      // DD-MM-YYYY or DD/MM/YYYY
+      const [d, m, y] = parts;
+      return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+    }
+  }
+  return clean;
+}
+
+function buildWhatsAppSolicitudMessage(data: {
+  fechaSolicitud?: string;
+  fechaDisponibilidad?: string;
+  nombreCompleto: string;
+  cedula: string;
+  telefonoPrincipal: string;
+  telefonoSecundario?: string | null;
+  ubicacion: string;
+  tipoServicio: string;
+  asesor: string;
+  correo?: string | null;
+  fechaNacimiento?: string | null;
+  contratoAnterior?: string | null;
+  fuente: string;
+  router?: string | boolean | null;
+  observaciones?: string | null;
+}): string {
+  const fSol = formatToDDMMYYYY(data.fechaSolicitud || new Date().toISOString().split("T")[0]);
+  const fDisp = formatToDDMMYYYY(data.fechaDisponibilidad || data.fechaSolicitud || new Date().toISOString().split("T")[0]);
+  const fNac = formatToDDMMYYYY(data.fechaNacimiento);
+  const cleanCed = String(data.cedula || "").replace(/^[VEJGvejg]-/, "").trim();
+  const rtr = (data.router && (data.router === "SI" || data.router === "si" || data.router === true)) ? "si" : "no";
+  const cont = (data.contratoAnterior && String(data.contratoAnterior).toUpperCase() === "SI") ? "SI" : "NO";
+
+  let msg = `Nueva Solicitud de Servicio\n\n`;
+  msg += `Fecha de Solicitud: ${fSol}\n`;
+  msg += `Disponibilidad: ${fDisp}\n`;
+  msg += `Nombre y Apellido: ${data.nombreCompleto}\n`;
+  msg += `Cédula/RIF: ${cleanCed || data.cedula}\n`;
+  msg += `Contacto 1: ${data.telefonoPrincipal}\n`;
+  msg += `Contacto 2: ${data.telefonoSecundario || ""}\n`;
+  msg += `Ubicación: ${data.ubicacion}\n`;
+  msg += `Tipo de Servicio: ${data.tipoServicio}\n`;
+  msg += `Asesor: ${data.asesor}\n`;
+  msg += `Correo: ${data.correo || ""}\n`;
+  msg += `Fecha de Nacimiento: ${fNac}\n`;
+  msg += `¿Posee contrato anterior?: ${cont}\n`;
+  msg += `Fuente: ${data.fuente}\n`;
+  msg += `Router: ${rtr}\n`;
+
+  if (data.observaciones && data.observaciones.trim()) {
+    msg += `Notas: ${data.observaciones.trim()}\n`;
+  }
+
+  return msg;
+}
 
 const TIPOS_SERVICIO = ["Domiciliario", "Empresarial"];
 const CEDULA_PREFIXES = ["V-", "E-", "J-", "G-"];
@@ -67,6 +135,9 @@ function SolicitudesContent() {
   }, [currentAsesor, isAdmin, user?.nombre]);
 
   // Form state
+  const [fechaSolicitud, setFechaSolicitud] = useState(
+    new Date().toISOString().split("T")[0]
+  );
   const [nombres, setNombres] = useState("");
   const [apellidos, setApellidos] = useState("");
   const [cedulaPrefix, setCedulaPrefix] = useState("V-");
@@ -77,6 +148,7 @@ function SolicitudesContent() {
   const [fechaDisponibilidad, setFechaDisponibilidad] = useState(
     new Date().toISOString().split("T")[0]
   );
+  const [fechaNacimiento, setFechaNacimiento] = useState("");
 
   // Geography cascade
   const [estado, setEstado] = useState("Miranda");
@@ -89,6 +161,8 @@ function SolicitudesContent() {
   const [tipoServicio, setTipoServicio] = useState("Domiciliario");
   const [planesList, setPlanesList] = useState<any[]>(() => cachedPlanesList);
   const [planSeleccionado, setPlanSeleccionado] = useState("");
+  const [contratoAnterior, setContratoAnterior] = useState("NO");
+  const [router, setRouter] = useState("SI");
   const [fuente, setFuente] = useState(FUENTES_CAPTACION[0]);
   const [observaciones, setObservaciones] = useState("");
 
@@ -177,45 +251,61 @@ function SolicitudesContent() {
     }
 
     setSaving(true);
-    const cedulaCompleta = `${cedulaPrefix}${cedulaNumero.trim()}`;
+    const cleanCedula = cedulaNumero.trim();
+    const cedulaCompleta = `${cedulaPrefix}${cleanCedula}`;
+    const nombreCompleto = `${nombres.trim()} ${apellidos.trim()}`;
 
     const newSolicitud = {
       nombres: nombres.trim(),
       apellidos: apellidos.trim(),
+      nombre_cliente: nombreCompleto,
       cedula: cedulaCompleta,
       genero: "No especificado",
       telefono_principal: telefonoPrincipal.trim(),
       telefono_secundario: telefonoSecundario.trim() || null,
+      telefono: telefonoPrincipal.trim(),
       correo: correo.trim() || null,
+      fecha_solicitud: fechaSolicitud,
       fecha_disponibilidad: fechaDisponibilidad,
+      fecha_nacimiento: fechaNacimiento || null,
+      contrato_anterior: contratoAnterior,
+      power_go: router === "SI",
       estado,
       municipio,
       parroquia,
       sector: sector || null,
       direccion: direccion.trim() || "No especificada",
+      ubicacion: direccion.trim() || `${estado}, ${municipio}, ${parroquia}${sector ? `, ${sector}` : ""}`,
       tipo_servicio: tipoServicio,
       plan: planSeleccionado,
+      tipo_operacion: "Instalación",
       fuente,
       promotor: effectiveAsesor,
+      asesor_normalizado: effectiveAsesor,
       observaciones: observaciones.trim() || null,
+      estatus: "Pendiente",
     };
 
     try {
       await saveSolicitud(newSolicitud);
 
-      // Construct WhatsApp message
-      let msg = `*SOLICITUD DE SERVICIO - POWER LINK*\n\n`;
-      msg += `*Cliente:* ${newSolicitud.nombres} ${newSolicitud.apellidos}\n`;
-      msg += `*Cédula/RIF:* ${newSolicitud.cedula}\n`;
-      msg += `*Teléfono:* ${newSolicitud.telefono_principal}\n`;
-      if (newSolicitud.telefono_secundario) msg += `*Tel. Secundario:* ${newSolicitud.telefono_secundario}\n`;
-      msg += `*Ubicación:* ${estado}, ${municipio}, ${parroquia}${sector ? `, ${sector}` : ""}\n`;
-      msg += `*Dirección:* ${newSolicitud.direccion}\n`;
-      msg += `*Servicio:* ${tipoServicio} - ${planSeleccionado}\n`;
-      msg += `*Disponibilidad:* ${fechaDisponibilidad}\n`;
-      msg += `*Fuente:* ${fuente}\n`;
-      msg += `*Asesor:* ${effectiveAsesor}\n`;
-      if (newSolicitud.observaciones) msg += `*Notas:* ${newSolicitud.observaciones}\n`;
+      const msg = buildWhatsAppSolicitudMessage({
+        fechaSolicitud,
+        fechaDisponibilidad,
+        nombreCompleto,
+        cedula: cleanCedula,
+        telefonoPrincipal: telefonoPrincipal.trim(),
+        telefonoSecundario: telefonoSecundario.trim() || null,
+        ubicacion: newSolicitud.direccion,
+        tipoServicio: planSeleccionado,
+        asesor: effectiveAsesor,
+        correo: correo.trim() || null,
+        fechaNacimiento: fechaNacimiento || null,
+        contratoAnterior,
+        fuente,
+        router,
+        observaciones: observaciones.trim() || null,
+      });
 
       setToastMsg({ text: "Solicitud registrada con éxito", type: "success" });
 
@@ -226,8 +316,11 @@ function SolicitudesContent() {
       setTelefonoPrincipal("");
       setTelefonoSecundario("");
       setCorreo("");
+      setFechaNacimiento("");
       setDireccion("");
       setObservaciones("");
+      setContratoAnterior("NO");
+      setRouter("SI");
 
       // Open WhatsApp
       const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
@@ -396,24 +489,46 @@ function SolicitudesContent() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[11px] text-neutral-500 block">Correo electrónico (opcional)</label>
+                  <input
+                    type="email"
+                    value={correo}
+                    onChange={(e) => setCorreo(e.target.value)}
+                    placeholder="cliente@gmail.com"
+                    className="w-full py-2 px-1 text-xs border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[11px] text-neutral-500 block">Correo electrónico (opcional)</label>
+                    <label className="text-[11px] text-neutral-500 block">Fecha de solicitud</label>
                     <input
-                      type="email"
-                      value={correo}
-                      onChange={(e) => setCorreo(e.target.value)}
-                      placeholder="cliente@gmail.com"
+                      type="date"
+                      value={fechaSolicitud}
+                      onChange={(e) => setFechaSolicitud(e.target.value)}
                       className="w-full py-2 px-1 text-xs border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
+                      required
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] text-neutral-500 block">Fecha estimada de disponibilidad</label>
+                    <label className="text-[11px] text-neutral-500 block">Disponibilidad</label>
                     <input
                       type="date"
                       value={fechaDisponibilidad}
                       onChange={(e) => setFechaDisponibilidad(e.target.value)}
+                      className="w-full py-2 px-1 text-xs border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-neutral-500 block">Fecha de nacimiento (opcional)</label>
+                    <input
+                      type="date"
+                      value={fechaNacimiento}
+                      onChange={(e) => setFechaNacimiento(e.target.value)}
                       className="w-full py-2 px-1 text-xs border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
                     />
                   </div>
@@ -500,7 +615,7 @@ function SolicitudesContent() {
               {/* Sección 3: Plan y Servicio */}
               <div className="space-y-4">
                 <h2 className="text-xs font-semibold text-neutral-900 pb-2 border-b border-neutral-200">
-                  3. Servicio comercial y fuente
+                  3. Servicio comercial y condiciones
                 </h2>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -523,6 +638,26 @@ function SolicitudesContent() {
                     />
                   </div>
 
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-neutral-500 block">¿Posee contrato anterior?</label>
+                    <CustomDropdown
+                      value={contratoAnterior}
+                      options={CONTRATO_ANTERIOR_OPTIONS}
+                      onChange={setContratoAnterior}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-neutral-500 block">Router</label>
+                    <CustomDropdown
+                      value={router}
+                      options={ROUTER_OPTIONS}
+                      onChange={setRouter}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[11px] text-neutral-500 block">Fuente de captación</label>
                     <CustomDropdown
@@ -628,14 +763,23 @@ function SolicitudesContent() {
                           <button
                             type="button"
                             onClick={() => {
-                              let msg = `*SOLICITUD DE SERVICIO*\n\n`;
-                              msg += `Cliente: ${sol.nombres} ${sol.apellidos}\n`;
-                              msg += `Cédula: ${sol.cedula}\n`;
-                              msg += `Teléfono: ${sol.telefono_principal}\n`;
-                              msg += `Plan: ${sol.plan}\n`;
-                              msg += `Ubicación: ${loc}\n`;
-                              msg += `Dirección: ${sol.direccion}\n`;
-                              msg += `Asesor: ${sol.promotor}\n`;
+                              const msg = buildWhatsAppSolicitudMessage({
+                                fechaSolicitud: sol.fecha_solicitud || sol.created_at,
+                                fechaDisponibilidad: sol.fecha_disponibilidad || sol.fecha_solicitud,
+                                nombreCompleto: sol.nombre_cliente || `${sol.nombres || ""} ${sol.apellidos || ""}`.trim(),
+                                cedula: sol.cedula,
+                                telefonoPrincipal: sol.telefono_principal || sol.telefono || "",
+                                telefonoSecundario: sol.telefono_secundario || "",
+                                ubicacion: sol.direccion || sol.ubicacion || loc || "",
+                                tipoServicio: sol.plan || sol.tipo_servicio || "",
+                                asesor: sol.promotor || sol.asesor_normalizado || "",
+                                correo: sol.correo || "",
+                                fechaNacimiento: sol.fecha_nacimiento || "",
+                                contratoAnterior: sol.contrato_anterior || "NO",
+                                fuente: sol.fuente || "",
+                                router: (sol.power_go === true || String(sol.power_go).toUpperCase() === "SI") ? "SI" : "NO",
+                                observaciones: sol.observaciones || "",
+                              });
                               const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
                               window.open(url, "_blank");
                             }}

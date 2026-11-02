@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { getSheetsClient } from "@/app/lib/googleAuth";
 import { geoHierarchy as fallbackGeoHierarchy } from "@/lib/geo_hierarchy";
 import { formatProperCase } from "@/lib/utils";
+import { getCurrentSpanishMonth } from "@/lib/dashboard-data";
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -566,31 +567,60 @@ export async function getSolicitudes(filters?: {
 }
 
 export async function saveSolicitud(solicitud: any) {
+  // Normalize fields
+  const fechaSol = solicitud.fecha_solicitud || new Date().toISOString();
+  const nombreComp = solicitud.nombre_cliente || `${solicitud.nombres || ""} ${solicitud.apellidos || ""}`.trim();
+  const telPrinc = solicitud.telefono_principal || solicitud.telefono || null;
+  const telSec = solicitud.telefono_secundario || null;
+  const isPowerGo = solicitud.power_go === true || String(solicitud.power_go).toUpperCase() === "SI";
+  const mes = solicitud.mes || getCurrentSpanishMonth();
+
   // 1. PostgreSQL
   try {
     const row = await queryRow(
       `INSERT INTO public.solicitudes (
-         fecha_solicitud, promotor, fuente, nombres, apellidos, cedula,
-         telefono, plan, estado, municipio, parroquia, sector, estatus,
-         tipo_operacion, power_go, created_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+         fecha_solicitud, fecha_disponibilidad, fecha_nacimiento,
+         nombres, apellidos, nombre_cliente, cedula, genero,
+         telefono_principal, telefono_secundario, telefono, correo,
+         direccion, ubicacion, estado, municipio, parroquia, sector,
+         tipo_servicio, plan, tipo_operacion, promotor, asesor_normalizado,
+         contrato_anterior, power_go, fuente, observaciones, estatus, mes, created_at
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+         $21, $22, $23, $24, $25, $26, $27, $28, $29, NOW()
+       )
        RETURNING *`,
       [
-        solicitud.fecha_solicitud || new Date().toISOString(),
-        solicitud.promotor || null,
-        solicitud.fuente || null,
+        fechaSol,
+        solicitud.fecha_disponibilidad || null,
+        solicitud.fecha_nacimiento || null,
         solicitud.nombres || null,
         solicitud.apellidos || null,
+        nombreComp || null,
         solicitud.cedula || null,
-        solicitud.telefono || null,
-        solicitud.plan || null,
+        solicitud.genero || "No especificado",
+        telPrinc,
+        telSec,
+        telPrinc,
+        solicitud.correo || null,
+        solicitud.direccion || null,
+        solicitud.ubicacion || solicitud.direccion || null,
         solicitud.estado || null,
         solicitud.municipio || null,
         solicitud.parroquia || null,
         solicitud.sector || null,
-        solicitud.estatus || "Pendiente",
+        solicitud.tipo_servicio || "Domiciliario",
+        solicitud.plan || null,
         solicitud.tipo_operacion || "Instalación",
-        solicitud.power_go || "NO",
+        solicitud.promotor || null,
+        solicitud.asesor_normalizado || solicitud.promotor || null,
+        solicitud.contrato_anterior || "NO",
+        isPowerGo,
+        solicitud.fuente || null,
+        solicitud.observaciones || null,
+        solicitud.estatus || "Pendiente",
+        mes,
       ]
     );
     if (row) return row;
@@ -600,9 +630,20 @@ export async function saveSolicitud(solicitud: any) {
 
   // 2. Supabase fallback
   const supabase = await createClient();
+  const supabasePayload = {
+    ...solicitud,
+    fecha_solicitud: fechaSol,
+    nombre_cliente: nombreComp,
+    telefono_principal: telPrinc,
+    telefono_secundario: telSec,
+    telefono: telPrinc,
+    power_go: isPowerGo,
+    contrato_anterior: solicitud.contrato_anterior || "NO",
+    mes,
+  };
   const { data, error } = await supabase
     .from("solicitudes")
-    .insert([solicitud])
+    .insert([supabasePayload])
     .select()
     .single();
 
