@@ -202,10 +202,12 @@ export async function fetchRawOperationalData(
                 : Promise.resolve(null),
         ]);
 
-        const [jsonInst, jsonSol] = await Promise.all([
-            resInst.json(),
-            resSol.json()
-        ]);
+        const jsonInst = resInst && resInst.ok
+            ? await resInst.json().catch(() => ({ success: false, data: [] }))
+            : { success: false, data: [] };
+        const jsonSol = resSol && resSol.ok
+            ? await resSol.json().catch(() => ({ success: false, data: [] }))
+            : { success: false, data: [] };
 
         instRaw = jsonInst.success ? jsonInst.data || [] : [];
         solRaw = jsonSol.success ? jsonSol.data || [] : [];
@@ -717,7 +719,7 @@ export async function fetchPlanificacionData(forceRefresh = false): Promise<Plan
         const refreshParam = forceRefresh ? "&refresh=true" : "";
         const url = `/api/sheets?spreadsheetId=${PLANIFICACION_SPREADSHEET_ID}&sheetName=${encodeURIComponent(PLANIFICACION_SHEET_NAME)}${refreshParam}`;
         const res = await fetch(url);
-        const json = await res.json();
+        const json = res.ok ? await res.json().catch(() => ({ success: false, data: [] })) : { success: false, data: [] };
 
         if (!json.success || !Array.isArray(json.data)) {
             return [];

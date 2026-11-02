@@ -41,6 +41,7 @@ async function readEvaluacionesLocal(): Promise<EvaluacionRecord[]> {
 }
 
 async function writeEvaluacionesLocal(evaluaciones: EvaluacionRecord[]): Promise<boolean> {
+  if (process.env.VERCEL) return true;
   try {
     await ensureDirectory();
     await fs.writeFile(

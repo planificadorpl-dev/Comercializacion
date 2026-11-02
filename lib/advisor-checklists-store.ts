@@ -30,6 +30,7 @@ async function readChecklistsLocal(): Promise<AdvisorChecklistRecord[]> {
 }
 
 async function writeChecklistsLocal(list: AdvisorChecklistRecord[]): Promise<boolean> {
+  if (process.env.VERCEL) return true;
   try {
     await ensureDirectory();
     await fs.writeFile(

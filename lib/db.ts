@@ -38,6 +38,7 @@ export function getPool(): Pool {
     max: process.env.NODE_ENV === "production" ? 10 : 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
+    statement_timeout: 8000, // Prevent serverless queries from hanging indefinitely
   };
 
   const poolInstance = new Pool(poolConfig);

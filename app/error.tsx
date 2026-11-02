@@ -24,34 +24,26 @@ export default function ErrorBoundary({
 
         <div className="space-y-1.5 py-2">
           <p className="text-sm font-medium text-neutral-900 tracking-tight">
-            Transición temporal de sesión
+            Inconveniente temporal de conexión
           </p>
           <p className="text-xs text-neutral-500 font-normal">
-            Estamos sincronizando tu sesión con el servidor.
+            No se pudo completar la carga de la vista. Puedes reintentar o volver al inicio.
           </p>
         </div>
 
         <div className="flex items-center justify-center gap-4 pt-2">
           <button
             type="button"
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                window.location.href = "/";
-              } else {
-                reset();
-              }
-            }}
+            onClick={() => reset()}
             className="text-xs font-semibold text-neutral-900 hover:text-emerald-700 transition-colors cursor-pointer py-1.5 px-3"
           >
-            Continuar
+            Reintentar
           </button>
           <button
             type="button"
             onClick={() => {
               if (typeof window !== "undefined") {
                 window.location.reload();
-              } else {
-                reset();
               }
             }}
             className="text-xs font-normal text-neutral-400 hover:text-neutral-800 transition-colors cursor-pointer py-1.5 px-3"
