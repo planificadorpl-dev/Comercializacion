@@ -10,7 +10,10 @@ declare global {
 }
 
 export function isDatabaseConfigured(): boolean {
-  return Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== "");
+  return Boolean(
+    (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== "") ||
+    (process.env.POSTGRES_URL && process.env.POSTGRES_URL.trim() !== "")
+  );
 }
 
 export function getPool(): Pool {
@@ -20,6 +23,7 @@ export function getPool(): Pool {
 
   const connectionString =
     process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
     "postgresql://postgres:postgres@localhost:5432/ventas_intranet";
 
   const isLocalhost =

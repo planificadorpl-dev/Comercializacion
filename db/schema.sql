@@ -136,6 +136,14 @@ CREATE TABLE IF NOT EXISTS public.actividades (
 
 CREATE INDEX IF NOT EXISTS idx_actividades_fecha ON public.actividades(fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_actividades_asesor ON public.actividades(asesor);
+
+ALTER TABLE public.actividades ADD COLUMN IF NOT EXISTS cerrada BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.actividades ADD COLUMN IF NOT EXISTS checklist JSONB;
+ALTER TABLE public.actividades ADD COLUMN IF NOT EXISTS checklist_cumplimiento_pct INT DEFAULT 0;
+ALTER TABLE public.actividades ADD COLUMN IF NOT EXISTS checklist_cumplidos INT DEFAULT 0;
+ALTER TABLE public.actividades ADD COLUMN IF NOT EXISTS checklist_total INT DEFAULT 30;
+ALTER TABLE public.actividades ADD COLUMN IF NOT EXISTS checklist_factor_scores JSONB;
+
 CREATE INDEX IF NOT EXISTS idx_actividades_cerrada ON public.actividades(cerrada);
 
 -- 8. TABLA: advisor_checklists (Guía operativa diaria del asesor de 30 ítems)
@@ -238,6 +246,9 @@ CREATE TABLE IF NOT EXISTS public.planes_config (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT uq_planes UNIQUE (nombre, tipo)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_planes ON public.planes_config(nombre, tipo);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_geodata ON public.geodata_config(estado, municipio, parroquia, sector);
 
 -- 13. TABLA: operadores_competencia (Relevamiento de la competencia y mercado)
 CREATE TABLE IF NOT EXISTS public.operadores_competencia (
