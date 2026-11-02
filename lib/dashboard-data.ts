@@ -701,6 +701,8 @@ export interface PlanificacionRecord {
     servicio?: string;
     oficina?: string;
     municipio?: string;
+    parroquia?: string;
+    tipo_actividad?: string;
     power_go?: string;
     plan?: string;
     tipo_asesor?: AdvisorType;
@@ -764,6 +766,8 @@ export async function fetchPlanificacionData(forceRefresh = false): Promise<Plan
                     municipio: formatProperCase(item.municipio || item.oficina || ""),
                     power_go: item.power_go || "NO",
                     plan: formatProperCase(item.plan || ""),
+                    parroquia: formatProperCase(item.parroquia || item.zona || ""),
+                    tipo_actividad: formatProperCase(item.tipo_actividad || item.plan || "Recorrido"),
                     tipo_asesor: advisorType,
                     es_ex_colaborador: isEx,
                     sede_taquilla: sedeTaquilla,

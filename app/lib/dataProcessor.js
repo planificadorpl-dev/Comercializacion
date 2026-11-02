@@ -323,6 +323,9 @@ function parseCurrencyVal(val) {
         mes: mes,
         asesor: asesor,
         sector: sector,
+        parroquia: parroquia,
+        municipio: municipio,
+        tipo_actividad: actividad,
         zona: parroquia, // Parroquia explícita de la hoja
         oficina: municipio, // Municipio explícito de la hoja
         estado: estado,
