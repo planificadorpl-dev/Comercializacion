@@ -113,6 +113,7 @@ async function readUsersLocal(): Promise<StoredUser[]> {
 }
 
 async function writeUsersLocal(users: StoredUser[]): Promise<void> {
+  if (process.env.VERCEL) return;
   try {
     await fs.mkdir(path.dirname(USERS_FILE_PATH), { recursive: true });
     await fs.writeFile(USERS_FILE_PATH, JSON.stringify(users, null, 2), "utf-8");

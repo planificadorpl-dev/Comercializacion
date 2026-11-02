@@ -91,18 +91,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     // 1. Unauthenticated users must go to /login
     if (!user) {
       if (!isLoginPage) {
-        router.push("/login");
+        window.location.href = "/login";
       }
       return;
     }
 
     // 2. Authenticated user sitting on /login -> redirect to their home
     if (isLoginPage) {
-      if (user.rol === "asesor") {
-        router.push("/actividades");
-      } else {
-        router.push("/");
-      }
+      window.location.href = user.rol === "asesor" ? "/actividades" : "/";
       return;
     }
 
@@ -113,7 +109,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         ADMIN_ROUTES.some((r) => pathname.startsWith(r));
 
       if (isForbidden) {
-        router.push("/actividades");
+        window.location.href = "/actividades";
       }
     } else if (user.rol === "supervisor" || user.rol === "impulsador") {
       // Supervisores / Impulsadores can ONLY see the 3 top panels: /, /planificacion, /evaluaciones
@@ -121,26 +117,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         ADMIN_ROUTES.some((r) => pathname.startsWith(r));
 
       if (isForbidden) {
-        router.push("/");
+        window.location.href = "/";
       }
     }
     // Admins have access to all routes
-  }, [user, isLoading, pathname, router]);
+  }, [user, isLoading, pathname]);
 
   const handleLogin = async (credentials: { emailOrUsername: string; password: string }) => {
     const res = await loginUser(credentials);
     if (res.success && res.user) {
-      setUser(res.user);
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem("ventas_current_user", JSON.stringify(res.user));
         } catch {}
       }
-      if (res.user.rol === "asesor") {
-        router.push("/actividades");
-      } else {
-        router.push("/");
-      }
+      const target = res.user.rol === "asesor" ? "/actividades" : "/";
+      window.location.href = target;
     }
     return res;
   };
@@ -151,9 +143,10 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem("ventas_current_user");
       } catch {}
     }
-    setUser(null);
-    await logoutUser();
-    router.push("/login");
+    try {
+      await logoutUser();
+    } catch {}
+    window.location.href = "/login";
   };
 
   const handleImpersonate = async (targetUserId: string) => {
@@ -161,17 +154,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await impersonateUser(targetUserId);
       if (res.success && res.user) {
-        setUser(res.user);
         if (typeof window !== "undefined") {
           try {
             localStorage.setItem("ventas_current_user", JSON.stringify(res.user));
           } catch {}
         }
-        if (res.user.rol === "asesor") {
-          router.push("/actividades");
-        } else {
-          router.push("/");
-        }
+        const target = res.user.rol === "asesor" ? "/actividades" : "/";
+        window.location.href = target;
       }
       return res;
     } finally {
@@ -184,13 +173,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await stopImpersonation();
       if (res.success && res.user) {
-        setUser(res.user);
         if (typeof window !== "undefined") {
           try {
             localStorage.setItem("ventas_current_user", JSON.stringify(res.user));
           } catch {}
         }
-        router.push("/admin?tab=usuarios");
+        window.location.href = "/admin?tab=usuarios";
       }
       return res;
     } finally {

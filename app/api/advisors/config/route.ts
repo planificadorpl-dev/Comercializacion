@@ -52,6 +52,7 @@ async function readConfigLocal(): Promise<StoredConfig> {
 }
 
 async function writeConfigLocal(config: StoredConfig): Promise<boolean> {
+  if (process.env.VERCEL) return true;
   try {
     await ensureConfigDirectory();
     await fs.writeFile(CONFIG_FILE_PATH, JSON.stringify(config, null, 2), "utf-8");
