@@ -29,6 +29,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
 
 # env files (can opt-in for committing if needed)
 .env*
@@ -36,6 +37,7 @@ yarn-error.log*
 # credentials and sensitive local data
 credentials*.json
 database_backup/
+.mcp.json
 
 # vercel
 .vercel
