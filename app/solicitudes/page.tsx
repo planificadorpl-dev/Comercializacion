@@ -56,6 +56,65 @@ function formatToDDMMYYYY(val: string | null | undefined): string {
   return clean;
 }
 
+function formatFullUbicacion({
+  estado,
+  municipio,
+  parroquia,
+  sector,
+  direccion,
+}: {
+  estado?: string | null;
+  municipio?: string | null;
+  parroquia?: string | null;
+  sector?: string | null;
+  direccion?: string | null;
+}): string {
+  const geoParts: string[] = [];
+
+  const est = (estado || "").trim();
+  const mun = (municipio || "").trim();
+  const par = (parroquia || "").trim();
+  const sec = (sector || "").trim();
+  const dir = (direccion || "").trim();
+
+  if (est) geoParts.push(est);
+  if (mun && mun.toLowerCase() !== est.toLowerCase()) geoParts.push(mun);
+  if (
+    par &&
+    par.toLowerCase() !== mun.toLowerCase() &&
+    par.toLowerCase() !== est.toLowerCase()
+  ) {
+    geoParts.push(par);
+  }
+  if (
+    sec &&
+    sec.toUpperCase() !== "N/A" &&
+    sec.toLowerCase() !== par.toLowerCase()
+  ) {
+    geoParts.push(sec);
+  }
+
+  if (!dir || dir === "No especificada") {
+    return geoParts.join(", ");
+  }
+
+  if (geoParts.length === 0) {
+    return dir;
+  }
+
+  // Deduplicate parts if dir already contains them
+  const dirLower = dir.toLowerCase();
+  const missingParts = geoParts.filter(
+    (p) => !dirLower.includes(p.toLowerCase())
+  );
+
+  if (missingParts.length === 0) {
+    return dir;
+  }
+
+  return `${missingParts.join(", ")}, ${dir}`;
+}
+
 function buildWhatsAppSolicitudMessage(data: {
   fechaSolicitud?: string;
   fechaDisponibilidad?: string;
@@ -255,6 +314,14 @@ function SolicitudesContent() {
     const cedulaCompleta = `${cedulaPrefix}${cleanCedula}`;
     const nombreCompleto = `${nombres.trim()} ${apellidos.trim()}`;
 
+    const fullUbicacion = formatFullUbicacion({
+      estado,
+      municipio,
+      parroquia,
+      sector,
+      direccion,
+    });
+
     const newSolicitud = {
       nombres: nombres.trim(),
       apellidos: apellidos.trim(),
@@ -275,7 +342,7 @@ function SolicitudesContent() {
       parroquia,
       sector: sector || null,
       direccion: direccion.trim() || "No especificada",
-      ubicacion: direccion.trim() || `${estado}, ${municipio}, ${parroquia}${sector ? `, ${sector}` : ""}`,
+      ubicacion: fullUbicacion,
       tipo_servicio: tipoServicio,
       plan: planSeleccionado,
       tipo_operacion: "Instalación",
@@ -296,7 +363,7 @@ function SolicitudesContent() {
         cedula: cleanCedula,
         telefonoPrincipal: telefonoPrincipal.trim(),
         telefonoSecundario: telefonoSecundario.trim() || null,
-        ubicacion: newSolicitud.direccion,
+        ubicacion: fullUbicacion,
         tipoServicio: planSeleccionado,
         asesor: effectiveAsesor,
         correo: correo.trim() || null,
@@ -755,6 +822,9 @@ function SolicitudesContent() {
                               <strong className="text-neutral-900">{sol.plan}</strong> ({sol.tipo_servicio})
                             </span>
                             {loc && <span className="text-neutral-400 truncate max-w-xs">{loc}</span>}
+                            {sol.direccion && sol.direccion !== "No especificada" && (
+                              <span className="text-neutral-400 truncate max-w-xs">· {sol.direccion}</span>
+                            )}
                           </div>
                         </div>
 
@@ -763,6 +833,13 @@ function SolicitudesContent() {
                           <button
                             type="button"
                             onClick={() => {
+                              const fullUbicacion = formatFullUbicacion({
+                                estado: sol.estado,
+                                municipio: sol.municipio,
+                                parroquia: sol.parroquia,
+                                sector: sol.sector,
+                                direccion: sol.direccion || sol.ubicacion,
+                              });
                               const msg = buildWhatsAppSolicitudMessage({
                                 fechaSolicitud: sol.fecha_solicitud || sol.created_at,
                                 fechaDisponibilidad: sol.fecha_disponibilidad || sol.fecha_solicitud,
@@ -770,7 +847,7 @@ function SolicitudesContent() {
                                 cedula: sol.cedula,
                                 telefonoPrincipal: sol.telefono_principal || sol.telefono || "",
                                 telefonoSecundario: sol.telefono_secundario || "",
-                                ubicacion: sol.direccion || sol.ubicacion || loc || "",
+                                ubicacion: fullUbicacion,
                                 tipoServicio: sol.plan || sol.tipo_servicio || "",
                                 asesor: sol.promotor || sol.asesor_normalizado || "",
                                 correo: sol.correo || "",
