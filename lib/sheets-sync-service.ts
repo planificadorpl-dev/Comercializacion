@@ -126,7 +126,7 @@ export async function runSheetsSync(): Promise<SyncResult> {
       const estatusRaw = r[13 + offset] ? String(r[13 + offset]).trim().toUpperCase() : "";
 
       // Filtrar filas de resumen, totales financieros o cupos de técnicos vacíos sin cliente ni cédula
-      if (!nombreCliente && !cedula && !estatusRaw) continue;
+      if (!nombreCliente && !cedula) continue;
       if (
         nombreCliente.toUpperCase().includes("TOTAL") ||
         estatusRaw.includes("DIVISAS") ||

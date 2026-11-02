@@ -204,6 +204,11 @@ function parseCurrencyVal(val) {
       const rawEstatus = row[13] !== undefined ? String(row[13]).trim() : "";
       if (!rawEstatus || rawEstatus === "" || rawEstatus.toUpperCase() === "ESTATUS") return null;
 
+      // 3. CLIENTE / CÉDULA: Debe tener al menos cliente o cédula para ser un registro válido (ignorar cupos vacíos en blanco)
+      const nombre_cliente = row[8] !== undefined ? String(row[8]).trim() : "";
+      const cedula = row[9] !== undefined ? String(row[9]).trim() : "";
+      if (!nombre_cliente && !cedula) return null;
+
       const fecha = formatToIsoDate(rawFecha);
       const mes = row[2] !== undefined ? String(row[2]).trim().toUpperCase() : "UNKNOWN";
       
@@ -216,10 +221,6 @@ function parseCurrencyVal(val) {
       
       // Router (col G=6) - Power BI replaces empty with "0"
       const router = (row[6] === "" || row[6] == null) ? "0" : String(row[6]).trim();
-      
-      // Nombre (col I=8), Cedula (col J=9)
-      const nombre_cliente = row[8] !== undefined ? String(row[8]).trim() : "";
-      const cedula = row[9] !== undefined ? String(row[9]).trim() : "";
       
       // Zona (col K=10), Sector (col L=11)
       const zona = row[10] !== undefined ? String(row[10]).trim().toUpperCase() : "";

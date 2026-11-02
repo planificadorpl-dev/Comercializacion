@@ -229,7 +229,8 @@ export async function fetchRawOperationalData(
         .filter((item: any) => {
             const hasFecha = item.fecha && String(item.fecha).trim() !== "" && String(item.fecha).toUpperCase() !== "FECHA";
             const hasEstatus = item.estatus && String(item.estatus).trim() !== "";
-            return hasFecha && hasEstatus;
+            const hasClientOrCedula = (item.nombre_cliente && String(item.nombre_cliente).trim() !== "") || (item.cedula && String(item.cedula).trim() !== "");
+            return hasFecha && hasEstatus && hasClientOrCedula;
         })
         .map((item: any) => {
             const normAdvisor = normalizeAdvisorName(item.asesor, activeAliases);
