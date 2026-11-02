@@ -28,12 +28,16 @@ interface DayByDayComparisonCardProps {
 export function DayByDayComparisonCard({
   installations = [],
   solicitudes = [],
-  defaultMonthA = "Septiembre",
-  defaultMonthB = "Octubre",
+  defaultMonthA,
+  defaultMonthB,
   onSelectDate,
   selectedDate,
   className,
 }: DayByDayComparisonCardProps) {
+  const currentIdx = new Date().getMonth();
+  const fallbackMonthB = MONTH_ORDER[currentIdx] || "Noviembre";
+  const fallbackMonthA = currentIdx > 0 ? MONTH_ORDER[currentIdx - 1] : "Octubre";
+
   // Available months from data (considering both installations and solicitudes)
   const availableMonths = useMemo(() => {
     const set = new Set([
@@ -44,14 +48,16 @@ export function DayByDayComparisonCard({
   }, [installations, solicitudes]);
 
   const [monthA, setMonthA] = useState<string>(() => {
-    return availableMonths.includes(defaultMonthA)
-      ? defaultMonthA
-      : availableMonths[availableMonths.length - 2] || "Septiembre";
+    const targetA = defaultMonthA || fallbackMonthA;
+    return availableMonths.includes(targetA)
+      ? targetA
+      : availableMonths[availableMonths.length - 2] || fallbackMonthA;
   });
   const [monthB, setMonthB] = useState<string>(() => {
-    return availableMonths.includes(defaultMonthB)
-      ? defaultMonthB
-      : availableMonths[availableMonths.length - 1] || "Octubre";
+    const targetB = defaultMonthB || fallbackMonthB;
+    return availableMonths.includes(targetB)
+      ? targetB
+      : availableMonths[availableMonths.length - 1] || fallbackMonthB;
   });
 
   useEffect(() => {

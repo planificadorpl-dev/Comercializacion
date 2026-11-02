@@ -231,7 +231,8 @@ export default function PlanificacionPage() {
     const globalMaxDate = allDates[allDates.length - 1]; // Fecha más reciente (2026-10-23)
 
     const isAll = selectedMonth === "all";
-    const isCurrentMonth = normKey(selectedMonth) === "OCTUBRE";
+    const currentSpanishMonth = MONTH_ORDER[new Date().getMonth()] || "Noviembre";
+    const isCurrentMonth = normKey(selectedMonth) === normKey(currentSpanishMonth) || normKey(selectedMonth) === "OCTUBRE";
 
     if (isAll || isCurrentMonth) {
       // En 'Todos los meses' o 'Octubre', los comerciales activos son estrictamente los 20 de la fecha más reciente (2026-10-23)

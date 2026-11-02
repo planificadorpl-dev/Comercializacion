@@ -43,11 +43,16 @@ import {
   resolveAdvisorOffice,
 } from "@/lib/normalization";
 
+export function getCurrentSpanishMonth(): string {
+  const currentMonthIdx = new Date().getMonth();
+  return MONTH_ORDER[currentMonthIdx] || "Noviembre";
+}
+
 const INITIAL_FILTERS: FilterState = {
   advisors: [],
   zones: [],
   statuses: [],
-  months: ["Octubre"],
+  months: [getCurrentSpanishMonth()],
   sectors: [],
   technicians: [],
   oficinas: [],
@@ -551,7 +556,7 @@ export default function DashboardPage() {
 
   // MoM Normalized Statistics (comparing against previous month at exact same day of month)
   const momStats = useMemo(() => {
-    const selectedMonth = filters.months.length === 1 ? filters.months[0] : "OCTUBRE";
+    const selectedMonth = filters.months.length === 1 ? filters.months[0] : getCurrentSpanishMonth();
     const maxDay = getMaxDayForMonth(filteredDataWithoutMonth, selectedMonth);
     const isSingleMonth = filters.months.length === 1;
 
