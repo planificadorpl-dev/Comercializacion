@@ -35,6 +35,7 @@ import { SectorsCard } from "@/components/dashboard/sectors-card";
 import { TechniciansCard } from "@/components/dashboard/technicians-card";
 import { ConnectionTypeCard } from "@/components/dashboard/connection-type-card";
 import { PlansCard } from "@/components/dashboard/plans-card";
+import { PersonalBreakdownCard } from "@/components/dashboard/personal-breakdown-card";
 import { AdvisorConfigModal, PersonnelTab } from "@/components/dashboard/advisor-config-modal";
 import {
   AdvisorOverridesMap,
@@ -1749,6 +1750,19 @@ export default function DashboardPage() {
             </div>
           </section>
 
+          {/* HORIZONTAL REFERENCE LINE (Feathered at ends) */}
+          <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-neutral-300 to-transparent my-2" />
+
+          {/* ROW 3: DESGLOSE DE PERSONAL (MUDADO DESDE PLANIFICACIÓN) */}
+          <section className="w-full">
+            <PersonalBreakdownCard
+              installations={filteredData}
+              solicitudes={filteredSolicitudes}
+              selectedAdvisor={filters.advisors[0]}
+              onSelectAdvisor={handleSelectAdvisor}
+              selectedMonth={filters.months[0]}
+            />
+          </section>
         </div>
       </main>
 
