@@ -9,7 +9,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/sidebar";
-import { SidebarOpenButton } from "@/components/providers/sidebar-provider";
+import { SidebarOpenButton, SidebarMobileButton } from "@/components/providers/sidebar-provider";
 import {
   fetchPlanificacionData,
   getCachedPlanificacionData,
@@ -40,8 +40,6 @@ function parseDateSafe(str: string): Date | null {
 }
 
 export default function PlanificacionPage() {
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-
   // Inicialización instantánea desde caché si está disponible
   const [records, setRecords] = useState<PlanificacionRecord[]>(() => getCachedPlanificacionData() || []);
   const [loading, setLoading] = useState(() => !getCachedPlanificacionData() || getCachedPlanificacionData()!.length === 0);
@@ -210,20 +208,15 @@ export default function PlanificacionPage() {
   return (
     <div className="flex h-screen bg-[#FBFBFB] text-neutral-900 font-sans antialiased overflow-hidden selection:bg-neutral-900 selection:text-white">
       {/* Barra lateral */}
-      <Sidebar
-        collapsed={false}
-        onToggleCollapse={() => {}}
-        activeItem="planificacion"
-        mobileOpen={mobileSidebarOpen}
-        onMobileClose={() => setMobileSidebarOpen(false)}
-      />
+      <Sidebar activeSection="planificacion" />
 
       {/* Contenedor principal con scroll fluido */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {/* Cabecera abierta minimalista */}
         <header className="sticky top-0 z-20 flex items-center justify-between px-6 py-4 bg-[#FBFBFB]/90 backdrop-blur-xs border-b border-neutral-100/80">
           <div className="flex items-center gap-3">
-            <SidebarOpenButton onClick={() => setMobileSidebarOpen(true)} />
+            <SidebarMobileButton />
+            <SidebarOpenButton />
             <div>
               <h1 className="text-base font-semibold text-neutral-900 tracking-tight">
                 Planificación Comercial
