@@ -7,6 +7,7 @@ import { getSheetsClient } from "@/app/lib/googleAuth";
 import { geoHierarchy as fallbackGeoHierarchy } from "@/lib/geo_hierarchy";
 import { formatProperCase } from "@/lib/utils";
 import { getCurrentSpanishMonth } from "@/lib/dashboard-data";
+import { normalizeLocation, isValidGeoName } from "@/lib/geo_normalization";
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -38,10 +39,11 @@ export async function getVentasConfig() {
     if (geodataRows && geodataRows.length > 0) {
       const geoHierarchy: Record<string, Record<string, Record<string, string[]>>> = {};
       geodataRows.forEach((row: any) => {
-        const e = row.estado || "N/A";
-        const m = row.municipio || "N/A";
-        const p = row.parroquia || "N/A";
-        const s = row.sector || "N/A";
+        const e = formatProperCase(row.estado);
+        const m = formatProperCase(row.municipio);
+        const p = formatProperCase(row.parroquia);
+        const s = formatProperCase(row.sector);
+        if (!isValidGeoName(e) || !isValidGeoName(m) || !isValidGeoName(p) || !isValidGeoName(s)) return;
         if (!geoHierarchy[e]) geoHierarchy[e] = {};
         if (!geoHierarchy[e][m]) geoHierarchy[e][m] = {};
         if (!geoHierarchy[e][m][p]) geoHierarchy[e][m][p] = [];
@@ -77,10 +79,11 @@ export async function getVentasConfig() {
 
     if (geodataRes.data && geodataRes.data.length > 0) {
       geodataRes.data.forEach((row: any) => {
-        const e = row.estado || "N/A";
-        const m = row.municipio || "N/A";
-        const p = row.parroquia || "N/A";
-        const s = row.sector || "N/A";
+        const e = formatProperCase(row.estado);
+        const m = formatProperCase(row.municipio);
+        const p = formatProperCase(row.parroquia);
+        const s = formatProperCase(row.sector);
+        if (!isValidGeoName(e) || !isValidGeoName(m) || !isValidGeoName(p) || !isValidGeoName(s)) return;
         if (!geoHierarchy[e]) geoHierarchy[e] = {};
         if (!geoHierarchy[e][m]) geoHierarchy[e][m] = {};
         if (!geoHierarchy[e][m][p]) geoHierarchy[e][m][p] = [];
@@ -175,49 +178,47 @@ export async function syncGeodataFromSheets(): Promise<{
       });
     }
 
-    // 2. Leer hoja de Planificación
-    const planSpreadsheetId = "1_PzDJLZ8jnPTZq9PgQMLfomwBwles8XOd8RD5Ksko2Y";
-    const planRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: planSpreadsheetId,
-      range: "Data!A:G",
+    // 2. Leer hoja de Cuadro Diario (Padrón Maestro de Sectores Oficiales)
+    const cuadroDiarioSpreadsheetId = "1rAV3gl6BWKRnXuC8IO6e7r2yPaEnWmuAOW_gyic5RiQ";
+    const cdRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: cuadroDiarioSpreadsheetId,
+      range: "CUADRO DIARIO!A2:L",
     });
 
-    const rows = planRes.data.values || [];
+    const rows = cdRes.data.values || [];
     if (rows.length < 2) {
       return {
         success: true,
         importedCount: 0,
         totalFound: 0,
-        message: "No se encontraron filas de sectores en la hoja de planificación.",
+        message: "No se encontraron filas de sectores en el Cuadro Diario.",
       };
     }
-
-    const header = rows[0].map((h: string) => (h || "").trim().toLowerCase());
-    const estIdx = header.findIndex((h: string) => h.includes("estado"));
-    const munIdx = header.findIndex((h: string) => h.includes("municipio") || h.includes("oficina"));
-    const parIdx = header.findIndex((h: string) => h.includes("parroquia"));
-    const secIdx = header.findIndex((h: string) => h.includes("sector"));
 
     const newRowsToInsert: Array<{ estado: string; municipio: string; parroquia: string; sector: string }> = [];
     const pendingSet = new Set<string>();
 
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      const sector = secIdx !== -1 && row[secIdx] ? String(row[secIdx]).trim() : "";
-      if (!sector || sector.toUpperCase() === "N/A" || sector.toUpperCase() === "SECTOR") continue;
+      const rawZona = row[10] ? String(row[10]).trim() : "";
+      const rawSector = row[11] ? String(row[11]).trim() : "";
+      if (!rawSector || !isValidGeoName(rawSector) || rawSector.toUpperCase() === "SECTOR") continue;
 
-      const estado = estIdx !== -1 && row[estIdx] ? String(row[estIdx]).trim() : "Miranda";
-      const municipio = munIdx !== -1 && row[munIdx] ? String(row[munIdx]).trim() : "General";
-      const parroquia = parIdx !== -1 && row[parIdx] ? String(row[parIdx]).trim() : "General";
+      const loc = normalizeLocation({
+        sector: rawSector,
+        zona: rawZona,
+      });
 
-      const dedupeKey = `${estado.toLowerCase()}|${municipio.toLowerCase()}|${parroquia.toLowerCase()}|${sector.toLowerCase()}`;
+      if (!isValidGeoName(loc.sector) || !isValidGeoName(loc.municipio) || !isValidGeoName(loc.estado)) continue;
+
+      const dedupeKey = `${loc.estado.toLowerCase()}|${loc.municipio.toLowerCase()}|${loc.parroquia.toLowerCase()}|${loc.sector.toLowerCase()}`;
       if (!existingSet.has(dedupeKey) && !pendingSet.has(dedupeKey)) {
         pendingSet.add(dedupeKey);
         newRowsToInsert.push({
-          estado: formatProperCase(estado),
-          municipio: formatProperCase(municipio),
-          parroquia: formatProperCase(parroquia),
-          sector: formatProperCase(sector),
+          estado: loc.estado,
+          municipio: loc.municipio,
+          parroquia: loc.parroquia,
+          sector: loc.sector,
         });
       }
     }
@@ -245,8 +246,8 @@ export async function syncGeodataFromSheets(): Promise<{
       totalFound: rows.length - 1,
       message:
         insertedCount > 0
-          ? `Se importaron ${insertedCount} sectores nuevos en PostgreSQL.`
-          : "Todos los sectores de Google Sheets ya están sincronizados en PostgreSQL.",
+          ? `Se importaron ${insertedCount} sectores oficiales desde el Cuadro Diario.`
+          : "Todos los sectores del Cuadro Diario ya están sincronizados en PostgreSQL.",
     };
   } catch (error: any) {
     console.error("Error en syncGeodataFromSheets:", error);

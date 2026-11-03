@@ -1,4 +1,5 @@
 import { formatProperCase, isInstalacionStatus, isNuevoServicioStatus } from "@/lib/utils";
+import { normalizeLocation, CanonicalLocationResult } from "@/lib/geo_normalization";
 import {
     AdvisorType,
     AdvisorOverridesMap,
@@ -56,6 +57,9 @@ export interface Installation {
     servicio: string;
     oficina: string;  // Calculado: OFICINA_MAP[asesor] || "OTROS"
     estado: string | null;  // Calculado: zona → MIRANDA/ARAGUA/D.C.
+    municipio?: string;
+    parroquia?: string;
+    subsector?: string;
 }
 
 export interface Solicitud {
@@ -80,6 +84,8 @@ export interface Solicitud {
     zona: string;
     sector: string;
     ubicacion?: string;
+    parroquia?: string;
+    subsector?: string;
 }
 
 export interface MetricChart {
@@ -277,6 +283,8 @@ export async function fetchRawOperationalData(
     const activeTechAliases: Record<string, string> = customTechAliases || resOverrides?.technicianAliases || {};
 
     // Parse and title-case all fields from raw Google Sheets data (CUADRO DIARIO)
+    const clientToCanonicalLocationMap = new Map<string, CanonicalLocationResult>();
+
     const formattedInstallations: Installation[] = instRaw
         .filter((item: any) => {
             const hasFecha = item.fecha && String(item.fecha).trim() !== "" && String(item.fecha).toUpperCase() !== "FECHA";
@@ -292,11 +300,30 @@ export async function fetchRawOperationalData(
             const normTech1 = normalizeTechnician(item.tecnico_1, activeTechOverrides, activeTechAliases);
             const normTech2 = normalizeTechnician(item.tecnico_2, activeTechOverrides, activeTechAliases);
 
+            // Normalización territorial estricta desde el Padrón del Cuadro Diario
+            const loc = normalizeLocation({
+                sector: item.sector,
+                zona: item.zona,
+                estado: item.estado,
+            });
+
+            // Registrar en el puente determinístico por cédula limpia (solo dígitos)
+            if (item.cedula) {
+                const cleanCed = String(item.cedula).replace(/[^0-9]/g, "");
+                if (cleanCed) {
+                    clientToCanonicalLocationMap.set(cleanCed, loc);
+                }
+            }
+
             return {
                 ...item,
                 mes: formatProperCase(item.mes),
-                zona: formatProperCase(item.zona),
-                sector: formatProperCase(item.sector),
+                zona: loc.zona,
+                sector: loc.sector,
+                subsector: loc.subsector,
+                municipio: loc.municipio,
+                parroquia: loc.parroquia,
+                estado: loc.estado,
                 asesor: normAdvisor,
                 tipo_asesor: advisorType,
                 es_ex_colaborador: isEx,
@@ -315,9 +342,9 @@ export async function fetchRawOperationalData(
     const clientToAdvisorMap = new Map<string, string>();
     formattedInstallations.forEach((inst) => {
         if (inst.cedula && inst.asesor) {
-            const cleanCed = inst.cedula.trim().toUpperCase();
+            const cleanCed = String(inst.cedula).replace(/[^0-9]/g, "");
             const cleanAdv = inst.asesor.trim();
-            if (cleanAdv !== "" && cleanAdv !== "Sin Asesor" && cleanAdv !== "Desconocido" && cleanAdv !== "Planificacion") {
+            if (cleanCed && cleanAdv !== "" && cleanAdv !== "Sin Asesor" && cleanAdv !== "Desconocido" && cleanAdv !== "Planificacion") {
                 clientToAdvisorMap.set(cleanCed, cleanAdv);
             }
         }
@@ -326,10 +353,10 @@ export async function fetchRawOperationalData(
     // Parse and title-case fields from SOLICITUDES
     const formattedSolicitudes: Solicitud[] = solRaw.map((item: any) => {
         let normAdvisor = normalizeAdvisorName(item.asesor, activeAliases);
+        const cleanCed = item.cedula ? String(item.cedula).replace(/[^0-9]/g, "") : "";
 
         // Si el asesor es 'Sin Asesor' o no identificado, intentar recuperar el asesor legítimo por la cédula del cliente en CUADRO DIARIO
-        if ((normAdvisor === "Sin Asesor" || !normAdvisor || normAdvisor.toLowerCase().includes("no identificado")) && item.cedula) {
-            const cleanCed = String(item.cedula).trim().toUpperCase();
+        if ((normAdvisor === "Sin Asesor" || !normAdvisor || normAdvisor.toLowerCase().includes("no identificado")) && cleanCed) {
             if (clientToAdvisorMap.has(cleanCed)) {
                 normAdvisor = clientToAdvisorMap.get(cleanCed)!;
             }
@@ -339,11 +366,31 @@ export async function fetchRawOperationalData(
         const sedeTaquilla = item.sede_taquilla || resolveAdvisorOffice(normAdvisor, activeOverrides);
         const isEx = isAdvisorExCollaborator(normAdvisor, activeOverrides);
 
+        // PUENTE DETERMINÍSTICO POR CÉDULA:
+        // Si el cliente ya fue instalado en CUADRO DIARIO, adoptar el sector y zona oficial validado por el técnico
+        let loc: CanonicalLocationResult;
+        if (cleanCed && clientToCanonicalLocationMap.has(cleanCed)) {
+            loc = clientToCanonicalLocationMap.get(cleanCed)!;
+        } else {
+            loc = normalizeLocation({
+                sector: item.sector,
+                ubicacion: item.ubicacion,
+                zona: item.zona,
+                parroquia: item.parroquia,
+                municipio: item.municipio,
+                estado: item.estado,
+            });
+        }
+
         return {
             ...item,
             mes: formatProperCase(item.mes),
-            zona: formatProperCase(item.zona),
-            sector: formatProperCase(item.sector),
+            zona: loc.zona,
+            sector: loc.sector,
+            subsector: loc.subsector,
+            municipio: loc.municipio,
+            parroquia: loc.parroquia,
+            estado: loc.estado,
             asesor: normAdvisor,
             tipo_asesor: advisorType,
             es_ex_colaborador: isEx,
@@ -352,8 +399,6 @@ export async function fetchRawOperationalData(
             fuente: item.fuente || "",
             estatus: formatProperCase(item.estatus),
             plan: formatProperCase(item.plan),
-            estado: formatProperCase(item.estado),
-            municipio: formatProperCase(item.municipio),
         };
     });
 
@@ -746,6 +791,7 @@ export interface PlanificacionRecord {
     mes: string;
     asesor: string;
     sector: string;
+    subsector?: string;
     estatus: string;
     estado: string;
     zona?: string;
@@ -828,21 +874,31 @@ export async function fetchPlanificacionData(forceRefresh = false): Promise<Plan
                 const sedeTaquilla = resolveAdvisorOffice(normAdvisor, overrides);
                 const isEx = isAdvisorExCollaborator(normAdvisor, overrides);
 
+                // Normalización territorial estricta hacia el Padrón Oficial del Cuadro Diario
+                const loc = normalizeLocation({
+                    sector: item.sector,
+                    zona: item.zona,
+                    parroquia: item.parroquia,
+                    municipio: item.municipio,
+                    estado: item.estado,
+                });
+
                 return {
                     id: item.id,
                     fecha: item.fecha,
                     mes: formatProperCase(item.mes),
                     asesor: normAdvisor,
-                    sector: formatProperCase(item.sector),
+                    sector: loc.sector,
+                    subsector: loc.subsector,
                     estatus: formatProperCase(item.estatus || "Planificado"),
-                    estado: item.estado && item.estado !== "N/A" ? formatProperCase(item.estado) : "",
-                    zona: formatProperCase(item.zona || ""),
+                    estado: loc.estado,
+                    zona: loc.zona,
                     servicio: formatProperCase(item.servicio || "Residencial"),
                     oficina: formatProperCase(item.oficina || ""),
-                    municipio: formatProperCase(item.municipio || ""),
+                    municipio: loc.municipio,
                     power_go: item.power_go || "NO",
                     plan: formatProperCase(item.plan || ""),
-                    parroquia: formatProperCase(item.parroquia || item.zona || ""),
+                    parroquia: loc.parroquia,
                     tipo_actividad: formatProperCase(item.tipo_actividad || item.plan || "Recorrido"),
                     tipo_asesor: advisorType,
                     es_ex_colaborador: isEx,
