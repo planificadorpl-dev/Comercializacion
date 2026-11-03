@@ -24,6 +24,7 @@ import { cn, formatNumber, formatProperCase } from "@/lib/utils";
 import { PlanificacionMetrics } from "@/components/planificacion/planificacion-metrics";
 import { PlanificacionMonthlyView } from "@/components/planificacion/planificacion-monthly-view";
 import { PlanificacionDailyView } from "@/components/planificacion/planificacion-daily-view";
+import { PlanificacionFilterCommandBar } from "@/components/planificacion/planificacion-filter-command-bar";
 
 type ViewMode = "mensual" | "diaria";
 
@@ -170,6 +171,29 @@ export default function PlanificacionPage() {
       (a, b) => MONTH_ORDER.indexOf(a) - MONTH_ORDER.indexOf(b)
     );
   }, [records]);
+
+  // Opciones dinámicas para el buscador de filtros
+  const filterOptions = useMemo(() => {
+    const advSet = new Set<string>();
+    const secSet = new Set<string>();
+    const parSet = new Set<string>();
+    const munSet = new Set<string>();
+
+    records.forEach((r) => {
+      if (r.asesor && r.asesor !== "Sin Asesor" && r.asesor !== "Desconocido") advSet.add(r.asesor);
+      if (r.sector) secSet.add(r.sector);
+      if (r.parroquia) parSet.add(r.parroquia);
+      if (r.municipio) munSet.add(r.municipio);
+    });
+
+    return {
+      advisors: Array.from(advSet).sort(),
+      sectors: Array.from(secSet).sort(),
+      months: availableMonths,
+      parroquias: Array.from(parSet).sort(),
+      municipios: Array.from(munSet).sort(),
+    };
+  }, [records, availableMonths]);
 
   // Mes seleccionado actual basado en referenceDate
   const currentSelectedMonth = useMemo(() => {
@@ -633,7 +657,7 @@ export default function PlanificacionPage() {
             </div>
           </div>
 
-          {/* Fila 2: Selector de Meses y Buscador */}
+          {/* Fila 2: Selector de Meses y Buscador Avanzado de Filtros */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3 overflow-x-auto no-scrollbar text-xs">
               {availableMonths.map((m) => (
@@ -653,26 +677,24 @@ export default function PlanificacionPage() {
               ))}
             </div>
 
-            {/* Buscador minimalista con línea base */}
-            <div className="flex items-center gap-1.5 w-full sm:w-64 border-b border-neutral-200 focus-within:border-neutral-900 transition-colors py-0.5">
-              <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0 stroke-[1.25]" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar asesor, ruta o sector..."
-                className="w-full bg-transparent text-xs text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm("")}
-                  className="text-neutral-400 hover:text-neutral-900 transition-colors p-0.5 cursor-pointer"
-                >
-                  <X className="w-3 h-3 stroke-[1.5]" />
-                </button>
-              )}
-            </div>
+            {/* Buscador de filtros con autocompletado y atajo interactivo */}
+            <PlanificacionFilterCommandBar
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              options={filterOptions}
+              selectedAdvisor={selectedAdvisor}
+              onSelectAdvisor={setSelectedAdvisor}
+              selectedSector={selectedSector}
+              onSelectSector={setSelectedSector}
+              selectedMonth={currentSelectedMonth}
+              onSelectMonth={handleSelectMonth}
+              onResetFilters={() => {
+                setSearchTerm("");
+                setSelectedAdvisor(null);
+                setSelectedSector(null);
+                setSelectedDateFilter(null);
+              }}
+            />
           </div>
 
 
