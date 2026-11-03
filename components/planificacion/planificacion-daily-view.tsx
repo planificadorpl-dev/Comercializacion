@@ -54,10 +54,10 @@ export function PlanificacionDailyView({
     const solTerr = new Map<string, number>();
     const instTerr = new Map<string, number>();
 
-    const isMatchDate = (itemDate: string | undefined, createdAt: string | undefined) => {
-      if (itemDate && itemDate.startsWith(dateStr)) return true;
-      if (createdAt && createdAt.startsWith(dateStr)) return true;
-      return false;
+    const isMatchDate = (itemDate: string | undefined) => {
+      if (!itemDate) return false;
+      const clean = itemDate.includes("T") ? itemDate.split("T")[0] : itemDate.slice(0, 10);
+      return clean === dateStr;
     };
 
     solicitudes.forEach((s) => {

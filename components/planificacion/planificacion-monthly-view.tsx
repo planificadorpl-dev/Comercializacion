@@ -281,7 +281,7 @@ export function PlanificacionMonthlyView({
 
           // Solicitudes del día en este sector
           solicitudes.forEach((s) => {
-            const isSameDate = s.fecha === dateStr || (s.created_at && s.created_at.startsWith(dateStr));
+            const isSameDate = s.fecha === dateStr || toStandardIsoDate(s.fecha) === dateStr;
             if (!isSameDate) return;
             const itemKey = normGeoKey(s.sector);
             const subKey = normGeoKey(s.subsector);
@@ -292,7 +292,7 @@ export function PlanificacionMonthlyView({
 
           // Instalaciones del día en este sector
           installations.forEach((i) => {
-            const isSameDate = i.fecha === dateStr || (i.created_at && i.created_at.startsWith(dateStr));
+            const isSameDate = i.fecha === dateStr || toStandardIsoDate(i.fecha) === dateStr;
             if (!isSameDate) return;
             const itemKey = normGeoKey(i.sector);
             const subKey = normGeoKey(i.subsector);

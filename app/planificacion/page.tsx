@@ -66,13 +66,10 @@ function toStandardIsoDate(val: any): string {
   return "";
 }
 
-function matchesDate(itemFecha: any, itemCreatedAt: any, targetIso: string): boolean {
-  if (!targetIso) return false;
-  const iso1 = toStandardIsoDate(itemFecha);
-  if (iso1 && iso1 === targetIso) return true;
-  const iso2 = toStandardIsoDate(itemCreatedAt);
-  if (iso2 && iso2 === targetIso) return true;
-  return false;
+function matchesDate(itemFecha: any, targetIso: string): boolean {
+  if (!targetIso || !itemFecha) return false;
+  const iso = toStandardIsoDate(itemFecha);
+  return Boolean(iso && iso === targetIso);
 }
 
 const SPANISH_DAYS_FULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -229,10 +226,10 @@ export default function PlanificacionPage() {
 
     if (viewMode === "diaria") {
       const targetIso = toStandardIsoDate(referenceDate);
-      list = list.filter((s) => matchesDate(s.fecha, s.created_at, targetIso));
+      list = list.filter((s) => matchesDate(s.fecha, targetIso));
     } else if (selectedDateFilter) {
       const targetIso = toStandardIsoDate(selectedDateFilter);
-      list = list.filter((s) => matchesDate(s.fecha, s.created_at, targetIso));
+      list = list.filter((s) => matchesDate(s.fecha, targetIso));
     } else {
       const mKey = normKey(currentSelectedMonth);
       list = list.filter((s) => normKey(s.mes) === mKey);
@@ -269,10 +266,10 @@ export default function PlanificacionPage() {
 
     if (viewMode === "diaria") {
       const targetIso = toStandardIsoDate(referenceDate);
-      list = list.filter((i) => matchesDate(i.fecha, i.created_at, targetIso));
+      list = list.filter((i) => matchesDate(i.fecha, targetIso));
     } else if (selectedDateFilter) {
       const targetIso = toStandardIsoDate(selectedDateFilter);
-      list = list.filter((i) => matchesDate(i.fecha, i.created_at, targetIso));
+      list = list.filter((i) => matchesDate(i.fecha, targetIso));
     } else {
       const mKey = normKey(currentSelectedMonth);
       list = list.filter((i) => normKey(i.mes) === mKey);
@@ -329,7 +326,7 @@ export default function PlanificacionPage() {
     let list = rawSolicitudes.filter((s) => isCommercialAdvisor(s.asesor));
     if (selectedDateFilter) {
       const targetIso = toStandardIsoDate(selectedDateFilter);
-      list = list.filter((s) => matchesDate(s.fecha, s.created_at, targetIso));
+      list = list.filter((s) => matchesDate(s.fecha, targetIso));
     } else {
       const mKey = normKey(currentSelectedMonth);
       list = list.filter((s) => normKey(s.mes) === mKey);
@@ -346,7 +343,7 @@ export default function PlanificacionPage() {
     let list = rawInstallations.filter((i) => isCommercialAdvisor(i.asesor));
     if (selectedDateFilter) {
       const targetIso = toStandardIsoDate(selectedDateFilter);
-      list = list.filter((i) => matchesDate(i.fecha, i.created_at, targetIso));
+      list = list.filter((i) => matchesDate(i.fecha, targetIso));
     } else {
       const mKey = normKey(currentSelectedMonth);
       list = list.filter((i) => normKey(i.mes) === mKey);
