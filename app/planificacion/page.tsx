@@ -234,11 +234,23 @@ export default function PlanificacionPage() {
     return list;
   }, [rawInstallations, viewMode, referenceDate, currentSelectedMonth, selectedAdvisor, selectedSector, searchTerm]);
 
-  // Registros filtrados para el mes actualmente seleccionado
+  // Registros filtrados para el mes actualmente seleccionado (para métricas y listados dependientes del filtro)
   const monthlyRecords = useMemo(() => {
     const mKey = normKey(currentSelectedMonth);
     return filteredRecords.filter((r) => normKey(r.mes) === mKey);
   }, [filteredRecords, currentSelectedMonth]);
+
+  // Registros completos del asesor en el mes para la cuadrícula del calendario
+  // (permite que el calendario siempre muestre dónde estuvo el asesor cada día)
+  const advisorMonthlyRecords = useMemo(() => {
+    const mKey = normKey(currentSelectedMonth);
+    let list = records.filter((r) => normKey(r.mes) === mKey);
+    if (selectedAdvisor) {
+      const advNk = normKey(selectedAdvisor);
+      list = list.filter((r) => normKey(r.asesor) === advNk);
+    }
+    return list;
+  }, [records, currentSelectedMonth, selectedAdvisor]);
 
   // Solicitudes del mes (filtradas por asesor si aplica, no restringidas por sector)
   const monthlySolicitudes = useMemo(() => {
@@ -567,7 +579,7 @@ export default function PlanificacionPage() {
             <PlanificacionMonthlyView
               month={currentSelectedMonth}
               year={referenceDate.getFullYear()}
-              records={monthlyRecords}
+              records={advisorMonthlyRecords}
               solicitudes={monthlySolicitudes}
               installations={monthlyInstallations}
               selectedAdvisor={selectedAdvisor}
