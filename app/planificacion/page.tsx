@@ -19,9 +19,22 @@ import {
 import { cn, formatNumber, formatProperCase } from "@/lib/utils";
 import { PlanificacionMetrics } from "@/components/planificacion/planificacion-metrics";
 import { PlanificacionMonthlyView } from "@/components/planificacion/planificacion-monthly-view";
+import { PlanificacionDailyView } from "@/components/planificacion/planificacion-daily-view";
+
+type ViewMode = "mensual" | "diaria";
 
 const normKey = (str: string | null | undefined): string =>
   (str || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+// Convierte objeto Date a ISO YYYY-MM-DD
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+const SPANISH_DAYS_FULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
 // Parsea una fecha en YYYY-MM-DD o D/M/YYYY de forma segura
 function parseDateSafe(str: string): Date | null {
@@ -47,6 +60,7 @@ export default function PlanificacionPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAdvisor, setSelectedAdvisor] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("mensual");
 
   // Fecha de referencia: por defecto 2026-11-02 (o fecha actual)
   const [referenceDate, setReferenceDate] = useState<Date>(() => new Date(2026, 10, 2));
@@ -130,13 +144,27 @@ export default function PlanificacionPage() {
     return filteredRecords.filter((r) => normKey(r.mes) === mKey);
   }, [filteredRecords, currentSelectedMonth]);
 
-  // Métricas para el mes activo
+  // Registros filtrados para la vista diaria
+  const { dailyRecords, dailyDateLabel } = useMemo(() => {
+    const dateIso = toIsoDate(referenceDate);
+    const inDay = filteredRecords.filter((r) => r.fecha === dateIso);
+    const dayName = SPANISH_DAYS_FULL[referenceDate.getDay()];
+    const dayNum = referenceDate.getDate();
+    const monthName = MONTH_ORDER[referenceDate.getMonth()] || "";
+    const year = referenceDate.getFullYear();
+    const label = `${dayName}, ${dayNum} de ${monthName.toLowerCase()} de ${year}`;
+
+    return { dailyRecords: inDay, dailyDateLabel: label };
+  }, [referenceDate, filteredRecords]);
+
+  // Métricas para el periodo activo (diario o mensual)
   const activeMetrics = useMemo(() => {
+    const scopeRecords = viewMode === "diaria" ? dailyRecords : monthlyRecords;
     const advisorsSet = new Set<string>();
     const sectorsSet = new Set<string>();
     const activityMap = new Map<string, number>();
 
-    monthlyRecords.forEach((r) => {
+    scopeRecords.forEach((r) => {
       if (r.asesor && r.asesor !== "Sin Asesor") advisorsSet.add(r.asesor);
       if (r.sector && r.sector !== "N/A") sectorsSet.add(r.sector);
       const act = r.tipo_actividad || r.plan || "Recorrido";
@@ -152,27 +180,35 @@ export default function PlanificacionPage() {
       }
     });
 
-    const predPct = monthlyRecords.length > 0 ? Math.round((predCount / monthlyRecords.length) * 100) : 0;
+    const predPct = scopeRecords.length > 0 ? Math.round((predCount / scopeRecords.length) * 100) : 0;
 
     return {
       totalAdvisors: advisorsSet.size,
       totalSectors: sectorsSet.size,
-      totalJornadas: monthlyRecords.length,
+      totalJornadas: scopeRecords.length,
       predominantActivity: predCount > 0 ? { name: predName, count: predCount, pct: predPct } : undefined,
-      periodLabel: `Mes de ${currentSelectedMonth}`,
+      periodLabel: viewMode === "diaria" ? dailyDateLabel : `Mes de ${currentSelectedMonth}`,
     };
-  }, [monthlyRecords, currentSelectedMonth]);
+  }, [viewMode, dailyRecords, monthlyRecords, dailyDateLabel, currentSelectedMonth]);
 
-  // Manejadores de navegación temporal (mensual / calendario)
+  // Manejadores de navegación temporal (mensual o diario)
   const handlePrevPeriod = () => {
     const d = new Date(referenceDate);
-    d.setMonth(d.getMonth() - 1);
+    if (viewMode === "diaria") {
+      d.setDate(d.getDate() - 1);
+    } else {
+      d.setMonth(d.getMonth() - 1);
+    }
     setReferenceDate(d);
   };
 
   const handleNextPeriod = () => {
     const d = new Date(referenceDate);
-    d.setMonth(d.getMonth() + 1);
+    if (viewMode === "diaria") {
+      d.setDate(d.getDate() + 1);
+    } else {
+      d.setMonth(d.getMonth() + 1);
+    }
     setReferenceDate(d);
   };
 
@@ -192,6 +228,7 @@ export default function PlanificacionPage() {
     const parsed = parseDateSafe(dateStr);
     if (parsed) {
       setReferenceDate(parsed);
+      setViewMode("diaria");
     }
   };
 
@@ -202,6 +239,7 @@ export default function PlanificacionPage() {
       d.setMonth(mIdx);
       d.setDate(1);
       setReferenceDate(d);
+      setViewMode("mensual");
     }
   };
 
@@ -250,9 +288,26 @@ export default function PlanificacionPage() {
           {/* Fila 1: Título de sección "Calendario" y Controles Temporales */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-100 pb-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-neutral-950">
-                Calendario
-              </span>
+              {viewMode === "diaria" ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("mensual")}
+                    className="text-xs text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5 stroke-[1.5]" />
+                    <span>Mes</span>
+                  </button>
+                  <span className="text-neutral-300">/</span>
+                  <span className="text-xs font-semibold text-neutral-950">
+                    Detalle diario
+                  </span>
+                </div>
+              ) : (
+                <span className="text-xs font-semibold text-neutral-950">
+                  Calendario
+                </span>
+              )}
               {selectedAdvisor && (
                 <div className="flex items-center gap-1.5 ml-2">
                   <span className="text-xs text-neutral-400">· Asesor:</span>
@@ -275,20 +330,22 @@ export default function PlanificacionPage() {
                 type="button"
                 onClick={handlePrevPeriod}
                 className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
-                title="Mes anterior"
+                title={viewMode === "diaria" ? "Día anterior" : "Mes anterior"}
               >
                 <ChevronLeft className="w-4 h-4 stroke-[1.5]" />
               </button>
 
               <span className="text-xs font-medium text-neutral-900 font-sans">
-                {currentSelectedMonth} {referenceDate.getFullYear()}
+                {viewMode === "diaria"
+                  ? `${referenceDate.getDate()} de ${currentSelectedMonth} ${referenceDate.getFullYear()}`
+                  : `${currentSelectedMonth} ${referenceDate.getFullYear()}`}
               </span>
 
               <button
                 type="button"
                 onClick={handleNextPeriod}
                 className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
-                title="Mes siguiente"
+                title={viewMode === "diaria" ? "Día siguiente" : "Mes siguiente"}
               >
                 <ChevronRight className="w-4 h-4 stroke-[1.5]" />
               </button>
@@ -300,7 +357,7 @@ export default function PlanificacionPage() {
                 onClick={handleToday}
                 className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors font-mono cursor-pointer"
               >
-                Mes actual
+                {viewMode === "diaria" ? "Día actual" : "Mes actual"}
               </button>
             </div>
           </div>
@@ -357,11 +414,19 @@ export default function PlanificacionPage() {
           />
           <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-neutral-300 to-transparent my-1" />
 
-          {/* Fila 4: Visualización Calendario Mensual */}
+          {/* Fila 4: Visualización Principal según Modo */}
           {loading ? (
             <div className="py-24 text-center text-xs text-neutral-400 font-mono">
               Cargando planificación comercial...
             </div>
+          ) : viewMode === "diaria" ? (
+            <PlanificacionDailyView
+              dateStr={toIsoDate(referenceDate)}
+              dateLabel={dailyDateLabel}
+              records={dailyRecords}
+              onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
+              selectedAdvisor={selectedAdvisor}
+            />
           ) : (
             <PlanificacionMonthlyView
               month={currentSelectedMonth}
