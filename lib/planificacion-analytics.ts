@@ -87,11 +87,13 @@ function parseDate(str: string | null | undefined): Date | null {
 export function computePlanificacionAnalytics(
   planRecords: PlanificacionRecord[],
   solicitudes: Solicitud[],
-  installations: Installation[]
+  installations: Installation[],
+  allInstallationsForMatching?: Installation[]
 ): PlanificacionAnalyticsResult {
+  const matchPool = allInstallationsForMatching && allInstallationsForMatching.length > 0 ? allInstallationsForMatching : installations;
   // 1. Mapeo de Instalaciones por Cédula para Matching Determinístico
   const instByCedula = new Map<string, { fecha: string; parsedDate: Date | null; inst: Installation }>();
-  installations.forEach((inst) => {
+  matchPool.forEach((inst) => {
     const ced = cleanCedula(inst.cedula);
     if (ced && ced.length >= 6) {
       if (!instByCedula.has(ced)) {
@@ -334,8 +336,58 @@ export function computePlanificacionAnalytics(
     actMap.get(act)!.jornadas.push(p);
   });
 
-  // Ventana de atribución temporal por jornada de actividad:
-  // Si una solicitud o instalación ocurrió en el mismo sector y fecha [T, T+7] atribuible
+  // Ventana de atribución temporal por jornada de actividad (Indexada para máxima velocidad):
+  interface PreIndexedAttributionItem {
+    time: number;
+    normAdv: string;
+    normSec: string;
+  }
+
+  const solsByAdv = new Map<string, PreIndexedAttributionItem[]>();
+  const solsBySec = new Map<string, PreIndexedAttributionItem[]>();
+
+  solicitudes.forEach((s) => {
+    if (!s.fecha) return;
+    const d = parseDate(s.fecha);
+    if (!d) return;
+    const item: PreIndexedAttributionItem = {
+      time: d.getTime(),
+      normAdv: normKey(s.asesor),
+      normSec: normKey(s.sector),
+    };
+    if (item.normAdv) {
+      if (!solsByAdv.has(item.normAdv)) solsByAdv.set(item.normAdv, []);
+      solsByAdv.get(item.normAdv)!.push(item);
+    }
+    if (item.normSec) {
+      if (!solsBySec.has(item.normSec)) solsBySec.set(item.normSec, []);
+      solsBySec.get(item.normSec)!.push(item);
+    }
+  });
+
+  const instsByAdv = new Map<string, PreIndexedAttributionItem[]>();
+  const instsBySec = new Map<string, PreIndexedAttributionItem[]>();
+
+  installations.forEach((i) => {
+    if (!i.fecha) return;
+    const d = parseDate(i.fecha);
+    if (!d) return;
+    const item: PreIndexedAttributionItem = {
+      time: d.getTime(),
+      normAdv: normKey(i.asesor),
+      normSec: normKey(i.sector),
+    };
+    if (item.normAdv) {
+      if (!instsByAdv.has(item.normAdv)) instsByAdv.set(item.normAdv, []);
+      instsByAdv.get(item.normAdv)!.push(item);
+    }
+    if (item.normSec) {
+      if (!instsBySec.has(item.normSec)) instsBySec.set(item.normSec, []);
+      instsBySec.get(item.normSec)!.push(item);
+    }
+  });
+
+  const ONE_DAY_MS = 86400000;
   const activitiesEffectiveness: ActivityEffectivenessItem[] = [];
 
   actMap.forEach((entry) => {
@@ -349,36 +401,39 @@ export function computePlanificacionAnalytics(
     entry.jornadas.forEach((j) => {
       const jDate = parseDate(j.fecha);
       if (!jDate) return;
+      const jTime = jDate.getTime();
       const targetSec = normKey(j.sector);
       const targetAdv = normKey(j.asesor);
 
-      // Solicitudes en ventana
-      solicitudes.forEach((s) => {
-        if (!s.fecha) return;
-        const sDate = parseDate(s.fecha);
-        if (!sDate) return;
-        const diff = Math.round((sDate.getTime() - jDate.getTime()) / (1000 * 60 * 60 * 24));
+      // Evaluar solicitudes candidatas indexadas
+      const candidateSols = new Set<PreIndexedAttributionItem>();
+      if (targetAdv && solsByAdv.has(targetAdv)) {
+        solsByAdv.get(targetAdv)!.forEach((s) => candidateSols.add(s));
+      }
+      if (targetSec && solsBySec.has(targetSec)) {
+        solsBySec.get(targetSec)!.forEach((s) => candidateSols.add(s));
+      }
+
+      candidateSols.forEach((s) => {
+        const diff = Math.round((s.time - jTime) / ONE_DAY_MS);
         if (diff >= 0 && diff <= 4) {
-          const sSec = normKey(s.sector);
-          const sAdv = normKey(s.asesor);
-          if (sAdv === targetAdv || (targetSec && sSec === targetSec)) {
-            attributedSols++;
-          }
+          attributedSols++;
         }
       });
 
-      // Instalaciones en ventana [T, T+14]
-      installations.forEach((i) => {
-        if (!i.fecha) return;
-        const iDate = parseDate(i.fecha);
-        if (!iDate) return;
-        const diff = Math.round((iDate.getTime() - jDate.getTime()) / (1000 * 60 * 60 * 24));
+      // Evaluar instalaciones candidatas indexadas en ventana [T, T+14]
+      const candidateInsts = new Set<PreIndexedAttributionItem>();
+      if (targetAdv && instsByAdv.has(targetAdv)) {
+        instsByAdv.get(targetAdv)!.forEach((i) => candidateInsts.add(i));
+      }
+      if (targetSec && instsBySec.has(targetSec)) {
+        instsBySec.get(targetSec)!.forEach((i) => candidateInsts.add(i));
+      }
+
+      candidateInsts.forEach((i) => {
+        const diff = Math.round((i.time - jTime) / ONE_DAY_MS);
         if (diff >= 0 && diff <= 14) {
-          const iSec = normKey(i.sector);
-          const iAdv = normKey(i.asesor);
-          if (iAdv === targetAdv || (targetSec && iSec === targetSec)) {
-            attributedInsts++;
-          }
+          attributedInsts++;
         }
       });
     });
@@ -524,3 +579,4 @@ export function computePlanificacionAnalytics(
     advisorsYield,
   };
 }
+

@@ -160,11 +160,56 @@ let clientCachedData: {
     timestamp: number;
 } | null = null;
 
+let clientCachedProcessedOps: {
+    installations: Installation[];
+    solicitudes: Solicitud[];
+    timestamp: number;
+} | null = null;
+
 const CLIENT_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const LOCAL_STORAGE_PLAN_KEY = "comercializacion_cache_planificacion_v1";
 
 export function clearDashboardDataCache() {
     clientCachedData = null;
+    clientCachedProcessedOps = null;
     clientCachedPlanificacion = null;
+    if (typeof window !== "undefined") {
+        try {
+            localStorage.removeItem(LOCAL_STORAGE_PLAN_KEY);
+        } catch (_) {}
+    }
+}
+
+export function getCachedOperationalData(): { installations: Installation[]; solicitudes: Solicitud[] } | null {
+    if (clientCachedProcessedOps && (Date.now() - clientCachedProcessedOps.timestamp < CLIENT_CACHE_TTL)) {
+        return {
+            installations: clientCachedProcessedOps.installations,
+            solicitudes: clientCachedProcessedOps.solicitudes,
+        };
+    }
+    return null;
+}
+
+export function getCachedPlanificacionData(): PlanificacionRecord[] | null {
+    if (clientCachedPlanificacion && Array.isArray(clientCachedPlanificacion.data) && clientCachedPlanificacion.data.length > 0) {
+        return clientCachedPlanificacion.data;
+    }
+    if (typeof window !== "undefined") {
+        try {
+            const rawStored = localStorage.getItem(LOCAL_STORAGE_PLAN_KEY);
+            if (rawStored) {
+                const parsed = JSON.parse(rawStored);
+                if (parsed && Array.isArray(parsed.data) && parsed.data.length > 0) {
+                    clientCachedPlanificacion = {
+                        data: parsed.data,
+                        timestamp: parsed.timestamp || Date.now(),
+                    };
+                    return parsed.data;
+                }
+            }
+        } catch (_) {}
+    }
+    return null;
 }
 
 export async function fetchRawOperationalData(
@@ -311,6 +356,12 @@ export async function fetchRawOperationalData(
             municipio: formatProperCase(item.municipio),
         };
     });
+
+    clientCachedProcessedOps = {
+        installations: formattedInstallations,
+        solicitudes: formattedSolicitudes,
+        timestamp: now,
+    };
 
     return {
         installations: formattedInstallations,
@@ -722,20 +773,45 @@ export async function fetchPlanificacionData(forceRefresh = false): Promise<Plan
         return clientCachedPlanificacion.data;
     }
 
+    // Try reading from localStorage for instant retrieval on client
+    if (!forceRefresh && typeof window !== "undefined") {
+        try {
+            const rawStored = localStorage.getItem(LOCAL_STORAGE_PLAN_KEY);
+            if (rawStored) {
+                const parsed = JSON.parse(rawStored);
+                if (parsed && Array.isArray(parsed.data) && parsed.data.length > 0 && (now - (parsed.timestamp || 0) < CLIENT_CACHE_TTL)) {
+                    clientCachedPlanificacion = {
+                        data: parsed.data,
+                        timestamp: parsed.timestamp || now,
+                    };
+                    // Silently revalidate in background if older than 3 minutes
+                    if (now - (parsed.timestamp || 0) > 3 * 60 * 1000) {
+                        setTimeout(() => fetchPlanificacionData(true).catch(() => {}), 150);
+                    }
+                    return parsed.data;
+                }
+            }
+        } catch (_) {}
+    }
+
     try {
         const refreshParam = forceRefresh ? "&refresh=true" : "";
         const url = `/api/sheets?spreadsheetId=${PLANIFICACION_SPREADSHEET_ID}&sheetName=${encodeURIComponent(PLANIFICACION_SHEET_NAME)}${refreshParam}`;
-        const res = await fetch(url);
+        
+        // Fetch planning sheet and advisor configuration concurrently in parallel
+        const [res, configRes] = await Promise.all([
+            fetch(url),
+            fetch(`/api/advisors/config?t=${Date.now()}`, {
+                cache: "no-store",
+                headers: { "Cache-Control": "no-cache" }
+            }).then(r => r.json()).catch(() => null),
+        ]);
+
         const json = res.ok ? await res.json().catch(() => ({ success: false, data: [] })) : { success: false, data: [] };
 
         if (!json.success || !Array.isArray(json.data)) {
             return [];
         }
-
-        const configRes = await fetch(`/api/advisors/config?t=${Date.now()}`, {
-            cache: "no-store",
-            headers: { "Cache-Control": "no-cache" }
-        }).then(r => r.json()).catch(() => null);
 
         const overrides: AdvisorOverridesMap = configRes?.overrides || {};
         const aliases: Record<string, string> = configRes?.aliases || {};
@@ -779,6 +855,15 @@ export async function fetchPlanificacionData(forceRefresh = false): Promise<Plan
             data: formatted,
             timestamp: now,
         };
+
+        if (typeof window !== "undefined") {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_PLAN_KEY, JSON.stringify({
+                    data: formatted,
+                    timestamp: now,
+                }));
+            } catch (_) {}
+        }
 
         return formatted;
     } catch (err) {

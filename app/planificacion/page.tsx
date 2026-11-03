@@ -13,6 +13,8 @@ import { SidebarOpenButton } from "@/components/providers/sidebar-provider";
 import {
   fetchPlanificacionData,
   fetchRawOperationalData,
+  getCachedPlanificacionData,
+  getCachedOperationalData,
   PlanificacionRecord,
   Installation,
   Solicitud,
@@ -24,7 +26,6 @@ import { PlanificacionWeeklyMatrix, WeekDay, AdvisorWeeklySchedule } from "@/com
 import { PlanificacionDailyView } from "@/components/planificacion/planificacion-daily-view";
 import { PlanificacionMonthlyView } from "@/components/planificacion/planificacion-monthly-view";
 import { PlanificacionEfectividadView } from "@/components/planificacion/planificacion-efectividad-view";
-import { computePlanificacionAnalytics } from "@/lib/planificacion-analytics";
 
 type ViewMode = "semanal" | "diaria" | "mensual" | "efectividad";
 
@@ -68,10 +69,13 @@ const SPANISH_DAYS_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
 export default function PlanificacionPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [records, setRecords] = useState<PlanificacionRecord[]>([]);
-  const [rawSolicitudes, setRawSolicitudes] = useState<Solicitud[]>([]);
-  const [rawInstallations, setRawInstallations] = useState<Installation[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // Inicialización instantánea desde caché si está disponible
+  const [records, setRecords] = useState<PlanificacionRecord[]>(() => getCachedPlanificacionData() || []);
+  const [rawSolicitudes, setRawSolicitudes] = useState<Solicitud[]>(() => getCachedOperationalData()?.solicitudes || []);
+  const [rawInstallations, setRawInstallations] = useState<Installation[]>(() => getCachedOperationalData()?.installations || []);
+  const [loading, setLoading] = useState(() => !getCachedPlanificacionData() || getCachedPlanificacionData()!.length === 0);
+  const [operationalLoading, setOperationalLoading] = useState(() => !getCachedOperationalData());
   const [refreshing, setRefreshing] = useState(false);
 
   // Estados de vista y navegación
@@ -84,53 +88,59 @@ export default function PlanificacionPage() {
   // Fecha de referencia: por defecto 2026-11-02 (o fecha actual)
   const [referenceDate, setReferenceDate] = useState<Date>(() => new Date(2026, 10, 2));
 
-  // Carga de datos de la hoja Data y de operaciones (Solicitudes e Instalaciones)
+  // Carga progresiva y desacoplada de planificación y operaciones para renderizado instantáneo
   const loadData = useCallback(async (force = false) => {
     if (force) setRefreshing(true);
-    else setLoading(true);
+    else if (records.length === 0) setLoading(true);
 
-    try {
-      const [planData, opData] = await Promise.all([
-        fetchPlanificacionData(force),
-        fetchRawOperationalData(undefined, undefined, undefined, undefined, force).catch(() => null),
-      ]);
-
-      setRecords(planData || []);
-      if (opData) {
-        setRawSolicitudes(opData.solicitudes || []);
-        setRawInstallations(opData.installations || []);
-      }
-
-      // Situar la fecha de referencia en la fecha más reciente con datos
-      if (planData && planData.length > 0) {
-        const sortedDates = planData
-          .map((d) => d.fecha)
-          .filter(Boolean)
-          .sort();
-        if (sortedDates.length > 0) {
-          const latestStr = sortedDates[sortedDates.length - 1];
-          const latestParsed = parseDateSafe(latestStr);
-          if (latestParsed) {
-            setReferenceDate(latestParsed);
+    // 1. Cargar datos de planificación comercial primero (renderizado inmediato de cuadrícula)
+    const planPromise = fetchPlanificacionData(force)
+      .then((planData) => {
+        if (planData && planData.length > 0) {
+          setRecords(planData);
+          const sortedDates = planData
+            .map((d) => d.fecha)
+            .filter(Boolean)
+            .sort();
+          if (sortedDates.length > 0) {
+            const latestStr = sortedDates[sortedDates.length - 1];
+            const latestParsed = parseDateSafe(latestStr);
+            if (latestParsed) {
+              setReferenceDate(latestParsed);
+            }
           }
         }
-      }
-    } catch (err) {
-      console.error("Error al cargar planificación comercial:", err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+      })
+      .catch((err) => {
+        console.error("Error al cargar planificación comercial:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+
+    // 2. Cargar datos operativos (solicitudes e instalaciones) concurrentemente en segundo plano
+    setOperationalLoading(true);
+    const opPromise = fetchRawOperationalData(undefined, undefined, undefined, undefined, force)
+      .then((opData) => {
+        if (opData) {
+          setRawSolicitudes(opData.solicitudes || []);
+          setRawInstallations(opData.installations || []);
+        }
+      })
+      .catch((err) => {
+        console.warn("Aviso al cargar datos de operaciones en segundo plano:", err);
+      })
+      .finally(() => {
+        setOperationalLoading(false);
+        setRefreshing(false);
+      });
+
+    await Promise.all([planPromise, opPromise]);
+  }, [records.length]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  // Motor de Análisis de Atribución y Efectividad
-  const analytics = useMemo(() => {
-    return computePlanificacionAnalytics(records, rawSolicitudes, rawInstallations);
-  }, [records, rawSolicitudes, rawInstallations]);
 
   // Lista de meses disponibles ordenada
   const availableMonths = useMemo(() => {
@@ -656,7 +666,10 @@ export default function PlanificacionPage() {
 
               {viewMode === "efectividad" && (
                 <PlanificacionEfectividadView
-                  analytics={analytics}
+                  planRecords={records}
+                  solicitudes={rawSolicitudes}
+                  installations={rawInstallations}
+                  operationalLoading={operationalLoading}
                   onSelectSector={(sec) => {
                     setSearchTerm(sec);
                     setViewMode("semanal");
