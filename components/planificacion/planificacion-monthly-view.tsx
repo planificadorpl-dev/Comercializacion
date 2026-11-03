@@ -50,30 +50,59 @@ export function PlanificacionMonthlyView({
   const { solByDate, instByDate, solBySector, instBySector } = useMemo(() => {
     const sMap = new Map<string, number>();
     const sSecMap = new Map<string, number>();
+
+    const targetSecKey = activeSector ? normGeoKey(activeSector) : null;
+
     solicitudes.forEach((s) => {
-      if (s.fecha) {
-        sMap.set(s.fecha, (sMap.get(s.fecha) || 0) + 1);
-      }
       const sKey = normGeoKey(s.sector);
+      const subKey = normGeoKey(s.subsector);
+
+      // Mapeo global por sector (para la lista de sectores con cobertura)
       if (sKey) {
         sSecMap.set(sKey, (sSecMap.get(sKey) || 0) + 1);
+      }
+
+      // Para el calendario: si hay un sector seleccionado, filtrar estrictamente por ese sector
+      if (s.fecha) {
+        if (targetSecKey) {
+          const isMatch =
+            sKey === targetSecKey ||
+            subKey === targetSecKey ||
+            (sKey && sKey.includes(targetSecKey)) ||
+            (targetSecKey && targetSecKey.includes(sKey));
+          if (!isMatch) return;
+        }
+        sMap.set(s.fecha, (sMap.get(s.fecha) || 0) + 1);
       }
     });
 
     const iMap = new Map<string, number>();
     const iSecMap = new Map<string, number>();
     installations.forEach((i) => {
-      if (i.fecha) {
-        iMap.set(i.fecha, (iMap.get(i.fecha) || 0) + 1);
-      }
       const iKey = normGeoKey(i.sector);
+      const subKey = normGeoKey(i.subsector);
+
+      // Mapeo global por sector (para la lista de sectores con cobertura)
       if (iKey) {
         iSecMap.set(iKey, (iSecMap.get(iKey) || 0) + 1);
+      }
+
+      // Para el calendario: si hay un sector seleccionado, filtrar estrictamente por ese sector
+      if (i.fecha) {
+        if (targetSecKey) {
+          const isMatch =
+            iKey === targetSecKey ||
+            subKey === targetSecKey ||
+            (iKey && iKey.includes(targetSecKey)) ||
+            (targetSecKey && targetSecKey.includes(iKey));
+          if (!isMatch) return;
+        }
+        iMap.set(i.fecha, (iMap.get(i.fecha) || 0) + 1);
       }
     });
 
     return { solByDate: sMap, instByDate: iMap, solBySector: sSecMap, instBySector: iSecMap };
-  }, [solicitudes, installations]);
+  }, [solicitudes, installations, activeSector]);
 
   // Construir matriz del calendario mensual
   const { calendarDays, topSectors, topAdvisors } = useMemo(() => {
@@ -265,7 +294,11 @@ export function PlanificacionMonthlyView({
         {/* Leyenda contextual discreta cuando hay asesor seleccionado */}
         {selectedAdvisor && (
           <div className="flex flex-wrap items-center justify-between text-[11px] text-neutral-400 font-mono pb-1 border-b border-neutral-100">
-            <span>Rutas y resultados de gestión</span>
+            <span>
+              {activeSector
+                ? `Resultados en ${activeSector} · ${selectedAdvisor}`
+                : `Rutas y resultados de gestión · ${selectedAdvisor}`}
+            </span>
             <div className="flex items-center gap-2">
               <span>
                 <strong className="text-neutral-700 font-semibold">sol</strong>: solicitudes enviadas
@@ -312,8 +345,16 @@ export function PlanificacionMonthlyView({
                 title={
                   selectedAdvisor
                     ? `${String(day.dayNum).padStart(2, "0")} de ${month}: ${
-                        day.topSectors.join(", ") || "Sin ruta asignada"
-                      }${hasResults ? ` (${day.solicitudesCount} sol · ${day.installationsCount} inst)` : " (Sin actividad)"}`
+                        activeSector
+                          ? activeSector
+                          : day.topSectors.join(", ") || "Sin ruta asignada"
+                      }${
+                        hasResults
+                          ? ` (${day.solicitudesCount} sol · ${day.installationsCount} inst)`
+                          : day.recordsCount > 0
+                          ? " (Jornada en campo sin conversiones)"
+                          : " (Sin actividad)"
+                      }`
                     : `${String(day.dayNum).padStart(2, "0")} de ${month}: ${
                         day.topSectors.join(", ") || "Sin jornada"
                       } (${day.advisorsCount} asesores)`
@@ -321,7 +362,7 @@ export function PlanificacionMonthlyView({
                 className={cn(
                   "h-24 p-2.5 flex flex-col justify-between transition-colors cursor-pointer group",
                   day.isToday ? "bg-neutral-100/40" : "hover:bg-neutral-50/60",
-                  !hasData && "opacity-35"
+                  !hasData && "opacity-20"
                 )}
               >
                 {/* 1. Número del día e Indicador de Asesores Totales (solo en vista global) */}
@@ -343,26 +384,68 @@ export function PlanificacionMonthlyView({
                   )}
                 </div>
 
-                {/* 2. Rutas o Sectores principales de ese día */}
+                {/* 2. Rutas o Desempeño principal de ese día */}
                 <div className="min-w-0 my-auto py-0.5 space-y-0.5">
-                  {day.topSectors.length > 0 ? (
-                    day.topSectors.map((sec, sIdx) => (
-                      <span
-                        key={sIdx}
-                        className="text-[11px] text-neutral-700 block truncate leading-tight font-sans"
-                      >
-                        {sec}
-                      </span>
-                    ))
-                  ) : day.recordsCount === 0 && !hasResults ? (
-                    <span className="text-[10px] text-neutral-300 font-mono block">
-                      Sin jornada
-                    </span>
-                  ) : null}
+                  {activeSector ? (
+                    /* Con sector filtrado: no repetimos el nombre del sector 21 veces, mostramos conversiones */
+                    day.recordsCount > 0 ? (
+                      hasResults ? (
+                        <div className="flex items-center gap-1.5 text-xs font-mono">
+                          {day.solicitudesCount > 0 && (
+                            <span
+                              className="text-neutral-900 inline-flex items-baseline gap-0.5"
+                              title={`${day.solicitudesCount} solicitudes enviadas`}
+                            >
+                              <strong className="font-semibold text-neutral-950 text-sm">
+                                {day.solicitudesCount}
+                              </strong>
+                              <span className="text-neutral-400 font-normal text-[10px]">sol</span>
+                            </span>
+                          )}
+                          {day.solicitudesCount > 0 && day.installationsCount > 0 && (
+                            <span className="text-neutral-300">·</span>
+                          )}
+                          {day.installationsCount > 0 && (
+                            <span
+                              className="text-neutral-900 inline-flex items-baseline gap-0.5"
+                              title={`${day.installationsCount} clientes instalados`}
+                            >
+                              <strong className="font-semibold text-neutral-950 text-sm">
+                                {day.installationsCount}
+                              </strong>
+                              <span className="text-neutral-400 font-normal text-[10px]">inst</span>
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-neutral-400 font-mono block">
+                          Jornada en campo
+                        </span>
+                      )
+                    ) : null
+                  ) : (
+                    /* Sin sector filtrado: mostramos las rutas planificadas */
+                    <>
+                      {day.topSectors.length > 0 ? (
+                        day.topSectors.map((sec, sIdx) => (
+                          <span
+                            key={sIdx}
+                            className="text-[11px] text-neutral-700 block truncate leading-tight font-sans"
+                          >
+                            {sec}
+                          </span>
+                        ))
+                      ) : day.recordsCount === 0 && !hasResults ? (
+                        <span className="text-[10px] text-neutral-300 font-mono block">
+                          Sin jornada
+                        </span>
+                      ) : null}
+                    </>
+                  )}
                 </div>
 
-                {/* 3. Desempeño del Asesor (solo días con resultados positivos) */}
-                {selectedAdvisor && hasResults ? (
+                {/* 3. Desempeño del Asesor (solo en vista multiruta donde el cuerpo muestra nombres de sectores) */}
+                {!activeSector && selectedAdvisor && hasResults ? (
                   <div className="pt-1.5 border-t border-neutral-100/80 flex items-center gap-1.5 text-[10px] font-mono leading-none">
                     {day.solicitudesCount > 0 && (
                       <span
