@@ -7,11 +7,9 @@ import {
   ChevronLeft,
   RotateCcw,
   CheckCheck,
-  Save,
   ArrowLeft,
   ArrowRight,
   Check,
-  AlertCircle,
 } from "lucide-react";
 import {
   EVALUACION_FACTORES,
@@ -363,18 +361,17 @@ function NuevaEvaluacionContent() {
           type="button"
           onClick={handleSubmit}
           disabled={saving}
-          className="inline-flex items-center gap-1.5 py-1.5 px-3 text-xs font-semibold text-neutral-950 hover:text-neutral-600 transition-colors cursor-pointer select-none"
+          className="text-xs font-semibold text-neutral-900 hover:text-neutral-500 transition-colors cursor-pointer select-none py-1 px-1"
         >
-          <Save className="w-4 h-4 stroke-[2]" />
-          <span>{saving ? "Guardando..." : "Guardar"}</span>
+          {saving ? "Guardando..." : "Guardar"}
         </button>
       </header>
 
       {/* Main Page Container */}
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-5 pb-32 space-y-6">
         {formError && (
-          <div className="p-3 bg-amber-50/80 border border-amber-200/60 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 animate-in fade-in">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="py-2 flex items-center gap-2 text-xs text-neutral-900 border-b border-neutral-100 animate-in fade-in">
+            <span className="w-1.5 h-1.5 rounded-full bg-neutral-900 shrink-0" />
             <span className="leading-relaxed">{formError}</span>
           </div>
         )}
@@ -824,18 +821,18 @@ function NuevaEvaluacionContent() {
       </main>
 
       {/* ─── BARRA INFERIOR FIJA: ACCIÓN DE GUARDAR SIEMPRE VISIBLE ─── */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-neutral-200/80 px-4 sm:px-6 py-3 select-none">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-neutral-100 px-4 sm:px-6 py-3 select-none">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <Link
             href="/evaluaciones"
-            className="min-h-[44px] py-2 px-3 text-xs text-neutral-500 hover:text-neutral-900 transition-colors flex items-center justify-center cursor-pointer"
+            className="text-xs text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer py-1"
           >
             Cancelar
           </Link>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <div className="hidden sm:flex flex-col text-right">
-              <span className="text-xs font-bold font-mono text-neutral-950">
+              <span className="text-xs font-semibold font-mono text-neutral-900">
                 {scores.cumplimientoPct}% ({scores.promedio}/5)
               </span>
               <span className="text-[10px] text-neutral-400">{level.label}</span>
@@ -846,22 +843,19 @@ function NuevaEvaluacionContent() {
               onClick={handleSubmit}
               disabled={saving}
               className={cn(
-                "min-h-[44px] py-2 px-5 rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs",
+                "text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 py-1 px-1",
                 saveSuccess
-                  ? "bg-emerald-600 text-white"
-                  : "bg-neutral-950 text-white hover:bg-neutral-800 active:scale-98"
+                  ? "text-neutral-900"
+                  : "text-neutral-900 hover:text-neutral-500 disabled:text-neutral-300 disabled:cursor-not-allowed"
               )}
             >
               {saveSuccess ? (
                 <>
-                  <Check className="w-4 h-4 stroke-[2]" />
-                  <span>¡Guardado con éxito!</span>
+                  <Check className="w-3.5 h-3.5 stroke-[1.5]" />
+                  <span>Evaluación guardada</span>
                 </>
               ) : (
-                <>
-                  <Save className="w-4 h-4 stroke-[2]" />
-                  <span>{saving ? "Guardando..." : "Guardar evaluación"}</span>
-                </>
+                <span>{saving ? "Guardando..." : "Guardar evaluación"}</span>
               )}
             </button>
           </div>

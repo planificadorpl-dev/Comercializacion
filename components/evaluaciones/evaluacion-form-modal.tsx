@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { X, RotateCcw, CheckCheck, Save, ArrowLeft, ArrowRight } from "lucide-react";
+import { X, RotateCcw, CheckCheck, ArrowLeft, ArrowRight } from "lucide-react";
 import {
   EVALUACION_FACTORES,
   TOTAL_EVALUACION_ITEMS,
@@ -812,10 +812,9 @@ export function EvaluacionFormModal({
               <button
                 type="submit"
                 disabled={saving}
-                className="inline-flex items-center gap-2 text-xs font-semibold text-neutral-900 hover:text-neutral-600 transition-colors cursor-pointer select-none py-1.5 px-2"
+                className="text-xs font-semibold text-neutral-900 hover:text-neutral-500 transition-colors cursor-pointer select-none py-1 px-1"
               >
-                <Save className="w-3.5 h-3.5 stroke-[2]" />
-                <span>{saving ? "Guardando..." : "Guardar evaluación"}</span>
+                {saving ? "Guardando..." : "Guardar evaluación"}
               </button>
             </div>
           </div>
