@@ -80,6 +80,7 @@ export const CANONICAL_ZONES_CONFIG: Record<
     estado: string;
     municipio: string;
     parroquiaDefault: string;
+    sectorDefault: string;
     parroquiasMap?: Record<string, string>; // sector canónico -> parroquia específica
   }
 > = {
@@ -87,21 +88,25 @@ export const CANONICAL_ZONES_CONFIG: Record<
     estado: "Miranda",
     municipio: "Los Salias",
     parroquiaDefault: "San Antonio de los Altos",
+    sectorDefault: "El Pueblo",
   },
   "CARRIZAL": {
     estado: "Miranda",
     municipio: "Carrizal",
     parroquiaDefault: "Carrizal",
+    sectorDefault: "Casco Central",
   },
   "SAN DIEGO": {
     estado: "Miranda",
     municipio: "Guaicaipuro",
     parroquiaDefault: "Cecilio Acosta",
+    sectorDefault: "Casco Central",
   },
   "LOS TEQUES": {
     estado: "Miranda",
     municipio: "Guaicaipuro",
     parroquiaDefault: "Los Teques",
+    sectorDefault: "Centro Los Teques",
     parroquiasMap: {
       "San Pedro": "San Pedro de los Altos",
       "Pozo de Rosas": "San Pedro de los Altos",
@@ -111,6 +116,7 @@ export const CANONICAL_ZONES_CONFIG: Record<
     estado: "Distrito Capital",
     municipio: "Libertador",
     parroquiaDefault: "Sucre",
+    sectorDefault: "Propatria",
     parroquiasMap: {
       "Propatria": "Sucre",
       "El Valle": "El Valle",
@@ -123,11 +129,13 @@ export const CANONICAL_ZONES_CONFIG: Record<
     estado: "Aragua",
     municipio: "Santos Michelena",
     parroquiaDefault: "Las Tejerías",
+    sectorDefault: "Casco Central",
   },
   "EL CONSEJO": {
     estado: "Aragua",
     municipio: "José Rafael Revenga",
     parroquiaDefault: "El Consejo",
+    sectorDefault: "Corosito",
   },
 };
 
@@ -457,6 +465,22 @@ export const DEFAULT_GEO_ALIASES: Record<string, GeoAliasTarget> = {
   "MORAN": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
   "ELAMPARO": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
   "PEREZBONALDE": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "BLANDIN": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "BOQUERON": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "ELNAZARENO": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "LOSMANQUITOS": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "LOSPINOS": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "LOSFRAILESDECATIA": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "LOSFLORESDECATIA": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "LOMASDEURDANETA": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "MARIOBRICENOIRAGORRY": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "CALLEMEXICO": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "GATONEGRO": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "CALLEECUADOR": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "CASALTAI": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "CASALTAII": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "CASALTAIII": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
+  "CUTIRA": { canonicalSector: "Propatria", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Sucre" },
 
   // --- DISTRITO CAPITAL: LA VEGA ---
   "LASTORRES": { canonicalSector: "La Vega", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "La Vega" },
@@ -471,6 +495,13 @@ export const DEFAULT_GEO_ALIASES: Record<string, GeoAliasTarget> = {
   "LOSNARANJOS": { canonicalSector: "La Vega", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "La Vega" },
   "ELPETROLEO": { canonicalSector: "La Vega", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "La Vega" },
   "LAAMAPOLA": { canonicalSector: "La Vega", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "La Vega" },
+  "LASDOSROSAS": { canonicalSector: "La Vega", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "La Vega" },
+  "TERRAZASDELAVEGA": { canonicalSector: "La Vega", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "La Vega" },
+  "LAVEGACASCOCENTRAL": { canonicalSector: "La Vega", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "La Vega" },
+  "SINAI": { canonicalSector: "La Vega", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "La Vega" },
+  "LAPEDRERA": { canonicalSector: "La Vega", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "La Vega" },
+  "LAHOYADA": { canonicalSector: "La Vega", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "La Vega" },
+  "SECTORUNIDO": { canonicalSector: "La Vega", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "La Vega" },
 
   // --- DISTRITO CAPITAL: EL VALLE ---
   "CALLE18": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
@@ -489,6 +520,33 @@ export const DEFAULT_GEO_ALIASES: Record<string, GeoAliasTarget> = {
   "BRUZUAL": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
   "CERROGRANDE": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
   "CALLE19DEABRIL": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "19DEABRIL": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "24DEJULIO": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "GALLOROJO": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "RESSANANDRES": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "LOSCARDONES": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "LASMALVINAS": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "LASMARIAS": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "5DEJULIO": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CALLE9": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CALLECAJIGAL": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CALLE13": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CALLEAPURE": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CALLE10": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CALLE17": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CALLE12": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "PRIMERODEMAYO": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "SECTORZAMORA": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CALLE14": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "VENGASKM0": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CALLESANLUIS": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CALLE8": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "ELCALVARIO": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CANISITO": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "LAMATANZA": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "DAVILA": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "CALLE15": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
+  "VUELTAFELICIANO": { canonicalSector: "El Valle", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "El Valle" },
 
   // --- DISTRITO CAPITAL: COCHE & LAS MAYAS ---
   "COCHECITO": { canonicalSector: "Coche", canonicalZone: "DISTRITO CAPITAL", parroquiaOverride: "Coche" },
@@ -642,33 +700,76 @@ export function normalizeLocation(
     }
   }
 
-  // 3. Fallback Contextual: si se conoce la Zona o Parroquia
+  // 3. Fallback Contextual: resolución estricta hacia el sector canónico del Cuadro Diario
   let resolvedZone = rawZone;
-  if (!resolvedZone || !CANONICAL_ZONES_CONFIG[resolvedZone]) {
-    const normP = normGeoKey(rawPar);
-    const normM = normGeoKey(rawMun);
-    if (normP.includes("SUCRE") || normP.includes("CATIA")) resolvedZone = "DISTRITO CAPITAL";
-    else if (normP.includes("VALLE")) resolvedZone = "DISTRITO CAPITAL";
-    else if (normP.includes("VEGA")) resolvedZone = "DISTRITO CAPITAL";
-    else if (normP.includes("COCHE")) resolvedZone = "DISTRITO CAPITAL";
-    else if (normM.includes("CARRIZAL") || normP.includes("CARRIZAL")) resolvedZone = "CARRIZAL";
-    else if (normM.includes("SALIAS") || normP.includes("ANTONIO")) resolvedZone = "SAN ANTONIO";
-    else if (normP.includes("DIEGO") || normP.includes("CECILIO")) resolvedZone = "SAN DIEGO";
-    else if (normP.includes("TEQUES") || normM.includes("GUAICAIPURO")) resolvedZone = "LOS TEQUES";
-    else if (normP.includes("TEJERIA") || normM.includes("MICHELENA")) resolvedZone = "TEJERIAS";
-    else if (normP.includes("CONSEJO") || normM.includes("REVENGA")) resolvedZone = "EL CONSEJO";
+  let resolvedSector = "";
+  let resolvedParroquia = rawPar;
+
+  const normP = normGeoKey(rawPar);
+  const normM = normGeoKey(rawMun);
+
+  if (normP.includes("SUCRE") || normP.includes("CATIA")) {
+    resolvedZone = "DISTRITO CAPITAL";
+    resolvedSector = "Propatria";
+    resolvedParroquia = "Sucre";
+  } else if (normP.includes("VALLE")) {
+    resolvedZone = "DISTRITO CAPITAL";
+    resolvedSector = "El Valle";
+    resolvedParroquia = "El Valle";
+  } else if (normP.includes("VEGA")) {
+    resolvedZone = "DISTRITO CAPITAL";
+    resolvedSector = "La Vega";
+    resolvedParroquia = "La Vega";
+  } else if (normP.includes("MAYA")) {
+    resolvedZone = "DISTRITO CAPITAL";
+    resolvedSector = "Las Mayas";
+    resolvedParroquia = "Coche";
+  } else if (normP.includes("COCHE")) {
+    resolvedZone = "DISTRITO CAPITAL";
+    resolvedSector = "Coche";
+    resolvedParroquia = "Coche";
+  } else if (normM.includes("CARRIZAL") || normP.includes("CARRIZAL")) {
+    resolvedZone = "CARRIZAL";
+    resolvedSector = "Casco Central";
+    resolvedParroquia = "Carrizal";
+  } else if (normM.includes("SALIAS") || normP.includes("ANTONIO")) {
+    resolvedZone = "SAN ANTONIO";
+    resolvedSector = "El Pueblo";
+    resolvedParroquia = "San Antonio de los Altos";
+  } else if (normP.includes("DIEGO") || normP.includes("CECILIO")) {
+    resolvedZone = "SAN DIEGO";
+    resolvedSector = "Casco Central";
+    resolvedParroquia = "Cecilio Acosta";
+  } else if (normP.includes("TEQUES") || normM.includes("GUAICAIPURO")) {
+    resolvedZone = "LOS TEQUES";
+    resolvedSector = "Centro Los Teques";
+    resolvedParroquia = "Los Teques";
+  } else if (normP.includes("TEJERIA") || normM.includes("MICHELENA")) {
+    resolvedZone = "TEJERIAS";
+    resolvedSector = "Casco Central";
+    resolvedParroquia = "Las Tejerías";
+  } else if (normP.includes("CONSEJO") || normM.includes("REVENGA")) {
+    resolvedZone = "EL CONSEJO";
+    resolvedSector = "Corosito";
+    resolvedParroquia = "El Consejo";
   }
 
+  if (!resolvedZone || !CANONICAL_ZONES_CONFIG[resolvedZone]) {
+    resolvedZone = "LOS TEQUES";
+  }
   const zConfig = CANONICAL_ZONES_CONFIG[resolvedZone];
-  const finalSec = rawCandidate || (zConfig ? zConfig.parroquiaDefault : "Sin Sector");
+  if (!resolvedSector) {
+    resolvedSector = zConfig.sectorDefault;
+  }
 
   return {
-    sector: finalSec,
-    subsector: rawCandidate,
-    zona: resolvedZone || "Desconocido",
-    parroquia: zConfig?.parroquiasMap?.[finalSec] || zConfig?.parroquiaDefault || rawPar || "General",
-    municipio: zConfig?.municipio || rawMun || "General",
-    estado: zConfig?.estado || rawEst || "Miranda",
-    isRecognized: Boolean(zConfig && canonicalLookup.has(normGeoKey(finalSec))),
+    sector: resolvedSector,
+    subsector: rawCandidate || resolvedSector,
+    zona: resolvedZone,
+    parroquia: resolvedParroquia || zConfig.parroquiaDefault,
+    municipio: zConfig.municipio,
+    estado: zConfig.estado,
+    isRecognized: false,
   };
 }
+

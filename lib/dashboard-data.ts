@@ -173,7 +173,7 @@ let clientCachedProcessedOps: {
 } | null = null;
 
 const CLIENT_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
-const LOCAL_STORAGE_PLAN_KEY = "comercializacion_cache_planificacion_v1";
+const LOCAL_STORAGE_PLAN_KEY = "comercializacion_cache_planificacion_v4";
 
 export function clearDashboardDataCache() {
     clientCachedData = null;
@@ -181,6 +181,9 @@ export function clearDashboardDataCache() {
     clientCachedPlanificacion = null;
     if (typeof window !== "undefined") {
         try {
+            localStorage.removeItem("comercializacion_cache_planificacion_v1");
+            localStorage.removeItem("comercializacion_cache_planificacion_v2");
+            localStorage.removeItem("comercializacion_cache_planificacion_v3");
             localStorage.removeItem(LOCAL_STORAGE_PLAN_KEY);
         } catch (_) {}
     }

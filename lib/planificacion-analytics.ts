@@ -1,5 +1,6 @@
 import { PlanificacionRecord, Installation, Solicitud } from "./dashboard-data";
 import { formatProperCase } from "./utils";
+import { normalizeLocation } from "./geo_normalization";
 
 export interface SectorHealthItem {
   sector: string;
@@ -420,23 +421,43 @@ export function computePlanificacionAnalytics(
   };
 
   planRecords.forEach((p) => {
-    if (p.sector && isValidGeoName(p.sector)) {
-      const entry = getSectorEntry(p.sector, p.parroquia, p.municipio, p.estado);
+    const loc = normalizeLocation({
+      sector: p.sector,
+      parroquia: p.parroquia,
+      municipio: p.municipio,
+      estado: p.estado,
+      zona: p.zona,
+    });
+    if (loc.sector && isValidGeoName(loc.sector)) {
+      const entry = getSectorEntry(loc.sector, loc.parroquia, loc.municipio, loc.estado);
       entry.jornadas.push(p);
     }
   });
 
   solWithStatus.forEach((item) => {
     const s = item.sol;
-    if (s.sector && isValidGeoName(s.sector)) {
-      const entry = getSectorEntry(s.sector, s.parroquia || s.zona, s.municipio, s.estado);
+    const loc = normalizeLocation({
+      sector: s.sector,
+      ubicacion: s.ubicacion,
+      parroquia: s.parroquia || s.zona,
+      municipio: s.municipio,
+      estado: s.estado,
+      zona: s.zona,
+    });
+    if (loc.sector && isValidGeoName(loc.sector)) {
+      const entry = getSectorEntry(loc.sector, loc.parroquia, loc.municipio, loc.estado);
       entry.sols.push(item);
     }
   });
 
   installations.forEach((i) => {
-    if (i.sector && isValidGeoName(i.sector)) {
-      const entry = getSectorEntry(i.sector, i.zona, i.oficina, i.estado);
+    const loc = normalizeLocation({
+      sector: i.sector,
+      zona: i.zona,
+      estado: i.estado,
+    });
+    if (loc.sector && isValidGeoName(loc.sector)) {
+      const entry = getSectorEntry(loc.sector, loc.parroquia, loc.municipio, loc.estado);
       entry.insts.push(i);
     }
   });

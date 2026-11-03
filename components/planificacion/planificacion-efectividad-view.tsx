@@ -190,47 +190,20 @@ export function PlanificacionEfectividadView({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [planRecords, solicitudes, matchesFilter]);
 
-  // 2. Estados disponibles (Filtro cruzado)
+  // 2. Estados disponibles (Filtro cruzado: ÚNICA Y EXCLUSIVAMENTE del Padrón Oficial de Cuadro Diario)
   const availableEstados = useMemo(() => {
     const set = new Set<string>();
-    const geoEstados = Object.keys(geoHierarchy).filter(isValidGeoName);
-
-    // Si hay municipio o parroquia seleccionados, deducir estado canónico
-    if (filters.municipio !== "all" || filters.parroquia !== "all") {
-      const targetMun = filters.municipio !== "all" ? normKey(filters.municipio) : "";
-      const targetPar = filters.parroquia !== "all" ? normKey(filters.parroquia) : "";
-
-      Object.entries(geoHierarchy).forEach(([estadoName, munMap]) => {
-        if (!isValidGeoName(estadoName)) return;
-        Object.entries(munMap).forEach(([munName, parMap]) => {
-          if (targetMun && normKey(munName) !== targetMun) return;
-          if (targetPar && !Object.keys(parMap).some((p) => normKey(p) === targetPar)) return;
-          set.add(estadoName);
-        });
-      });
-    }
-
-    // Agregar estados presentes en los registros que cumplen los demás filtros
-    planRecords.forEach((r) => {
-      if (!isValidGeoName(r.estado)) return;
-      if (matchesFilter(r, "estado")) {
-        set.add(formatProperCase(r.estado));
-      }
+    Object.keys(geoHierarchy).forEach((e) => {
+      if (isValidGeoName(e)) set.add(e);
     });
-
-    if (set.size === 0) {
-      geoEstados.forEach((e) => set.add(e));
-    }
-
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [planRecords, filters.municipio, filters.parroquia, matchesFilter]);
+  }, []);
 
-  // 3. Municipios disponibles (Filtro cruzado)
+  // 3. Municipios disponibles (Filtro cruzado: ÚNICA Y EXCLUSIVAMENTE del Cuadro Diario)
   const availableMunicipios = useMemo(() => {
     const set = new Set<string>();
     const fEstNorm = filters.estado !== "all" ? normKey(filters.estado) : "";
 
-    // De geoHierarchy según el estado activo
     Object.entries(geoHierarchy).forEach(([estadoName, munMap]) => {
       if (!isValidGeoName(estadoName)) return;
       if (!fEstNorm || normKey(estadoName) === fEstNorm) {
@@ -240,29 +213,15 @@ export function PlanificacionEfectividadView({
       }
     });
 
-    // De planRecords que cumplen los demás filtros
-    const geoMunNormSet = new Set(Array.from(set).map(normKey));
-    planRecords.forEach((r) => {
-      if (!isValidGeoName(r.municipio)) return;
-      if (matchesFilter(r, "municipio")) {
-        const nk = normKey(r.municipio);
-        if (!geoMunNormSet.has(nk)) {
-          set.add(formatProperCase(r.municipio));
-          geoMunNormSet.add(nk);
-        }
-      }
-    });
-
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [planRecords, filters.estado, matchesFilter]);
+  }, [filters.estado]);
 
-  // 4. Parroquias disponibles (Filtro cruzado)
+  // 4. Parroquias disponibles (Filtro cruzado: ÚNICA Y EXCLUSIVAMENTE del Cuadro Diario)
   const availableParroquias = useMemo(() => {
     const set = new Set<string>();
     const fEstNorm = filters.estado !== "all" ? normKey(filters.estado) : "";
     const fMunNorm = filters.municipio !== "all" ? normKey(filters.municipio) : "";
 
-    // De geoHierarchy
     Object.entries(geoHierarchy).forEach(([estadoName, munMap]) => {
       if (!isValidGeoName(estadoName)) return;
       if (!fEstNorm || normKey(estadoName) === fEstNorm) {
@@ -277,58 +236,37 @@ export function PlanificacionEfectividadView({
       }
     });
 
-    // De planRecords
-    const geoParNormSet = new Set(Array.from(set).map(normKey));
-    planRecords.forEach((r) => {
-      if (!isValidGeoName(r.parroquia)) return;
-      if (matchesFilter(r, "parroquia")) {
-        const nk = normKey(r.parroquia);
-        if (!geoParNormSet.has(nk)) {
-          set.add(formatProperCase(r.parroquia));
-          geoParNormSet.add(nk);
-        }
-      }
-    });
-
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [planRecords, filters.estado, filters.municipio, matchesFilter]);
+  }, [filters.estado, filters.municipio]);
 
-  // 5. Sectores disponibles (Filtro cruzado)
+  // 5. Sectores disponibles (Filtro cruzado: ÚNICA Y EXCLUSIVAMENTE del Cuadro Diario)
   const availableSectores = useMemo(() => {
     const set = new Set<string>();
     const fEstNorm = filters.estado !== "all" ? normKey(filters.estado) : "";
     const fMunNorm = filters.municipio !== "all" ? normKey(filters.municipio) : "";
     const fParNorm = filters.parroquia !== "all" ? normKey(filters.parroquia) : "";
 
-    // De geoHierarchy si hay municipio o parroquia
-    if (fMunNorm || fParNorm) {
-      Object.entries(geoHierarchy).forEach(([estadoName, munMap]) => {
-        if (!fEstNorm || normKey(estadoName) === fEstNorm) {
-          Object.entries(munMap).forEach(([munName, parMap]) => {
-            if (!fMunNorm || normKey(munName) === fMunNorm) {
-              Object.entries(parMap).forEach(([parName, secList]) => {
-                if (!fParNorm || normKey(parName) === fParNorm) {
-                  secList.forEach((s) => {
-                    if (isValidGeoName(s)) set.add(s);
-                  });
-                }
-              });
-            }
-          });
-        }
-      });
-    }
-
-    // De planRecords que cumplen los demás filtros
-    planRecords.forEach((r) => {
-      if (!isValidGeoName(r.sector)) return;
-      if (matchesFilter(r, "sector")) {
-        set.add(formatProperCase(r.sector));
+    Object.entries(geoHierarchy).forEach(([estadoName, munMap]) => {
+      if (!isValidGeoName(estadoName)) return;
+      if (!fEstNorm || normKey(estadoName) === fEstNorm) {
+        Object.entries(munMap).forEach(([munName, parMap]) => {
+          if (!isValidGeoName(munName)) return;
+          if (!fMunNorm || normKey(munName) === fMunNorm) {
+            Object.entries(parMap).forEach(([parName, secList]) => {
+              if (!isValidGeoName(parName)) return;
+              if (!fParNorm || normKey(parName) === fParNorm) {
+                secList.forEach((s) => {
+                  if (isValidGeoName(s)) set.add(s);
+                });
+              }
+            });
+          }
+        });
       }
     });
 
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [planRecords, filters.estado, filters.municipio, filters.parroquia, matchesFilter]);
+  }, [filters.estado, filters.municipio, filters.parroquia]);
 
   // 6. Actividades disponibles (Filtro cruzado)
   const availableActivities = useMemo(() => {

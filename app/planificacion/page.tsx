@@ -179,20 +179,14 @@ export default function PlanificacionPage() {
   // Lista de municipios disponibles para el filtro (solo municipios reales de la jerarquía oficial y registros válidos)
   const availableMunicipios = useMemo(() => {
     const set = new Set<string>();
-    // De geoHierarchy (fuente canónica oficial)
+    // De geoHierarchy (fuente canónica oficial del Cuadro Diario)
     Object.values(geoHierarchy).forEach((munMap) => {
       Object.keys(munMap).forEach((m) => {
         if (isValidGeoName(m)) set.add(m);
       });
     });
-    // De records
-    records.forEach((r) => {
-      if (isValidGeoName(r.municipio)) {
-        set.add(formatProperCase(r.municipio));
-      }
-    });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [records]);
+  }, []);
 
   // Mes seleccionado actual basado en referenceDate
   const currentSelectedMonth = useMemo(() => {
