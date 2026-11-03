@@ -67,6 +67,7 @@ export default function PlanificacionPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAdvisor, setSelectedAdvisor] = useState<string | null>(null);
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("mensual");
 
   // Fecha de referencia: por defecto 2026-11-02 (o fecha actual)
@@ -162,13 +163,15 @@ export default function PlanificacionPage() {
     return list;
   }, [records, searchTerm, selectedAdvisor, selectedSector]);
 
-  // Solicitudes filtradas transversalmente según selección activa (periodo, asesor, sector, búsqueda)
+  // Solicitudes filtradas transversalmente según selección activa (periodo, asesor, sector, búsqueda, día móvil)
   const filteredSolicitudes = useMemo(() => {
     let list = rawSolicitudes;
 
     if (viewMode === "diaria") {
       const dateIso = toIsoDate(referenceDate);
       list = list.filter((s) => s.fecha === dateIso);
+    } else if (selectedDateFilter) {
+      list = list.filter((s) => s.fecha === selectedDateFilter || (s.created_at && s.created_at.startsWith(selectedDateFilter)));
     } else {
       const mKey = normKey(currentSelectedMonth);
       list = list.filter((s) => normKey(s.mes) === mKey);
@@ -196,15 +199,17 @@ export default function PlanificacionPage() {
     }
 
     return list;
-  }, [rawSolicitudes, viewMode, referenceDate, currentSelectedMonth, selectedAdvisor, selectedSector, searchTerm]);
+  }, [rawSolicitudes, viewMode, referenceDate, selectedDateFilter, currentSelectedMonth, selectedAdvisor, selectedSector, searchTerm]);
 
-  // Instalaciones filtradas transversalmente según selección activa (periodo, asesor, sector, búsqueda)
+  // Instalaciones filtradas transversalmente según selección activa (periodo, asesor, sector, búsqueda, día móvil)
   const filteredInstallations = useMemo(() => {
     let list = rawInstallations;
 
     if (viewMode === "diaria") {
       const dateIso = toIsoDate(referenceDate);
       list = list.filter((i) => i.fecha === dateIso);
+    } else if (selectedDateFilter) {
+      list = list.filter((i) => i.fecha === selectedDateFilter || (i.created_at && i.created_at.startsWith(selectedDateFilter)));
     } else {
       const mKey = normKey(currentSelectedMonth);
       list = list.filter((i) => normKey(i.mes) === mKey);
@@ -232,13 +237,16 @@ export default function PlanificacionPage() {
     }
 
     return list;
-  }, [rawInstallations, viewMode, referenceDate, currentSelectedMonth, selectedAdvisor, selectedSector, searchTerm]);
+  }, [rawInstallations, viewMode, referenceDate, selectedDateFilter, currentSelectedMonth, selectedAdvisor, selectedSector, searchTerm]);
 
-  // Registros filtrados para el mes actualmente seleccionado (para métricas y listados dependientes del filtro)
+  // Registros filtrados para el mes o día actualmente seleccionado (para métricas y listados dependientes del filtro)
   const monthlyRecords = useMemo(() => {
+    if (selectedDateFilter) {
+      return filteredRecords.filter((r) => r.fecha === selectedDateFilter);
+    }
     const mKey = normKey(currentSelectedMonth);
     return filteredRecords.filter((r) => normKey(r.mes) === mKey);
-  }, [filteredRecords, currentSelectedMonth]);
+  }, [filteredRecords, selectedDateFilter, currentSelectedMonth]);
 
   // Registros completos del asesor en el mes para la cuadrícula del calendario
   // (permite que el calendario siempre muestre dónde estuvo el asesor cada día)
@@ -252,27 +260,37 @@ export default function PlanificacionPage() {
     return list;
   }, [records, currentSelectedMonth, selectedAdvisor]);
 
-  // Solicitudes del mes (filtradas por asesor si aplica, no restringidas por sector)
+  // Solicitudes del mes o día móvil (filtradas por asesor si aplica, no restringidas por sector)
   const monthlySolicitudes = useMemo(() => {
-    const mKey = normKey(currentSelectedMonth);
-    let list = rawSolicitudes.filter((s) => normKey(s.mes) === mKey);
+    let list = rawSolicitudes;
+    if (selectedDateFilter) {
+      list = list.filter((s) => s.fecha === selectedDateFilter || (s.created_at && s.created_at.startsWith(selectedDateFilter)));
+    } else {
+      const mKey = normKey(currentSelectedMonth);
+      list = list.filter((s) => normKey(s.mes) === mKey);
+    }
     if (selectedAdvisor) {
       const advNk = normKey(selectedAdvisor);
       list = list.filter((s) => normKey(s.asesor) === advNk);
     }
     return list;
-  }, [rawSolicitudes, currentSelectedMonth, selectedAdvisor]);
+  }, [rawSolicitudes, selectedDateFilter, currentSelectedMonth, selectedAdvisor]);
 
-  // Instalaciones del mes (filtradas por asesor si aplica, no restringidas por sector)
+  // Instalaciones del mes o día móvil (filtradas por asesor si aplica, no restringidas por sector)
   const monthlyInstallations = useMemo(() => {
-    const mKey = normKey(currentSelectedMonth);
-    let list = rawInstallations.filter((i) => normKey(i.mes) === mKey);
+    let list = rawInstallations;
+    if (selectedDateFilter) {
+      list = list.filter((i) => i.fecha === selectedDateFilter || (i.created_at && i.created_at.startsWith(selectedDateFilter)));
+    } else {
+      const mKey = normKey(currentSelectedMonth);
+      list = list.filter((i) => normKey(i.mes) === mKey);
+    }
     if (selectedAdvisor) {
       const advNk = normKey(selectedAdvisor);
       list = list.filter((i) => normKey(i.asesor) === advNk);
     }
     return list;
-  }, [rawInstallations, currentSelectedMonth, selectedAdvisor]);
+  }, [rawInstallations, selectedDateFilter, currentSelectedMonth, selectedAdvisor]);
 
   // Registros filtrados para la vista diaria
   const { dailyRecords, dailyDateLabel } = useMemo(() => {
@@ -312,17 +330,31 @@ export default function PlanificacionPage() {
 
     const predPct = scopeRecords.length > 0 ? Math.round((predCount / scopeRecords.length) * 100) : 0;
 
+    let activeLabel = `Mes de ${currentSelectedMonth}`;
+    if (viewMode === "diaria") {
+      activeLabel = dailyDateLabel;
+    } else if (selectedDateFilter) {
+      const parsed = parseDateSafe(selectedDateFilter);
+      if (parsed) {
+        const dName = SPANISH_DAYS_FULL[parsed.getDay()];
+        activeLabel = `${dName}, ${parsed.getDate()} de ${currentSelectedMonth.toLowerCase()}`;
+      } else {
+        activeLabel = selectedDateFilter;
+      }
+    }
+
     return {
       totalAdvisors: advisorsSet.size,
       totalSectors: sectorsSet.size,
       totalJornadas: scopeRecords.length,
       predominantActivity: predCount > 0 ? { name: predName, count: predCount, pct: predPct } : undefined,
-      periodLabel: viewMode === "diaria" ? dailyDateLabel : `Mes de ${currentSelectedMonth}`,
+      periodLabel: activeLabel,
     };
-  }, [viewMode, dailyRecords, monthlyRecords, dailyDateLabel, currentSelectedMonth]);
+  }, [viewMode, selectedDateFilter, dailyRecords, monthlyRecords, dailyDateLabel, currentSelectedMonth]);
 
   // Manejadores de navegación temporal (mensual o diario)
   const handlePrevPeriod = () => {
+    setSelectedDateFilter(null);
     const d = new Date(referenceDate);
     if (viewMode === "diaria") {
       d.setDate(d.getDate() - 1);
@@ -333,6 +365,7 @@ export default function PlanificacionPage() {
   };
 
   const handleNextPeriod = () => {
+    setSelectedDateFilter(null);
     const d = new Date(referenceDate);
     if (viewMode === "diaria") {
       d.setDate(d.getDate() + 1);
@@ -343,6 +376,7 @@ export default function PlanificacionPage() {
   };
 
   const handleToday = () => {
+    setSelectedDateFilter(null);
     const sorted = records.map((r) => r.fecha).filter(Boolean).sort();
     if (sorted.length > 0) {
       const parsed = parseDateSafe(sorted[sorted.length - 1]);
@@ -355,6 +389,7 @@ export default function PlanificacionPage() {
   };
 
   const handleSelectSpecificDay = (dateStr: string) => {
+    setSelectedDateFilter(null);
     const parsed = parseDateSafe(dateStr);
     if (parsed) {
       setReferenceDate(parsed);
@@ -363,6 +398,7 @@ export default function PlanificacionPage() {
   };
 
   const handleSelectMonth = (monthName: string) => {
+    setSelectedDateFilter(null);
     const mIdx = MONTH_ORDER.findIndex((m) => m.toLowerCase() === monthName.toLowerCase());
     if (mIdx >= 0) {
       const d = new Date(referenceDate);
@@ -461,6 +497,25 @@ export default function PlanificacionPage() {
                     type="button"
                     onClick={() => setSelectedSector(null)}
                     title="Quitar filtro de sector"
+                    className="text-neutral-400 hover:text-neutral-900 p-0.5 cursor-pointer transition-colors"
+                  >
+                    <X className="w-3 h-3 stroke-[1.5]" />
+                  </button>
+                </div>
+              )}
+              {selectedDateFilter && (
+                <div className="flex items-center gap-1.5 ml-2">
+                  <span className="text-xs text-neutral-400">· Día:</span>
+                  <span className="text-xs font-medium text-neutral-900 font-mono">
+                    {(() => {
+                      const parsed = parseDateSafe(selectedDateFilter);
+                      return parsed ? `${String(parsed.getDate()).padStart(2, "0")} de ${currentSelectedMonth}` : selectedDateFilter;
+                    })()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDateFilter(null)}
+                    title="Quitar filtro de día y ver mes completo"
                     className="text-neutral-400 hover:text-neutral-900 p-0.5 cursor-pointer transition-colors"
                   >
                     <X className="w-3 h-3 stroke-[1.5]" />
@@ -587,6 +642,8 @@ export default function PlanificacionPage() {
               onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
               selectedSector={selectedSector}
               onSelectSector={setSelectedSector}
+              selectedDateFilter={selectedDateFilter}
+              onSelectDateFilter={setSelectedDateFilter}
             />
           )}
         </main>

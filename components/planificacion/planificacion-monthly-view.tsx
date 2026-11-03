@@ -17,6 +17,8 @@ interface PlanificacionMonthlyViewProps {
   onSelectAdvisor?: (advisor: string) => void;
   selectedSector?: string | null;
   onSelectSector?: (sector: string | null) => void;
+  selectedDateFilter?: string | null;
+  onSelectDateFilter?: (dateStr: string | null) => void;
 }
 
 function toStandardIsoDate(val: any): string {
@@ -98,10 +100,19 @@ export function PlanificacionMonthlyView({
   onSelectAdvisor,
   selectedSector: propSelectedSector,
   onSelectSector,
+  selectedDateFilter,
+  onSelectDateFilter,
 }: PlanificacionMonthlyViewProps) {
   const [internalSector, setInternalSector] = useState<string | null>(null);
   const [showAllAdvisors, setShowAllAdvisors] = useState(false);
-  const [selectedMobileDay, setSelectedMobileDay] = useState<string | null>(null);
+  const [internalMobileDay, setInternalMobileDay] = useState<string | null>(null);
+
+  const selectedMobileDay = selectedDateFilter !== undefined ? selectedDateFilter : internalMobileDay;
+  const setSelectedMobileDay = (d: string | null) => {
+    if (onSelectDateFilter) onSelectDateFilter(d);
+    setInternalMobileDay(d);
+  };
+
   const activeSector = propSelectedSector !== undefined ? propSelectedSector : internalSector;
 
   const handleToggleSector = (secName: string) => {
@@ -687,7 +698,13 @@ export function PlanificacionMonthlyView({
                 <button
                   key={`m-${day.dateStr}`}
                   type="button"
-                  onClick={() => setSelectedMobileDay(day.dateStr)}
+                  onClick={() => {
+                    if (selectedMobileDay === day.dateStr) {
+                      setSelectedMobileDay(null);
+                    } else {
+                      setSelectedMobileDay(day.dateStr);
+                    }
+                  }}
                   className={cn(
                     "h-10 flex flex-col items-center justify-center rounded-md transition-all cursor-pointer relative",
                     isSelected
@@ -739,6 +756,16 @@ export function PlanificacionMonthlyView({
                       <span className="text-[10px] text-neutral-400 font-mono">
                         (Hoy)
                       </span>
+                    )}
+                    {selectedMobileDay && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMobileDay(null)}
+                        className="text-[10px] font-mono text-neutral-400 hover:text-neutral-900 ml-1 cursor-pointer transition-colors"
+                        title="Ver todo el mes"
+                      >
+                        (Ver mes completo)
+                      </button>
                     )}
                   </div>
                   {onSelectDay && (
