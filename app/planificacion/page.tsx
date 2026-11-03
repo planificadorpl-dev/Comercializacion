@@ -43,12 +43,36 @@ function advisorKeysMatch(keyA: string, keyB: string): boolean {
   return false;
 }
 
-// Convierte objeto Date a ISO YYYY-MM-DD
-function toIsoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function toStandardIsoDate(val: any): string {
+  if (!val) return "";
+  const str = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+
+  const parts = str.split(/[\/\-]/).map((p) => parseInt(p, 10));
+  if (parts.length === 3) {
+    let y = parts[2];
+    let m = parts[1];
+    let d = parts[0];
+    if (parts[0] > 1000) {
+      y = parts[0];
+      m = parts[1];
+      d = parts[2];
+    }
+    if (y && m && d && !isNaN(y) && !isNaN(m) && !isNaN(d)) {
+      return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
+  }
+  return "";
+}
+
+function matchesDate(itemFecha: any, itemCreatedAt: any, targetIso: string): boolean {
+  if (!targetIso) return false;
+  const iso1 = toStandardIsoDate(itemFecha);
+  if (iso1 && iso1 === targetIso) return true;
+  const iso2 = toStandardIsoDate(itemCreatedAt);
+  if (iso2 && iso2 === targetIso) return true;
+  return false;
 }
 
 const SPANISH_DAYS_FULL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -204,10 +228,11 @@ export default function PlanificacionPage() {
     let list = rawSolicitudes.filter((s) => isCommercialAdvisor(s.asesor));
 
     if (viewMode === "diaria") {
-      const dateIso = toIsoDate(referenceDate);
-      list = list.filter((s) => s.fecha === dateIso);
+      const targetIso = toStandardIsoDate(referenceDate);
+      list = list.filter((s) => matchesDate(s.fecha, s.created_at, targetIso));
     } else if (selectedDateFilter) {
-      list = list.filter((s) => s.fecha === selectedDateFilter || (s.created_at && s.created_at.startsWith(selectedDateFilter)));
+      const targetIso = toStandardIsoDate(selectedDateFilter);
+      list = list.filter((s) => matchesDate(s.fecha, s.created_at, targetIso));
     } else {
       const mKey = normKey(currentSelectedMonth);
       list = list.filter((s) => normKey(s.mes) === mKey);
@@ -243,10 +268,11 @@ export default function PlanificacionPage() {
     let list = rawInstallations.filter((i) => isCommercialAdvisor(i.asesor));
 
     if (viewMode === "diaria") {
-      const dateIso = toIsoDate(referenceDate);
-      list = list.filter((i) => i.fecha === dateIso);
+      const targetIso = toStandardIsoDate(referenceDate);
+      list = list.filter((i) => matchesDate(i.fecha, i.created_at, targetIso));
     } else if (selectedDateFilter) {
-      list = list.filter((i) => i.fecha === selectedDateFilter || (i.created_at && i.created_at.startsWith(selectedDateFilter)));
+      const targetIso = toStandardIsoDate(selectedDateFilter);
+      list = list.filter((i) => matchesDate(i.fecha, i.created_at, targetIso));
     } else {
       const mKey = normKey(currentSelectedMonth);
       list = list.filter((i) => normKey(i.mes) === mKey);
@@ -279,7 +305,8 @@ export default function PlanificacionPage() {
   // Registros filtrados para el mes o día actualmente seleccionado (para métricas y listados dependientes del filtro)
   const monthlyRecords = useMemo(() => {
     if (selectedDateFilter) {
-      return filteredRecords.filter((r) => r.fecha === selectedDateFilter);
+      const targetIso = toStandardIsoDate(selectedDateFilter);
+      return filteredRecords.filter((r) => toStandardIsoDate(r.fecha) === targetIso);
     }
     const mKey = normKey(currentSelectedMonth);
     return filteredRecords.filter((r) => normKey(r.mes) === mKey);
@@ -301,7 +328,8 @@ export default function PlanificacionPage() {
   const monthlySolicitudes = useMemo(() => {
     let list = rawSolicitudes.filter((s) => isCommercialAdvisor(s.asesor));
     if (selectedDateFilter) {
-      list = list.filter((s) => s.fecha === selectedDateFilter || (s.created_at && s.created_at.startsWith(selectedDateFilter)));
+      const targetIso = toStandardIsoDate(selectedDateFilter);
+      list = list.filter((s) => matchesDate(s.fecha, s.created_at, targetIso));
     } else {
       const mKey = normKey(currentSelectedMonth);
       list = list.filter((s) => normKey(s.mes) === mKey);
@@ -317,7 +345,8 @@ export default function PlanificacionPage() {
   const monthlyInstallations = useMemo(() => {
     let list = rawInstallations.filter((i) => isCommercialAdvisor(i.asesor));
     if (selectedDateFilter) {
-      list = list.filter((i) => i.fecha === selectedDateFilter || (i.created_at && i.created_at.startsWith(selectedDateFilter)));
+      const targetIso = toStandardIsoDate(selectedDateFilter);
+      list = list.filter((i) => matchesDate(i.fecha, i.created_at, targetIso));
     } else {
       const mKey = normKey(currentSelectedMonth);
       list = list.filter((i) => normKey(i.mes) === mKey);
@@ -331,8 +360,8 @@ export default function PlanificacionPage() {
 
   // Registros filtrados para la vista diaria
   const { dailyRecords, dailyDateLabel } = useMemo(() => {
-    const dateIso = toIsoDate(referenceDate);
-    const inDay = filteredRecords.filter((r) => r.fecha === dateIso);
+    const targetIso = toStandardIsoDate(referenceDate);
+    const inDay = filteredRecords.filter((r) => toStandardIsoDate(r.fecha) === targetIso);
     const dayName = SPANISH_DAYS_FULL[referenceDate.getDay()];
     const dayNum = referenceDate.getDate();
     const monthName = MONTH_ORDER[referenceDate.getMonth()] || "";
