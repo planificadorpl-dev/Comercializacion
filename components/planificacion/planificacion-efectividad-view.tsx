@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Search, X, Calendar, RotateCcw } from "lucide-react";
 import { cn, formatNumber, formatProperCase } from "@/lib/utils";
 import {
@@ -82,20 +82,297 @@ export function PlanificacionEfectividadView({
     ...initialFilters,
   }));
 
-  // Opciones dinámicas para asesores (de todas las fuentes disponibles)
+  // Mapas inversos canónicos derivados exclusivamente de la jerarquía oficial (geoHierarchy)
+  const {
+    parroquiaToMun,
+    sectorToMun,
+    parroquiaToEstado,
+    sectorToEstado,
+  } = useMemo(() => {
+    const pToM = new Map<string, string>();
+    const sToM = new Map<string, string>();
+    const pToE = new Map<string, string>();
+    const sToE = new Map<string, string>();
+
+    Object.entries(geoHierarchy).forEach(([estadoName, munMap]) => {
+      const eNorm = normKey(estadoName);
+      Object.entries(munMap).forEach(([munName, parMap]) => {
+        const mNorm = normKey(munName);
+        Object.entries(parMap).forEach(([parName, secList]) => {
+          const pNorm = normKey(parName);
+          pToM.set(pNorm, mNorm);
+          pToE.set(pNorm, eNorm);
+          secList.forEach((sec) => {
+            const sNorm = normKey(sec);
+            sToM.set(sNorm, mNorm);
+            sToE.set(sNorm, eNorm);
+          });
+        });
+      });
+    });
+
+    return {
+      parroquiaToMun: pToM,
+      sectorToMun: sToM,
+      parroquiaToEstado: pToE,
+      sectorToEstado: sToE,
+    };
+  }, []);
+
+  // 1. Estados canónicos (Única fuente de verdad: geoHierarchy + normalización sin duplicados)
+  const availableEstados = useMemo(() => {
+    const geoEstados = Object.keys(geoHierarchy);
+    const geoNormMap = new Map<string, string>();
+    geoEstados.forEach((e) => geoNormMap.set(normKey(e), e));
+
+    const extraEstados = new Set<string>();
+    planRecords.forEach((r) => {
+      if (!r.estado || r.estado === "N/A" || r.estado === "Otros") return;
+      const nk = normKey(r.estado);
+      if (!geoNormMap.has(nk)) {
+        extraEstados.add(formatProperCase(r.estado));
+      }
+    });
+
+    return [...geoEstados, ...Array.from(extraEstados)].sort((a, b) => a.localeCompare(b));
+  }, [planRecords]);
+
+  // 2. Municipios canónicos (filtrados por estado y sin oficinas administrativas como 'Call Center' o 'Comercializacion')
+  const availableMunicipios = useMemo(() => {
+    const set = new Set<string>();
+    const fEstNorm = filters.estado !== "all" ? normKey(filters.estado) : "";
+
+    // A. De geoHierarchy (estructura oficial pura)
+    Object.entries(geoHierarchy).forEach(([estadoName, munMap]) => {
+      if (!fEstNorm || normKey(estadoName) === fEstNorm) {
+        Object.keys(munMap).forEach((m) => set.add(m));
+      }
+    });
+
+    // B. De planRecords (validando que sean municipios reales y no sedes/oficinas)
+    const EXCLUDED_NON_MUNICIPIOS = new Set([
+      "N/A",
+      "OTROS",
+      "OTRO",
+      "CALL CENTER",
+      "COMERCIALIZACION",
+      "COMERCIALIZACION / EX-COLABORADOR",
+      "ALI PRIMERA",
+      "SEDE",
+      "OFICINA",
+      "SIN MUNICIPIO",
+    ]);
+
+    const geoMunNormSet = new Set(Array.from(set).map(normKey));
+
+    planRecords.forEach((r) => {
+      if (!r.municipio) return;
+      const nk = normKey(r.municipio);
+      if (EXCLUDED_NON_MUNICIPIOS.has(nk)) return;
+      if (fEstNorm && normKey(r.estado) !== fEstNorm) return;
+
+      if (!geoMunNormSet.has(nk)) {
+        set.add(formatProperCase(r.municipio));
+        geoMunNormSet.add(nk);
+      }
+    });
+
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [planRecords, filters.estado]);
+
+  // 3. Parroquias canónicas (filtradas por municipio y estado seleccionados)
+  const availableParroquias = useMemo(() => {
+    const set = new Set<string>();
+    const fEstNorm = filters.estado !== "all" ? normKey(filters.estado) : "";
+    const fMunNorm = filters.municipio !== "all" ? normKey(filters.municipio) : "";
+
+    // A. De geoHierarchy
+    Object.entries(geoHierarchy).forEach(([estadoName, munMap]) => {
+      if (!fEstNorm || normKey(estadoName) === fEstNorm) {
+        Object.entries(munMap).forEach(([munName, parMap]) => {
+          if (!fMunNorm || normKey(munName) === fMunNorm) {
+            Object.keys(parMap).forEach((p) => {
+              if (p && p !== "N/A") set.add(p);
+            });
+          }
+        });
+      }
+    });
+
+    // B. De planRecords
+    const geoParNormSet = new Set(Array.from(set).map(normKey));
+    planRecords.forEach((r) => {
+      if (!r.parroquia || r.parroquia === "N/A" || r.parroquia === "Otros") return;
+      const nk = normKey(r.parroquia);
+      if (fEstNorm && normKey(r.estado) !== fEstNorm) return;
+      if (fMunNorm && normKey(r.municipio) !== fMunNorm) return;
+
+      if (!geoParNormSet.has(nk)) {
+        set.add(formatProperCase(r.parroquia));
+        geoParNormSet.add(nk);
+      }
+    });
+
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [planRecords, filters.estado, filters.municipio]);
+
+  // 4. Sectores canónicos según parroquia/municipio
+  const availableSectores = useMemo(() => {
+    const set = new Set<string>();
+    const fEstNorm = filters.estado !== "all" ? normKey(filters.estado) : "";
+    const fMunNorm = filters.municipio !== "all" ? normKey(filters.municipio) : "";
+    const fParNorm = filters.parroquia !== "all" ? normKey(filters.parroquia) : "";
+
+    // De geoHierarchy
+    if (fMunNorm || fParNorm) {
+      Object.entries(geoHierarchy).forEach(([estadoName, munMap]) => {
+        if (!fEstNorm || normKey(estadoName) === fEstNorm) {
+          Object.entries(munMap).forEach(([munName, parMap]) => {
+            if (!fMunNorm || normKey(munName) === fMunNorm) {
+              Object.entries(parMap).forEach(([parName, secList]) => {
+                if (!fParNorm || normKey(parName) === fParNorm) {
+                  secList.forEach((s) => {
+                    if (s && s !== "N/A") set.add(s);
+                  });
+                }
+              });
+            }
+          });
+        }
+      });
+    }
+
+    // De planRecords
+    planRecords.forEach((r) => {
+      if (!r.sector || r.sector === "N/A" || r.sector === "Sin Sector") return;
+      if (fEstNorm && normKey(r.estado) !== fEstNorm) return;
+      if (fMunNorm && normKey(r.municipio) !== fMunNorm) return;
+      if (fParNorm && normKey(r.parroquia) !== fParNorm) return;
+      set.add(formatProperCase(r.sector));
+    });
+
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [planRecords, filters.estado, filters.municipio, filters.parroquia]);
+
+  // 5. ASESORES COMERCIALES ACTIVOS EN ESA FECHA:
+  // Filtro estricto: solo asesores comerciales (no taquilla, no planificacion, no tecnicos, no ex-colaboradores)
+  // y que estén efectivamente activos/programados en la fecha o rango temporal seleccionado
   const availableAdvisors = useMemo(() => {
     const set = new Set<string>();
+
+    const matchesDate = (isoDate: string | null | undefined): boolean => {
+      if (!isoDate) return filters.dateMode === "none";
+      if (filters.dateMode === "single") {
+        return Boolean(filters.singleDate && isoDate === filters.singleDate);
+      }
+      if (filters.dateMode === "range") {
+        if (filters.startDate && isoDate < filters.startDate) return false;
+        if (filters.endDate && isoDate > filters.endDate) return false;
+        return true;
+      }
+      return true;
+    };
+
+    // A. De planificación comercial (rutas asignadas en esa fecha)
     planRecords.forEach((r) => {
-      if (r.asesor && r.asesor !== "Sin Asesor") set.add(r.asesor);
+      if (!r.asesor) return;
+      const clean = r.asesor.trim();
+      if (
+        !clean ||
+        clean === "Sin Asesor" ||
+        clean === "Desconocido" ||
+        clean === "Planificación" ||
+        clean === "Externo"
+      ) {
+        return;
+      }
+      // Solo comerciales activos (excluir taquilla, planificacion, tecnicos y ex-colaboradores)
+      if (r.tipo_asesor && r.tipo_asesor !== "comercial") return;
+      if (r.es_ex_colaborador) return;
+
+      if (matchesDate(r.fecha)) {
+        set.add(clean);
+      }
     });
+
+    // B. De solicitudes operativas generadas por asesores comerciales en esa fecha
     solicitudes.forEach((s) => {
-      if (s.asesor && s.asesor !== "Sin Asesor") set.add(s.asesor);
+      if (!s.asesor) return;
+      const clean = s.asesor.trim();
+      if (
+        !clean ||
+        clean === "Sin Asesor" ||
+        clean === "Desconocido" ||
+        clean === "Planificación" ||
+        clean === "Externo"
+      ) {
+        return;
+      }
+      if (s.tipo_asesor && s.tipo_asesor !== "comercial") return;
+      if (s.es_ex_colaborador) return;
+
+      if (matchesDate(s.fecha)) {
+        set.add(clean);
+      }
     });
-    installations.forEach((i) => {
-      if (i.asesor && i.asesor !== "Sin Asesor") set.add(i.asesor);
-    });
+
+    // Si en modo 'none' (todo el periodo), asegurar lista de todos los comerciales activos
+    if (set.size === 0 && filters.dateMode === "none") {
+      planRecords.forEach((r) => {
+        if (
+          r.asesor &&
+          r.asesor !== "Sin Asesor" &&
+          r.asesor !== "Desconocido" &&
+          r.tipo_asesor === "comercial" &&
+          !r.es_ex_colaborador
+        ) {
+          set.add(r.asesor);
+        }
+      });
+    }
+
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [planRecords, solicitudes, installations]);
+  }, [
+    planRecords,
+    solicitudes,
+    filters.dateMode,
+    filters.singleDate,
+    filters.startDate,
+    filters.endDate,
+  ]);
+
+  // Si el asesor seleccionado deja de estar activo al cambiar la fecha, restablecer a 'all'
+  useEffect(() => {
+    if (
+      filters.asesor !== "all" &&
+      availableAdvisors.length > 0 &&
+      !availableAdvisors.includes(filters.asesor)
+    ) {
+      setFilters((p) => ({ ...p, asesor: "all" }));
+    }
+  }, [availableAdvisors, filters.asesor]);
+
+  // Si el municipio seleccionado deja de pertenecer al estado, restablecer a 'all'
+  useEffect(() => {
+    if (
+      filters.municipio !== "all" &&
+      availableMunicipios.length > 0 &&
+      !availableMunicipios.includes(filters.municipio)
+    ) {
+      setFilters((p) => ({ ...p, municipio: "all", parroquia: "all", sector: "" }));
+    }
+  }, [availableMunicipios, filters.municipio]);
+
+  // Si la parroquia seleccionada deja de pertenecer al municipio, restablecer a 'all'
+  useEffect(() => {
+    if (
+      filters.parroquia !== "all" &&
+      availableParroquias.length > 0 &&
+      !availableParroquias.includes(filters.parroquia)
+    ) {
+      setFilters((p) => ({ ...p, parroquia: "all", sector: "" }));
+    }
+  }, [availableParroquias, filters.parroquia]);
 
   // Opciones dinámicas para tipos de actividad
   const availableActivities = useMemo(() => {
@@ -106,83 +383,6 @@ export function PlanificacionEfectividadView({
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [planRecords]);
-
-  // Opciones dinámicas para estados
-  const availableEstados = useMemo(() => {
-    const set = new Set<string>(Object.keys(geoHierarchy));
-    planRecords.forEach((r) => {
-      if (r.estado && r.estado !== "N/A") set.add(r.estado);
-    });
-    solicitudes.forEach((s) => {
-      if (s.estado && s.estado !== "N/A") set.add(s.estado);
-    });
-    installations.forEach((i) => {
-      if (i.estado && i.estado !== "N/A") set.add(i.estado);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [planRecords, solicitudes, installations]);
-
-  // Opciones dinámicas para municipios (en cascada según el estado seleccionado)
-  const availableMunicipios = useMemo(() => {
-    const set = new Set<string>();
-    if (filters.estado !== "all" && geoHierarchy[filters.estado]) {
-      Object.keys(geoHierarchy[filters.estado]).forEach((m) => set.add(m));
-    }
-    const fEstNorm = filters.estado !== "all" ? normKey(filters.estado) : "";
-    planRecords.forEach((r) => {
-      if (r.municipio && r.municipio !== "N/A") {
-        if (!fEstNorm || normKey(r.estado) === fEstNorm) set.add(r.municipio);
-      }
-    });
-    solicitudes.forEach((s) => {
-      if (s.municipio && s.municipio !== "N/A") {
-        if (!fEstNorm || normKey(s.estado) === fEstNorm) set.add(s.municipio);
-      }
-    });
-    installations.forEach((i) => {
-      const mun = i.oficina || i.zona;
-      if (mun && mun !== "N/A") {
-        if (!fEstNorm || normKey(i.estado) === fEstNorm) set.add(mun);
-      }
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [planRecords, solicitudes, installations, filters.estado]);
-
-  // Opciones dinámicas para parroquias (en cascada según el municipio y estado)
-  const availableParroquias = useMemo(() => {
-    const set = new Set<string>();
-    if (
-      filters.estado !== "all" &&
-      filters.municipio !== "all" &&
-      geoHierarchy[filters.estado]?.[filters.municipio]
-    ) {
-      Object.keys(geoHierarchy[filters.estado][filters.municipio]).forEach((p) => set.add(p));
-    }
-    const fMunNorm = filters.municipio !== "all" ? normKey(filters.municipio) : "";
-    const fEstNorm = filters.estado !== "all" ? normKey(filters.estado) : "";
-    planRecords.forEach((r) => {
-      if (r.parroquia && r.parroquia !== "N/A") {
-        const m = normKey(r.municipio);
-        const e = normKey(r.estado);
-        if ((!fMunNorm || m === fMunNorm) && (!fEstNorm || e === fEstNorm)) set.add(r.parroquia);
-      }
-    });
-    solicitudes.forEach((s) => {
-      if (s.zona && s.zona !== "N/A") {
-        const m = normKey(s.municipio);
-        const e = normKey(s.estado);
-        if ((!fMunNorm || m === fMunNorm) && (!fEstNorm || e === fEstNorm)) set.add(s.zona);
-      }
-    });
-    installations.forEach((i) => {
-      if (i.zona && i.zona !== "N/A") {
-        const m = normKey(i.oficina);
-        const e = normKey(i.estado);
-        if ((!fMunNorm || m === fMunNorm) && (!fEstNorm || e === fEstNorm)) set.add(i.zona);
-      }
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [planRecords, solicitudes, installations, filters.estado, filters.municipio]);
 
   // Manejo de presets de fecha
   const handleDatePreset = (preset: "hoy" | "semana" | "mes_actual" | "mes_anterior" | "todo") => {
@@ -282,14 +482,14 @@ export function PlanificacionEfectividadView({
       return true;
     };
 
-    // 1. Planificación
+    // 1. Planificación Comercial
     const fPlan = planRecords.filter((p) => {
       if (!matchesDate(p.fecha)) return false;
       if (fAdv && normKey(p.asesor) !== fAdv) return false;
       if (fAct && normKey(p.tipo_actividad || p.plan) !== fAct) return false;
       if (fEst && normKey(p.estado) !== fEst) return false;
-      if (fMun && normKey(p.municipio || p.oficina) !== fMun) return false;
-      if (fPar && normKey(p.parroquia || p.zona) !== fPar) return false;
+      if (fMun && normKey(p.municipio) !== fMun) return false;
+      if (fPar && normKey(p.parroquia) !== fPar) return false;
       if (fSec && !normKey(p.sector).includes(fSec)) return false;
       return true;
     });
@@ -312,14 +512,32 @@ export function PlanificacionEfectividadView({
       return true;
     });
 
-    // 3. Instalaciones
+    // 3. Instalaciones: Resolución territorial limpia mediante mapas canónicos
     const fInsts = installations.filter((i) => {
       if (!matchesDate(i.fecha)) return false;
       if (fAdv && normKey(i.asesor) !== fAdv) return false;
-      if (fEst && normKey(i.estado) !== fEst) return false;
-      if (fMun && normKey(i.oficina) !== fMun) return false;
+
+      // Resolución de estado geográfico
+      if (fEst) {
+        const directEstado = normKey(i.estado);
+        const resolvedEstado =
+          parroquiaToEstado.get(normKey(i.zona)) || sectorToEstado.get(normKey(i.sector));
+        if (directEstado !== fEst && resolvedEstado !== fEst) return false;
+      }
+
+      // Resolución de municipio geográfico (sin considerar oficinas internas)
+      if (fMun) {
+        const resolvedMun =
+          parroquiaToMun.get(normKey(i.zona)) || sectorToMun.get(normKey(i.sector));
+        if (resolvedMun !== fMun) return false;
+      }
+
+      // Resolución de parroquia geográfica
       if (fPar && normKey(i.zona) !== fPar) return false;
+
+      // Resolución de sector
       if (fSec && !normKey(i.sector).includes(fSec)) return false;
+
       if (activeSectorsForAct && !activeSectorsForAct.has(normKey(i.sector))) {
         if (normKey(i.plan) !== fAct) return false;
       }
@@ -327,12 +545,26 @@ export function PlanificacionEfectividadView({
     });
 
     return { filteredPlan: fPlan, filteredSols: fSols, filteredInsts: fInsts };
-  }, [planRecords, solicitudes, installations, filters]);
+  }, [
+    planRecords,
+    solicitudes,
+    installations,
+    filters,
+    parroquiaToEstado,
+    sectorToEstado,
+    parroquiaToMun,
+    sectorToMun,
+  ]);
 
   // Motor de Atribución reactivo sobre datos filtrados
   const activeAnalytics = useMemo(() => {
     if (planRecords.length > 0 || solicitudes.length > 0 || installations.length > 0) {
-      return computePlanificacionAnalytics(filteredPlan, filteredSols, filteredInsts, installations);
+      return computePlanificacionAnalytics(
+        filteredPlan,
+        filteredSols,
+        filteredInsts,
+        installations
+      );
     }
     return (
       fallbackAnalytics || {
@@ -354,7 +586,15 @@ export function PlanificacionEfectividadView({
         advisorsYield: [],
       }
     );
-  }, [filteredPlan, filteredSols, filteredInsts, installations, planRecords.length, solicitudes.length, fallbackAnalytics]);
+  }, [
+    filteredPlan,
+    filteredSols,
+    filteredInsts,
+    installations,
+    planRecords.length,
+    solicitudes.length,
+    fallbackAnalytics,
+  ]);
 
   const { overall, sectorsHealth, activitiesEffectiveness, advisorsYield } = activeAnalytics;
 
@@ -501,7 +741,13 @@ export function PlanificacionEfectividadView({
             <span className="text-neutral-300">·</span>
             <button
               type="button"
-              onClick={() => setFilters((p) => ({ ...p, dateMode: "single", singleDate: p.singleDate || "2026-11-02" }))}
+              onClick={() =>
+                setFilters((p) => ({
+                  ...p,
+                  dateMode: "single",
+                  singleDate: p.singleDate || "2026-11-02",
+                }))
+              }
               className={cn(
                 "cursor-pointer transition-colors py-0.5 whitespace-nowrap",
                 filters.dateMode === "single"
@@ -604,11 +850,13 @@ export function PlanificacionEfectividadView({
           </div>
         )}
 
-        {/* Fila 2B: Desplegables de Segmentación (Asesor, Actividad, Estado, Municipio, Parroquia, Sector) */}
+        {/* Fila 2B: Desplegables de Segmentación (Asesor Comercial Activo, Actividad, Estado, Municipio, Parroquia, Sector) */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2 text-xs">
-          {/* Asesor */}
+          {/* Asesor Comercial Activo en la fecha */}
           <div className="space-y-1">
-            <label className="text-[10px] text-neutral-400 font-mono block">Asesor</label>
+            <label className="text-[10px] text-neutral-400 font-mono block">
+              Asesor comercial ({availableAdvisors.length})
+            </label>
             <CustomDropdown
               value={filters.asesor}
               options={[
@@ -617,6 +865,7 @@ export function PlanificacionEfectividadView({
               ]}
               onChange={(val) => setFilters((p) => ({ ...p, asesor: val }))}
               compact
+              disabled={availableAdvisors.length === 0}
             />
           </div>
 
@@ -649,6 +898,7 @@ export function PlanificacionEfectividadView({
                   estado: val,
                   municipio: "all",
                   parroquia: "all",
+                  sector: "",
                 }))
               }
               compact
@@ -669,6 +919,7 @@ export function PlanificacionEfectividadView({
                   ...p,
                   municipio: val,
                   parroquia: "all",
+                  sector: "",
                 }))
               }
               compact
@@ -685,34 +936,52 @@ export function PlanificacionEfectividadView({
                 { value: "all", label: "Todas las parroquias" },
                 ...availableParroquias.map((par) => ({ value: par, label: par })),
               ]}
-              onChange={(val) => setFilters((p) => ({ ...p, parroquia: val }))}
+              onChange={(val) =>
+                setFilters((p) => ({
+                  ...p,
+                  parroquia: val,
+                  sector: "",
+                }))
+              }
               compact
               disabled={availableParroquias.length === 0}
             />
           </div>
 
-          {/* Sector / Ruta con línea base */}
+          {/* Sector o ruta canónica */}
           <div className="space-y-1">
             <label className="text-[10px] text-neutral-400 font-mono block">Sector o ruta</label>
-            <div className="flex items-center gap-1 border-b border-neutral-200 focus-within:border-neutral-900 transition-colors py-1">
-              <Search className="w-3 h-3 text-neutral-400 shrink-0 stroke-[1.25]" />
-              <input
-                type="text"
+            {availableSectores.length > 0 ? (
+              <CustomDropdown
                 value={filters.sector}
-                onChange={(e) => setFilters((p) => ({ ...p, sector: e.target.value }))}
-                placeholder="Sector..."
-                className="w-full bg-transparent text-xs text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
+                options={[
+                  { value: "", label: "Todos los sectores" },
+                  ...availableSectores.map((s) => ({ value: s, label: s })),
+                ]}
+                onChange={(val) => setFilters((p) => ({ ...p, sector: val }))}
+                compact
               />
-              {filters.sector && (
-                <button
-                  type="button"
-                  onClick={() => setFilters((p) => ({ ...p, sector: "" }))}
-                  className="text-neutral-400 hover:text-neutral-900 transition-colors p-0.5 cursor-pointer"
-                >
-                  <X className="w-2.5 h-2.5 stroke-[1.5]" />
-                </button>
-              )}
-            </div>
+            ) : (
+              <div className="flex items-center gap-1 border-b border-neutral-200 focus-within:border-neutral-900 transition-colors py-1">
+                <Search className="w-3 h-3 text-neutral-400 shrink-0 stroke-[1.25]" />
+                <input
+                  type="text"
+                  value={filters.sector}
+                  onChange={(e) => setFilters((p) => ({ ...p, sector: e.target.value }))}
+                  placeholder="Sector..."
+                  className="w-full bg-transparent text-xs text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
+                />
+                {filters.sector && (
+                  <button
+                    type="button"
+                    onClick={() => setFilters((p) => ({ ...p, sector: "" }))}
+                    className="text-neutral-400 hover:text-neutral-900 transition-colors p-0.5 cursor-pointer"
+                  >
+                    <X className="w-2.5 h-2.5 stroke-[1.5]" />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -741,7 +1010,9 @@ export function PlanificacionEfectividadView({
                     Rango: {filters.startDate || "..."} → {filters.endDate || "..."}
                     <button
                       type="button"
-                      onClick={() => setFilters((p) => ({ ...p, dateMode: "none", startDate: "", endDate: "" }))}
+                      onClick={() =>
+                        setFilters((p) => ({ ...p, dateMode: "none", startDate: "", endDate: "" }))
+                      }
                       className="text-neutral-400 hover:text-neutral-900 cursor-pointer"
                     >
                       <X className="w-2.5 h-2.5 stroke-[1.5]" />
@@ -780,7 +1051,15 @@ export function PlanificacionEfectividadView({
                     Estado: {filters.estado}
                     <button
                       type="button"
-                      onClick={() => setFilters((p) => ({ ...p, estado: "all", municipio: "all", parroquia: "all" }))}
+                      onClick={() =>
+                        setFilters((p) => ({
+                          ...p,
+                          estado: "all",
+                          municipio: "all",
+                          parroquia: "all",
+                          sector: "",
+                        }))
+                      }
                       className="text-neutral-400 hover:text-neutral-900 cursor-pointer"
                     >
                       <X className="w-2.5 h-2.5 stroke-[1.5]" />
@@ -793,7 +1072,14 @@ export function PlanificacionEfectividadView({
                     Municipio: {filters.municipio}
                     <button
                       type="button"
-                      onClick={() => setFilters((p) => ({ ...p, municipio: "all", parroquia: "all" }))}
+                      onClick={() =>
+                        setFilters((p) => ({
+                          ...p,
+                          municipio: "all",
+                          parroquia: "all",
+                          sector: "",
+                        }))
+                      }
                       className="text-neutral-400 hover:text-neutral-900 cursor-pointer"
                     >
                       <X className="w-2.5 h-2.5 stroke-[1.5]" />
@@ -806,7 +1092,13 @@ export function PlanificacionEfectividadView({
                     Parroquia: {filters.parroquia}
                     <button
                       type="button"
-                      onClick={() => setFilters((p) => ({ ...p, parroquia: "all" }))}
+                      onClick={() =>
+                        setFilters((p) => ({
+                          ...p,
+                          parroquia: "all",
+                          sector: "",
+                        }))
+                      }
                       className="text-neutral-400 hover:text-neutral-900 cursor-pointer"
                     >
                       <X className="w-2.5 h-2.5 stroke-[1.5]" />
@@ -838,7 +1130,9 @@ export function PlanificacionEfectividadView({
                 </button>
               </>
             ) : (
-              <span className="text-neutral-400">Sin filtros aplicados (Mostrando histórico completo)</span>
+              <span className="text-neutral-400">
+                Sin filtros aplicados (Mostrando histórico comercial completo)
+              </span>
             )}
           </div>
 
