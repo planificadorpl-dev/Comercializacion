@@ -357,9 +357,6 @@ export function EvaluacionFormModal({
             <h2 className="text-sm font-semibold text-neutral-900 font-sans tracking-tight">
               {initialData ? "Editar evaluación de asesor" : "Nueva evaluación de asesor"}
             </h2>
-            <p className="text-[11px] text-neutral-400 font-mono mt-0.5">
-              Power Link Corp, C.A. — Formato de supervisión y evaluación
-            </p>
           </div>
           <button
             type="button"

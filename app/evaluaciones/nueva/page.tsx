@@ -351,9 +351,6 @@ function NuevaEvaluacionContent() {
             <h1 className="text-sm font-bold text-neutral-950 font-sans leading-tight">
               {editId ? "Editar evaluación" : "Nueva evaluación"}
             </h1>
-            <p className="text-[10px] text-neutral-400 font-mono leading-none">
-              Power Link Corp, C.A. — Formato de supervisión
-            </p>
           </div>
         </div>
 
