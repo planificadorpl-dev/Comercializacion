@@ -20,7 +20,6 @@ import { cn, formatNumber, formatProperCase } from "@/lib/utils";
 import { PlanificacionMetrics } from "@/components/planificacion/planificacion-metrics";
 import { PlanificacionMonthlyView } from "@/components/planificacion/planificacion-monthly-view";
 import { PlanificacionDailyView } from "@/components/planificacion/planificacion-daily-view";
-import { CustomDropdown } from "@/components/ui/custom-dropdown";
 
 type ViewMode = "mensual" | "diaria";
 
@@ -115,58 +114,6 @@ export default function PlanificacionPage() {
     const mIdx = referenceDate.getMonth();
     return MONTH_ORDER[mIdx] || "Noviembre";
   }, [referenceDate]);
-
-  // Lista de todos los asesores activos en el mes seleccionado (con total de jornadas en dicho mes)
-  const monthlyActiveAdvisors = useMemo(() => {
-    const mKey = normKey(currentSelectedMonth);
-    // Filtrar registros del mes sin limitar por selectedAdvisor para mantener la lista completa
-    let baseList = records.filter((r) => normKey(r.mes) === mKey);
-
-    if (searchTerm.trim()) {
-      const term = normKey(searchTerm);
-      baseList = baseList.filter((r) => {
-        const adv = normKey(r.asesor);
-        const sec = normKey(r.sector);
-        const par = normKey(r.parroquia);
-        const mun = normKey(r.municipio);
-        return adv.includes(term) || sec.includes(term) || par.includes(term) || mun.includes(term);
-      });
-    }
-
-    const map = new Map<string, { count: number; sectors: Set<string> }>();
-    baseList.forEach((r) => {
-      if (!r.asesor || r.asesor === "Sin Asesor" || r.asesor.trim() === "") return;
-      if (!map.has(r.asesor)) {
-        map.set(r.asesor, { count: 0, sectors: new Set() });
-      }
-      const entry = map.get(r.asesor)!;
-      entry.count += 1;
-      if (r.sector && r.sector !== "N/A") entry.sectors.add(r.sector);
-    });
-
-    return Array.from(map.entries())
-      .map(([name, data]) => ({
-        name,
-        count: data.count,
-        sectorsCount: data.sectors.size,
-      }))
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  }, [records, currentSelectedMonth, searchTerm]);
-
-  // Opciones formateadas para el selector desplegable de asesores
-  const advisorDropdownOptions = useMemo(() => {
-    const totalJornadas = monthlyActiveAdvisors.reduce((acc, a) => acc + a.count, 0);
-    return [
-      {
-        value: "all",
-        label: `Todos los asesores (${monthlyActiveAdvisors.length}) · ${formatNumber(totalJornadas)} jornadas`,
-      },
-      ...monthlyActiveAdvisors.map((adv) => ({
-        value: adv.name,
-        label: `${adv.name} · ${adv.count} ${adv.count === 1 ? "jornada" : "jornadas"}`,
-      })),
-    ];
-  }, [monthlyActiveAdvisors]);
 
   // Registros filtrados transversalmente por búsqueda y asesor
   const filteredRecords = useMemo(() => {
@@ -457,65 +404,6 @@ export default function PlanificacionPage() {
             </div>
           </div>
 
-          {/* Selector de Asesores Totales Activos debajo de los meses */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs border-b border-neutral-100 pb-2.5">
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-              <span className="text-[11px] text-neutral-400 font-mono shrink-0 mr-1">
-                Asesores activos:
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedAdvisor(null)}
-                className={cn(
-                  "cursor-pointer transition-colors py-0.5 whitespace-nowrap",
-                  selectedAdvisor === null
-                    ? "text-neutral-950 font-semibold border-b border-neutral-900"
-                    : "text-neutral-400 hover:text-neutral-700"
-                )}
-              >
-                Todos ({monthlyActiveAdvisors.length})
-              </button>
-              <span className="text-neutral-300">·</span>
-              <div className="w-64 sm:w-72 shrink-0">
-                <CustomDropdown
-                  value={selectedAdvisor || "all"}
-                  options={advisorDropdownOptions}
-                  onChange={(val) => setSelectedAdvisor(val === "all" ? null : val)}
-                  compact
-                  placeholder="Seleccionar asesor..."
-                />
-              </div>
-
-              {!selectedAdvisor && monthlyActiveAdvisors.slice(0, 3).map((adv) => (
-                <button
-                  key={adv.name}
-                  type="button"
-                  onClick={() => setSelectedAdvisor(adv.name)}
-                  className="hidden md:inline-block text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors whitespace-nowrap cursor-pointer py-0.5 ml-1"
-                  title={`${adv.name}: ${adv.count} jornadas en el mes`}
-                >
-                  {adv.name.split(" ")[0]} ({adv.count})
-                </button>
-              ))}
-            </div>
-
-            {selectedAdvisor && (
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[11px] text-neutral-500 font-mono">
-                  Asesor: <strong className="font-semibold text-neutral-900">{selectedAdvisor}</strong>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedAdvisor(null)}
-                  title="Ver todos los asesores"
-                  className="text-neutral-400 hover:text-neutral-900 transition-colors p-0.5 cursor-pointer flex items-center gap-1"
-                >
-                  <X className="w-3.5 h-3.5 stroke-[1.5]" />
-                  <span className="text-[11px] font-mono">Ver todos</span>
-                </button>
-              </div>
-            )}
-          </div>
 
           {/* Fila 3: Cinta de Métricas Operativas */}
           <PlanificacionMetrics
