@@ -53,6 +53,40 @@ function getMonthDayKey(val: any): string {
   return "";
 }
 
+const normAdvKey = (s: string | null | undefined): string =>
+  (s || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+
+function advisorKeysMatch(keyA: string, keyB: string): boolean {
+  if (!keyA || !keyB) return false;
+  if (keyA === keyB) return true;
+  const wordsA = keyA.split(" ").filter(Boolean);
+  const wordsB = keyB.split(" ").filter(Boolean);
+  if (wordsA.length >= 2 && wordsB.length >= 2) {
+    if (wordsA[0] === wordsB[0] && wordsA[wordsA.length - 1] === wordsB[wordsB.length - 1]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getAdvisorInstallationsCount(advName: string, instMap: Map<string, number>): number {
+  const targetKey = normAdvKey(advName);
+  if (!targetKey) return 0;
+
+  let total = 0;
+  for (const [key, count] of instMap.entries()) {
+    if (key === targetKey || advisorKeysMatch(targetKey, key)) {
+      total += count;
+    }
+  }
+  return total;
+}
+
 export function PlanificacionMonthlyView({
   month,
   year = 2026,
@@ -281,20 +315,54 @@ export function PlanificacionMonthlyView({
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
-    // 4. Top asesores del mes
-    const advisorStats = new Map<string, { count: number; sectors: Set<string> }>();
+    // 4. Mapeo previo de instalaciones del mes por asesor
+    const instCountByAdv = new Map<string, number>();
+    installations.forEach((inst) => {
+      if (!inst.asesor || inst.asesor === "Sin Asesor") return;
+      const k = normAdvKey(inst.asesor);
+      if (k) {
+        instCountByAdv.set(k, (instCountByAdv.get(k) || 0) + 1);
+      }
+    });
+
+    // 5. Top asesores del mes (ordenados de mayor a menor según cantidad de instalaciones, manteniendo jornadas)
+    const advisorStats = new Map<
+      string,
+      { count: number; sectors: Set<string>; installationsCount: number }
+    >();
+
     records.forEach((r) => {
       if (!r.asesor || r.asesor === "Sin Asesor") return;
       if (!advisorStats.has(r.asesor)) {
-        advisorStats.set(r.asesor, { count: 0, sectors: new Set() });
+        advisorStats.set(r.asesor, { count: 0, sectors: new Set(), installationsCount: 0 });
       }
       const entry = advisorStats.get(r.asesor)!;
       entry.count += 1;
       if (r.sector) entry.sectors.add(r.sector);
     });
+
+    advisorStats.forEach((entry, advName) => {
+      entry.installationsCount = getAdvisorInstallationsCount(advName, instCountByAdv);
+    });
+
     const sortedTopAdvisors = Array.from(advisorStats.entries())
-      .map(([name, data]) => ({ name, count: data.count, sectorsCount: data.sectors.size }))
-      .sort((a, b) => b.count - a.count);
+      .map(([name, data]) => ({
+        name,
+        count: data.count,
+        sectorsCount: data.sectors.size,
+        installationsCount: data.installationsCount,
+      }))
+      .sort((a, b) => {
+        // Ordenar de mayor a menor según la cantidad de instalaciones
+        if (b.installationsCount !== a.installationsCount) {
+          return b.installationsCount - a.installationsCount;
+        }
+        // Desempate por jornadas asignadas
+        if (b.count !== a.count) {
+          return b.count - a.count;
+        }
+        return a.name.localeCompare(b.name);
+      });
 
     return {
       calendarDays: days,
@@ -305,10 +373,20 @@ export function PlanificacionMonthlyView({
 
   // Asesores a mostrar a la derecha (filtrados por sector si se seleccionó uno, o top asesores generales)
   const displayedAdvisors = useMemo(() => {
+    const instCountByAdv = new Map<string, number>();
+    installations.forEach((inst) => {
+      if (!inst.asesor || inst.asesor === "Sin Asesor") return;
+      const k = normAdvKey(inst.asesor);
+      if (k) {
+        instCountByAdv.set(k, (instCountByAdv.get(k) || 0) + 1);
+      }
+    });
+
     if (!activeSector) {
       return topAdvisors.map((adv) => ({
         name: adv.name,
         count: adv.count,
+        installationsCount: adv.installationsCount,
         subtext: `${adv.sectorsCount} ${adv.sectorsCount === 1 ? "sector cubierto" : "sectores cubiertos"}`,
       }));
     }
@@ -329,13 +407,25 @@ export function PlanificacionMonthlyView({
     });
 
     return Array.from(map.entries())
-      .map(([name, data]) => ({
-        name,
-        count: data.count,
-        subtext: `${data.dates.size} ${data.dates.size === 1 ? "día de actividad" : "días de actividad"}`,
-      }))
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-  }, [activeSector, topAdvisors, records]);
+      .map(([name, data]) => {
+        const instCount = getAdvisorInstallationsCount(name, instCountByAdv);
+        return {
+          name,
+          count: data.count,
+          installationsCount: instCount,
+          subtext: `${data.dates.size} ${data.dates.size === 1 ? "día de actividad" : "días de actividad"}`,
+        };
+      })
+      .sort((a, b) => {
+        if (b.installationsCount !== a.installationsCount) {
+          return b.installationsCount - a.installationsCount;
+        }
+        if (b.count !== a.count) {
+          return b.count - a.count;
+        }
+        return a.name.localeCompare(b.name);
+      });
+  }, [activeSector, topAdvisors, records, installations]);
 
   return (
     <div className="space-y-8 pt-2">
@@ -641,7 +731,7 @@ export function PlanificacionMonthlyView({
             <span className="text-[11px] text-neutral-400 font-mono">
               {activeSector
                 ? `${displayedAdvisors.length} ${displayedAdvisors.length === 1 ? "asesor asignado" : "asesores asignados"}`
-                : "Turnos asignados"}
+                : "Instalaciones · Jornadas"}
             </span>
           </div>
 
@@ -672,9 +762,27 @@ export function PlanificacionMonthlyView({
                       </div>
                     </div>
 
-                    <span className="font-mono text-xs text-neutral-800 shrink-0">
-                      {adv.count} {adv.count === 1 ? "jornada" : "jornadas"}
-                    </span>
+                    <div className="flex items-center gap-2 font-mono text-xs shrink-0">
+                      <span
+                        className={cn(
+                          adv.installationsCount > 0 ? "text-neutral-900" : "text-neutral-400"
+                        )}
+                        title={`${adv.installationsCount} clientes instalados de ${adv.name}`}
+                      >
+                        <strong
+                          className={cn(
+                            adv.installationsCount > 0 ? "font-semibold text-neutral-950" : "font-normal"
+                          )}
+                        >
+                          {adv.installationsCount}
+                        </strong>{" "}
+                        <span className="text-neutral-400 font-normal">inst</span>
+                      </span>
+                      <span className="text-neutral-300">·</span>
+                      <span className="text-neutral-600 font-normal">
+                        {adv.count} {adv.count === 1 ? "jornada" : "jornadas"}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
