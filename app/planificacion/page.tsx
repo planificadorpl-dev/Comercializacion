@@ -12,8 +12,12 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { SidebarOpenButton, SidebarMobileButton } from "@/components/providers/sidebar-provider";
 import {
   fetchPlanificacionData,
+  fetchRawOperationalData,
   getCachedPlanificacionData,
+  getCachedOperationalData,
   PlanificacionRecord,
+  Installation,
+  Solicitud,
   MONTH_ORDER,
 } from "@/lib/dashboard-data";
 import { cn, formatNumber, formatProperCase } from "@/lib/utils";
@@ -55,23 +59,33 @@ function parseDateSafe(str: string): Date | null {
 export default function PlanificacionPage() {
   // Inicialización instantánea desde caché si está disponible
   const [records, setRecords] = useState<PlanificacionRecord[]>(() => getCachedPlanificacionData() || []);
+  const [rawSolicitudes, setRawSolicitudes] = useState<Solicitud[]>(() => getCachedOperationalData()?.solicitudes || []);
+  const [rawInstallations, setRawInstallations] = useState<Installation[]>(() => getCachedOperationalData()?.installations || []);
   const [loading, setLoading] = useState(() => !getCachedPlanificacionData() || getCachedPlanificacionData()!.length === 0);
   const [refreshing, setRefreshing] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAdvisor, setSelectedAdvisor] = useState<string | null>(null);
+  const [selectedSector, setSelectedSector] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("mensual");
 
   // Fecha de referencia: por defecto 2026-11-02 (o fecha actual)
   const [referenceDate, setReferenceDate] = useState<Date>(() => new Date(2026, 10, 2));
 
-  // Carga directa de planificación comercial para renderizado instantáneo
+  // Carga concurrente de planificación y operaciones para renderizado instantáneo
   const loadData = useCallback(async (force = false) => {
     if (force) setRefreshing(true);
     else if (records.length === 0) setLoading(true);
 
     try {
-      const planData = await fetchPlanificacionData(force);
+      const [planData, opData] = await Promise.all([
+        fetchPlanificacionData(force),
+        fetchRawOperationalData(undefined, undefined, undefined, undefined, force).catch((err) => {
+          console.warn("Aviso al cargar operaciones en planificación:", err);
+          return null;
+        }),
+      ]);
+
       if (planData && planData.length > 0) {
         setRecords(planData);
         const sortedDates = planData
@@ -85,6 +99,11 @@ export default function PlanificacionPage() {
             setReferenceDate(latestParsed);
           }
         }
+      }
+
+      if (opData) {
+        if (opData.solicitudes) setRawSolicitudes(opData.solicitudes);
+        if (opData.installations) setRawInstallations(opData.installations);
       }
     } catch (err) {
       console.error("Error al cargar planificación comercial:", err);
@@ -115,7 +134,7 @@ export default function PlanificacionPage() {
     return MONTH_ORDER[mIdx] || "Noviembre";
   }, [referenceDate]);
 
-  // Registros filtrados transversalmente por búsqueda y asesor
+  // Registros filtrados transversalmente por búsqueda, asesor y sector
   const filteredRecords = useMemo(() => {
     let list = records;
 
@@ -135,8 +154,85 @@ export default function PlanificacionPage() {
       list = list.filter((r) => normKey(r.asesor) === targetNk);
     }
 
+    if (selectedSector) {
+      const targetSec = normKey(selectedSector);
+      list = list.filter((r) => normKey(r.sector) === targetSec);
+    }
+
     return list;
-  }, [records, searchTerm, selectedAdvisor]);
+  }, [records, searchTerm, selectedAdvisor, selectedSector]);
+
+  // Solicitudes filtradas transversalmente según selección activa (periodo, asesor, sector, búsqueda)
+  const filteredSolicitudes = useMemo(() => {
+    let list = rawSolicitudes;
+
+    if (viewMode === "diaria") {
+      const dateIso = toIsoDate(referenceDate);
+      list = list.filter((s) => s.fecha === dateIso);
+    } else {
+      const mKey = normKey(currentSelectedMonth);
+      list = list.filter((s) => normKey(s.mes) === mKey);
+    }
+
+    if (selectedAdvisor) {
+      const advNk = normKey(selectedAdvisor);
+      list = list.filter((s) => normKey(s.asesor) === advNk);
+    }
+
+    if (selectedSector) {
+      const secNk = normKey(selectedSector);
+      list = list.filter((s) => normKey(s.sector) === secNk);
+    }
+
+    if (searchTerm.trim()) {
+      const term = normKey(searchTerm);
+      list = list.filter((s) => {
+        const adv = normKey(s.asesor);
+        const sec = normKey(s.sector);
+        const par = normKey(s.parroquia);
+        const mun = normKey(s.municipio);
+        return adv.includes(term) || sec.includes(term) || par.includes(term) || mun.includes(term);
+      });
+    }
+
+    return list;
+  }, [rawSolicitudes, viewMode, referenceDate, currentSelectedMonth, selectedAdvisor, selectedSector, searchTerm]);
+
+  // Instalaciones filtradas transversalmente según selección activa (periodo, asesor, sector, búsqueda)
+  const filteredInstallations = useMemo(() => {
+    let list = rawInstallations;
+
+    if (viewMode === "diaria") {
+      const dateIso = toIsoDate(referenceDate);
+      list = list.filter((i) => i.fecha === dateIso);
+    } else {
+      const mKey = normKey(currentSelectedMonth);
+      list = list.filter((i) => normKey(i.mes) === mKey);
+    }
+
+    if (selectedAdvisor) {
+      const advNk = normKey(selectedAdvisor);
+      list = list.filter((i) => normKey(i.asesor) === advNk);
+    }
+
+    if (selectedSector) {
+      const secNk = normKey(selectedSector);
+      list = list.filter((i) => normKey(i.sector) === secNk);
+    }
+
+    if (searchTerm.trim()) {
+      const term = normKey(searchTerm);
+      list = list.filter((i) => {
+        const adv = normKey(i.asesor);
+        const sec = normKey(i.sector);
+        const par = normKey(i.parroquia);
+        const mun = normKey(i.municipio);
+        return adv.includes(term) || sec.includes(term) || par.includes(term) || mun.includes(term);
+      });
+    }
+
+    return list;
+  }, [rawInstallations, viewMode, referenceDate, currentSelectedMonth, selectedAdvisor, selectedSector, searchTerm]);
 
   // Registros filtrados para el mes actualmente seleccionado
   const monthlyRecords = useMemo(() => {
@@ -240,6 +336,7 @@ export default function PlanificacionPage() {
       d.setDate(1);
       setReferenceDate(d);
       setViewMode("mensual");
+      setSelectedSector(null);
     }
   };
 
@@ -316,6 +413,20 @@ export default function PlanificacionPage() {
                     type="button"
                     onClick={() => setSelectedAdvisor(null)}
                     title="Quitar filtro de asesor"
+                    className="text-neutral-400 hover:text-neutral-900 p-0.5 cursor-pointer transition-colors"
+                  >
+                    <X className="w-3 h-3 stroke-[1.5]" />
+                  </button>
+                </div>
+              )}
+              {selectedSector && (
+                <div className="flex items-center gap-1.5 ml-2">
+                  <span className="text-xs text-neutral-400">· Sector:</span>
+                  <span className="text-xs font-medium text-neutral-900">{selectedSector}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSector(null)}
+                    title="Quitar filtro de sector"
                     className="text-neutral-400 hover:text-neutral-900 p-0.5 cursor-pointer transition-colors"
                   >
                     <X className="w-3 h-3 stroke-[1.5]" />
@@ -410,6 +521,8 @@ export default function PlanificacionPage() {
             totalAdvisors={activeMetrics.totalAdvisors}
             totalSectors={activeMetrics.totalSectors}
             totalJornadas={activeMetrics.totalJornadas}
+            totalSolicitudes={filteredSolicitudes.length}
+            totalInstallations={filteredInstallations.length}
             predominantActivity={activeMetrics.predominantActivity}
             periodLabel={activeMetrics.periodLabel}
           />
@@ -435,6 +548,8 @@ export default function PlanificacionPage() {
               records={monthlyRecords}
               onSelectDay={handleSelectSpecificDay}
               onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
+              selectedSector={selectedSector}
+              onSelectSector={setSelectedSector}
             />
           )}
         </main>

@@ -6,6 +6,8 @@ interface PlanificacionMetricsProps {
   totalAdvisors: number;
   totalSectors: number;
   totalJornadas: number;
+  totalSolicitudes?: number;
+  totalInstallations?: number;
   predominantActivity?: { name: string; count: number; pct: number };
   periodLabel: string;
 }
@@ -14,11 +16,13 @@ export function PlanificacionMetrics({
   totalAdvisors,
   totalSectors,
   totalJornadas,
+  totalSolicitudes = 0,
+  totalInstallations = 0,
   predominantActivity,
   periodLabel,
 }: PlanificacionMetricsProps) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 py-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6 py-4">
       {/* 1. Asesores en campo */}
       <div className="space-y-1 relative">
         <span className="text-xs text-neutral-500 font-sans block">
@@ -39,7 +43,7 @@ export function PlanificacionMetrics({
 
       {/* 2. Rutas y sectores */}
       <div className="space-y-1 relative">
-        <div className="hidden lg:block absolute left-[-12px] top-1 bottom-1 w-[1px] bg-gradient-to-b from-transparent via-neutral-200 to-transparent pointer-events-none" />
+        <div className="hidden sm:block absolute left-[-12px] top-1 bottom-1 w-[1px] bg-gradient-to-b from-transparent via-neutral-200 to-transparent pointer-events-none" />
         <span className="text-xs text-neutral-500 font-sans block">
           Rutas y sectores
         </span>
@@ -58,7 +62,7 @@ export function PlanificacionMetrics({
 
       {/* 3. Jornadas planificadas */}
       <div className="space-y-1 relative">
-        <div className="hidden lg:block absolute left-[-12px] top-1 bottom-1 w-[1px] bg-gradient-to-b from-transparent via-neutral-200 to-transparent pointer-events-none" />
+        <div className="hidden md:block absolute left-[-12px] top-1 bottom-1 w-[1px] bg-gradient-to-b from-transparent via-neutral-200 to-transparent pointer-events-none" />
         <span className="text-xs text-neutral-500 font-sans block">
           Jornadas planificadas
         </span>
@@ -75,7 +79,47 @@ export function PlanificacionMetrics({
         </p>
       </div>
 
-      {/* 4. Modalidad predominante */}
+      {/* 4. Solicitudes registradas */}
+      <div className="space-y-1 relative">
+        <div className="hidden lg:block absolute left-[-12px] top-1 bottom-1 w-[1px] bg-gradient-to-b from-transparent via-neutral-200 to-transparent pointer-events-none" />
+        <span className="text-xs text-neutral-500 font-sans block">
+          Solicitudes registradas
+        </span>
+        <div className="flex items-baseline gap-2">
+          <span className="text-2xl font-semibold text-neutral-950 font-mono tracking-tight">
+            {formatNumber(totalSolicitudes)}
+          </span>
+          <span className="text-[11px] text-neutral-400 font-mono">
+            ventas
+          </span>
+        </div>
+        <p className="text-[11px] text-neutral-400 font-mono">
+          Generadas en el período
+        </p>
+      </div>
+
+      {/* 5. Clientes instalados */}
+      <div className="space-y-1 relative">
+        <div className="hidden lg:block absolute left-[-12px] top-1 bottom-1 w-[1px] bg-gradient-to-b from-transparent via-neutral-200 to-transparent pointer-events-none" />
+        <span className="text-xs text-neutral-500 font-sans block">
+          Clientes instalados
+        </span>
+        <div className="flex items-baseline gap-2">
+          <span className="text-2xl font-semibold text-neutral-950 font-mono tracking-tight">
+            {formatNumber(totalInstallations)}
+          </span>
+          <span className="text-[11px] text-neutral-400 font-mono">
+            instalaciones
+          </span>
+        </div>
+        <p className="text-[11px] text-neutral-400 font-mono">
+          {totalSolicitudes > 0
+            ? `${Math.round((totalInstallations / totalSolicitudes) * 100)}% de efectividad`
+            : "Instalaciones ejecutadas"}
+        </p>
+      </div>
+
+      {/* 6. Modalidad predominante */}
       <div className="space-y-1 relative">
         <div className="hidden lg:block absolute left-[-12px] top-1 bottom-1 w-[1px] bg-gradient-to-b from-transparent via-neutral-200 to-transparent pointer-events-none" />
         <span className="text-xs text-neutral-500 font-sans block">
@@ -86,7 +130,7 @@ export function PlanificacionMetrics({
             {predominantActivity?.name || "Sin datos"}
           </span>
         </div>
-        <p className="text-[11px] text-neutral-400 font-mono">
+        <p className="text-[11px] text-neutral-400 font-mono truncate">
           {predominantActivity
             ? `${predominantActivity.count} jornadas (${predominantActivity.pct}%)`
             : "No hay actividades en el período"}
