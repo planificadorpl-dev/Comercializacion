@@ -240,6 +240,28 @@ export default function PlanificacionPage() {
     return filteredRecords.filter((r) => normKey(r.mes) === mKey);
   }, [filteredRecords, currentSelectedMonth]);
 
+  // Solicitudes del mes (filtradas por asesor si aplica, no restringidas por sector)
+  const monthlySolicitudes = useMemo(() => {
+    const mKey = normKey(currentSelectedMonth);
+    let list = rawSolicitudes.filter((s) => normKey(s.mes) === mKey);
+    if (selectedAdvisor) {
+      const advNk = normKey(selectedAdvisor);
+      list = list.filter((s) => normKey(s.asesor) === advNk);
+    }
+    return list;
+  }, [rawSolicitudes, currentSelectedMonth, selectedAdvisor]);
+
+  // Instalaciones del mes (filtradas por asesor si aplica, no restringidas por sector)
+  const monthlyInstallations = useMemo(() => {
+    const mKey = normKey(currentSelectedMonth);
+    let list = rawInstallations.filter((i) => normKey(i.mes) === mKey);
+    if (selectedAdvisor) {
+      const advNk = normKey(selectedAdvisor);
+      list = list.filter((i) => normKey(i.asesor) === advNk);
+    }
+    return list;
+  }, [rawInstallations, currentSelectedMonth, selectedAdvisor]);
+
   // Registros filtrados para la vista diaria
   const { dailyRecords, dailyDateLabel } = useMemo(() => {
     const dateIso = toIsoDate(referenceDate);
@@ -546,8 +568,8 @@ export default function PlanificacionPage() {
               month={currentSelectedMonth}
               year={referenceDate.getFullYear()}
               records={monthlyRecords}
-              solicitudes={filteredSolicitudes}
-              installations={filteredInstallations}
+              solicitudes={monthlySolicitudes}
+              installations={monthlyInstallations}
               selectedAdvisor={selectedAdvisor}
               onSelectDay={handleSelectSpecificDay}
               onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}

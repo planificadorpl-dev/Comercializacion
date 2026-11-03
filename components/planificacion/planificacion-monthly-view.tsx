@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { X } from "lucide-react";
 import { cn, formatNumber } from "@/lib/utils";
 import { PlanificacionRecord, Solicitud, Installation, MONTH_ORDER } from "@/lib/dashboard-data";
+import { normGeoKey } from "@/lib/geo_normalization";
 
 interface PlanificacionMonthlyViewProps {
   month: string;
@@ -45,21 +46,33 @@ export function PlanificacionMonthlyView({
     return idx >= 0 ? idx : 10; // Default Noviembre (10)
   }, [month]);
 
-  // Mapeo de solicitudes e instalaciones por fecha (YYYY-MM-DD)
-  const { solByDate, instByDate } = useMemo(() => {
+  // Mapeo de solicitudes e instalaciones por fecha (YYYY-MM-DD) y por sector canónico
+  const { solByDate, instByDate, solBySector, instBySector } = useMemo(() => {
     const sMap = new Map<string, number>();
+    const sSecMap = new Map<string, number>();
     solicitudes.forEach((s) => {
-      if (!s.fecha) return;
-      sMap.set(s.fecha, (sMap.get(s.fecha) || 0) + 1);
+      if (s.fecha) {
+        sMap.set(s.fecha, (sMap.get(s.fecha) || 0) + 1);
+      }
+      const sKey = normGeoKey(s.sector);
+      if (sKey) {
+        sSecMap.set(sKey, (sSecMap.get(sKey) || 0) + 1);
+      }
     });
 
     const iMap = new Map<string, number>();
+    const iSecMap = new Map<string, number>();
     installations.forEach((i) => {
-      if (!i.fecha) return;
-      iMap.set(i.fecha, (iMap.get(i.fecha) || 0) + 1);
+      if (i.fecha) {
+        iMap.set(i.fecha, (iMap.get(i.fecha) || 0) + 1);
+      }
+      const iKey = normGeoKey(i.sector);
+      if (iKey) {
+        iSecMap.set(iKey, (iSecMap.get(iKey) || 0) + 1);
+      }
     });
 
-    return { solByDate: sMap, instByDate: iMap };
+    return { solByDate: sMap, instByDate: iMap, solBySector: sSecMap, instBySector: iSecMap };
   }, [solicitudes, installations]);
 
   // Construir matriz del calendario mensual
@@ -142,7 +155,7 @@ export function PlanificacionMonthlyView({
       });
     }
 
-    // 3. Top sectores del mes
+    // 3. Top sectores del mes y resultados de gestión en el sector
     const sectorStats = new Map<string, { count: number; parroquia?: string; municipio?: string }>();
     records.forEach((r) => {
       if (!r.sector || r.sector === "N/A") return;
@@ -151,8 +164,41 @@ export function PlanificacionMonthlyView({
       }
       sectorStats.get(r.sector)!.count += 1;
     });
+
     const sortedTopSectors = Array.from(sectorStats.entries())
-      .map(([name, data]) => ({ name, ...data }))
+      .map(([name, data]) => {
+        const secKey = normGeoKey(name);
+        let solCount = solBySector.get(secKey) || 0;
+        let instCount = instBySector.get(secKey) || 0;
+
+        // Fallback para variantes de subsector o inclusión parcial
+        if (solCount === 0) {
+          solicitudes.forEach((s) => {
+            const sKey = normGeoKey(s.sector);
+            const subKey = normGeoKey(s.subsector);
+            if (sKey === secKey || subKey === secKey || (sKey && secKey && (sKey.includes(secKey) || secKey.includes(sKey)))) {
+              solCount += 1;
+            }
+          });
+        }
+
+        if (instCount === 0) {
+          installations.forEach((i) => {
+            const iKey = normGeoKey(i.sector);
+            const subKey = normGeoKey(i.subsector);
+            if (iKey === secKey || subKey === secKey || (iKey && secKey && (iKey.includes(secKey) || secKey.includes(iKey)))) {
+              instCount += 1;
+            }
+          });
+        }
+
+        return {
+          name,
+          ...data,
+          solicitudesCount: solCount,
+          installationsCount: instCount,
+        };
+      })
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
 
@@ -176,7 +222,7 @@ export function PlanificacionMonthlyView({
       topSectors: sortedTopSectors,
       topAdvisors: sortedTopAdvisors,
     };
-  }, [records, monthIdx, year, solByDate, instByDate]);
+  }, [records, monthIdx, year, solByDate, instByDate, solBySector, instBySector, solicitudes, installations]);
 
   // Asesores a mostrar a la derecha (filtrados por sector si se seleccionó uno, o top asesores generales)
   const displayedAdvisors = useMemo(() => {
@@ -362,10 +408,10 @@ export function PlanificacionMonthlyView({
         <div className="space-y-3">
           <div className="border-b border-neutral-100 pb-1.5 flex items-baseline justify-between">
             <h3 className="text-xs font-semibold text-neutral-900">
-              Sectores con mayor cobertura mensual
+              {selectedAdvisor ? "Sectores con cobertura del asesor" : "Sectores con mayor cobertura mensual"}
             </h3>
             <span className="text-[11px] text-neutral-400 font-mono">
-              Frecuencia de visitas
+              {selectedAdvisor ? "Jornadas y resultados" : "Frecuencia de visitas"}
             </span>
           </div>
 
@@ -408,9 +454,50 @@ export function PlanificacionMonthlyView({
                     </div>
                   </div>
 
-                  <span className="font-mono text-xs text-neutral-800 shrink-0">
-                    {sec.count} {sec.count === 1 ? "jornada" : "jornadas"}
-                  </span>
+                  {selectedAdvisor ? (
+                    <div className="flex flex-col items-end shrink-0 pl-3">
+                      <span className="font-mono text-xs text-neutral-800">
+                        {sec.count} {sec.count === 1 ? "jornada" : "jornadas"}
+                      </span>
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono pt-0.5">
+                        <span
+                          className={cn(
+                            sec.solicitudesCount > 0 ? "text-neutral-900" : "text-neutral-400"
+                          )}
+                          title={`${sec.solicitudesCount} solicitudes enviadas en ${sec.name}`}
+                        >
+                          <strong
+                            className={cn(
+                              sec.solicitudesCount > 0 ? "font-semibold text-neutral-950" : "font-normal"
+                            )}
+                          >
+                            {sec.solicitudesCount}
+                          </strong>{" "}
+                          <span className="text-neutral-400 font-normal">sol</span>
+                        </span>
+                        <span className="text-neutral-300">·</span>
+                        <span
+                          className={cn(
+                            sec.installationsCount > 0 ? "text-neutral-900" : "text-neutral-400"
+                          )}
+                          title={`${sec.installationsCount} clientes instalados en ${sec.name}`}
+                        >
+                          <strong
+                            className={cn(
+                              sec.installationsCount > 0 ? "font-semibold text-neutral-950" : "font-normal"
+                            )}
+                          >
+                            {sec.installationsCount}
+                          </strong>{" "}
+                          <span className="text-neutral-400 font-normal">inst</span>
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="font-mono text-xs text-neutral-800 shrink-0">
+                      {sec.count} {sec.count === 1 ? "jornada" : "jornadas"}
+                    </span>
+                  )}
                 </div>
               );
             })}
