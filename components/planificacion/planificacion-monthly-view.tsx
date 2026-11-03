@@ -216,6 +216,22 @@ export function PlanificacionMonthlyView({
     <div className="space-y-8 pt-2">
       {/* Cuadrícula del Calendario Mensual */}
       <div className="space-y-2">
+        {/* Leyenda contextual discreta cuando hay asesor seleccionado */}
+        {selectedAdvisor && (
+          <div className="flex flex-wrap items-center justify-between text-[11px] text-neutral-400 font-mono pb-1 border-b border-neutral-100">
+            <span>Rutas y resultados de gestión</span>
+            <div className="flex items-center gap-2">
+              <span>
+                <strong className="text-neutral-700 font-semibold">sol</strong>: solicitudes enviadas
+              </span>
+              <span className="text-neutral-300">·</span>
+              <span>
+                <strong className="text-neutral-700 font-semibold">inst</strong>: clientes instalados
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Cabecera de días de la semana */}
         <div className="grid grid-cols-7 border-b border-neutral-200 pb-2 text-xs text-neutral-400 font-mono text-center">
           <div>Lun</div>
@@ -232,11 +248,12 @@ export function PlanificacionMonthlyView({
           {calendarDays.map((day, idx) => {
             if (!day.dayNum) {
               return (
-                <div key={`empty-${idx}`} className="h-24 p-2 bg-neutral-50/20" />
+                <div key={`empty-${idx}`} className="h-24 p-2.5 bg-neutral-50/20" />
               );
             }
 
-            const hasData = day.recordsCount > 0 || day.solicitudesCount > 0 || day.installationsCount > 0;
+            const hasResults = day.solicitudesCount > 0 || day.installationsCount > 0;
+            const hasData = day.recordsCount > 0 || hasResults;
 
             return (
               <div
@@ -246,67 +263,90 @@ export function PlanificacionMonthlyView({
                     onSelectDay(day.dateStr);
                   }
                 }}
+                title={
+                  selectedAdvisor
+                    ? `${String(day.dayNum).padStart(2, "0")} de ${month}: ${
+                        day.topSectors.join(", ") || "Sin ruta asignada"
+                      }${hasResults ? ` (${day.solicitudesCount} sol · ${day.installationsCount} inst)` : " (Sin actividad)"}`
+                    : `${String(day.dayNum).padStart(2, "0")} de ${month}: ${
+                        day.topSectors.join(", ") || "Sin jornada"
+                      } (${day.advisorsCount} asesores)`
+                }
                 className={cn(
-                  "h-24 p-2 flex flex-col justify-between transition-colors cursor-pointer",
+                  "h-24 p-2.5 flex flex-col justify-between transition-colors cursor-pointer group",
                   day.isToday ? "bg-neutral-100/40" : "hover:bg-neutral-50/60",
-                  !hasData && "opacity-40"
+                  !hasData && "opacity-35"
                 )}
               >
-                {/* Número del día e Indicadores */}
-                <div className="flex items-center justify-between gap-1">
+                {/* 1. Número del día e Indicador de Asesores Totales (solo en vista global) */}
+                <div className="flex items-center justify-between">
                   <span
                     className={cn(
-                      "text-xs font-mono",
-                      day.isToday ? "font-bold text-neutral-950 underline" : "text-neutral-700"
+                      "text-xs font-mono transition-colors",
+                      day.isToday
+                        ? "font-bold text-neutral-950 underline decoration-neutral-400 underline-offset-4"
+                        : "text-neutral-500 group-hover:text-neutral-900"
                     )}
                   >
                     {String(day.dayNum).padStart(2, "0")}
                   </span>
-                  {selectedAdvisor ? (
-                    <div className="flex items-center gap-1 text-[10px] font-mono shrink-0">
-                      <span
-                        className={cn(
-                          day.solicitudesCount > 0 ? "font-semibold text-neutral-950" : "text-neutral-400"
-                        )}
-                        title={`${day.solicitudesCount} solicitudes enviadas`}
-                      >
-                        {day.solicitudesCount} sol
-                      </span>
-                      <span className="text-neutral-300">·</span>
-                      <span
-                        className={cn(
-                          day.installationsCount > 0 ? "font-semibold text-neutral-950" : "text-neutral-400"
-                        )}
-                        title={`${day.installationsCount} clientes instalados`}
-                      >
-                        {day.installationsCount} inst
-                      </span>
-                    </div>
-                  ) : (
-                    hasData && (
-                      <span className="text-[10px] text-neutral-500 font-mono">
-                        {day.advisorsCount} as.
-                      </span>
-                    )
+                  {!selectedAdvisor && hasData && (
+                    <span className="text-[10px] text-neutral-400 font-mono">
+                      {day.advisorsCount} as.
+                    </span>
                   )}
                 </div>
 
-                {/* Rutas principales de ese día */}
-                <div className="min-w-0 space-y-0.5">
-                  {day.topSectors.map((sec, sIdx) => (
-                    <span
-                      key={sIdx}
-                      className="text-[10px] text-neutral-600 block truncate leading-tight"
-                    >
-                      {sec}
-                    </span>
-                  ))}
-                  {day.recordsCount === 0 && (
+                {/* 2. Rutas o Sectores principales de ese día */}
+                <div className="min-w-0 my-auto py-0.5 space-y-0.5">
+                  {day.topSectors.length > 0 ? (
+                    day.topSectors.map((sec, sIdx) => (
+                      <span
+                        key={sIdx}
+                        className="text-[11px] text-neutral-700 block truncate leading-tight font-sans"
+                      >
+                        {sec}
+                      </span>
+                    ))
+                  ) : day.recordsCount === 0 && !hasResults ? (
                     <span className="text-[10px] text-neutral-300 font-mono block">
                       Sin jornada
                     </span>
-                  )}
+                  ) : null}
                 </div>
+
+                {/* 3. Desempeño del Asesor (solo días con resultados positivos) */}
+                {selectedAdvisor && hasResults ? (
+                  <div className="pt-1.5 border-t border-neutral-100/80 flex items-center gap-1.5 text-[10px] font-mono leading-none">
+                    {day.solicitudesCount > 0 && (
+                      <span
+                        className="text-neutral-900 inline-flex items-baseline gap-0.5"
+                        title={`${day.solicitudesCount} solicitudes enviadas`}
+                      >
+                        <strong className="font-semibold text-neutral-950">
+                          {day.solicitudesCount}
+                        </strong>
+                        <span className="text-neutral-400 font-normal">sol</span>
+                      </span>
+                    )}
+                    {day.solicitudesCount > 0 && day.installationsCount > 0 && (
+                      <span className="text-neutral-300">·</span>
+                    )}
+                    {day.installationsCount > 0 && (
+                      <span
+                        className="text-neutral-900 inline-flex items-baseline gap-0.5"
+                        title={`${day.installationsCount} clientes instalados`}
+                      >
+                        <strong className="font-semibold text-neutral-950">
+                          {day.installationsCount}
+                        </strong>
+                        <span className="text-neutral-400 font-normal">inst</span>
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="h-0" />
+                )}
               </div>
             );
           })}
