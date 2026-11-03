@@ -28,7 +28,7 @@ import { PlanificacionMonthlyView } from "@/components/planificacion/planificaci
 import { PlanificacionEfectividadView } from "@/components/planificacion/planificacion-efectividad-view";
 import { geoHierarchy } from "@/lib/geo_hierarchy";
 
-type ViewMode = "semanal" | "diaria" | "mensual" | "efectividad";
+type ViewMode = "mensual" | "efectividad";
 
 const normKey = (str: string | null | undefined): string =>
   (str || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -101,8 +101,8 @@ export default function PlanificacionPage() {
   const [operationalLoading, setOperationalLoading] = useState(() => !getCachedOperationalData());
   const [refreshing, setRefreshing] = useState(false);
 
-  // Estados de vista y navegación
-  const [viewMode, setViewMode] = useState<ViewMode>("semanal");
+  // Estados de vista y navegación: Calendario o Efectividad
+  const [viewMode, setViewMode] = useState<ViewMode>("mensual");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMunicipio, setSelectedMunicipio] = useState("all");
   const [selectedActividad, setSelectedActividad] = useState("all");
@@ -367,28 +367,16 @@ export default function PlanificacionPage() {
     };
   }, [viewMode, weekDays, currentSelectedMonth, filteredRecords, dailyRecords, dailyDateLabel, monthlyRecords]);
 
-  // Manejadores de navegación temporal
+  // Manejadores de navegación temporal (mensual / calendario)
   const handlePrevPeriod = () => {
     const d = new Date(referenceDate);
-    if (viewMode === "semanal") {
-      d.setDate(d.getDate() - 7);
-    } else if (viewMode === "diaria") {
-      d.setDate(d.getDate() - 1);
-    } else {
-      d.setMonth(d.getMonth() - 1);
-    }
+    d.setMonth(d.getMonth() - 1);
     setReferenceDate(d);
   };
 
   const handleNextPeriod = () => {
     const d = new Date(referenceDate);
-    if (viewMode === "semanal") {
-      d.setDate(d.getDate() + 7);
-    } else if (viewMode === "diaria") {
-      d.setDate(d.getDate() + 1);
-    } else {
-      d.setMonth(d.getMonth() + 1);
-    }
+    d.setMonth(d.getMonth() + 1);
     setReferenceDate(d);
   };
 
@@ -408,7 +396,6 @@ export default function PlanificacionPage() {
     const parsed = parseDateSafe(dateStr);
     if (parsed) {
       setReferenceDate(parsed);
-      setViewMode("diaria");
     }
   };
 
@@ -469,36 +456,10 @@ export default function PlanificacionPage() {
 
         {/* Contenido principal abierto sin tarjetas encerradas */}
         <main className="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
-          {/* Fila 1: Selector de Perspectiva (Semanal, Diaria, Mensual, Efectividad) y Controles Temporales */}
+          {/* Fila 1: Selector de Perspectiva (Calendario y Efectividad y retorno) y Controles Temporales */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-100 pb-3">
             {/* Selector de Perspectiva: Botones tipográficos limpios */}
             <div className="flex items-center gap-3 text-xs overflow-x-auto no-scrollbar">
-              <button
-                type="button"
-                onClick={() => setViewMode("semanal")}
-                className={cn(
-                  "transition-colors cursor-pointer py-1 text-xs whitespace-nowrap",
-                  viewMode === "semanal"
-                    ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
-                    : "text-neutral-400 hover:text-neutral-700"
-                )}
-              >
-                Vista semanal
-              </button>
-              <span className="text-neutral-300">·</span>
-              <button
-                type="button"
-                onClick={() => setViewMode("diaria")}
-                className={cn(
-                  "transition-colors cursor-pointer py-1 text-xs whitespace-nowrap",
-                  viewMode === "diaria"
-                    ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
-                    : "text-neutral-400 hover:text-neutral-700"
-                )}
-              >
-                Vista diaria
-              </button>
-              <span className="text-neutral-300">·</span>
               <button
                 type="button"
                 onClick={() => setViewMode("mensual")}
@@ -509,7 +470,7 @@ export default function PlanificacionPage() {
                     : "text-neutral-400 hover:text-neutral-700"
                 )}
               >
-                Vista mensual
+                Calendario
               </button>
               <span className="text-neutral-300">·</span>
               <button
@@ -526,33 +487,27 @@ export default function PlanificacionPage() {
               </button>
             </div>
 
-            {/* Controles de Navegación Temporal (en vistas temporalizadas) */}
-            {viewMode !== "efectividad" && (
+            {/* Controles de Navegación Temporal (en vista Calendario) */}
+            {viewMode === "mensual" && (
               <div className="flex items-center gap-3 text-xs">
                 <button
                   type="button"
                   onClick={handlePrevPeriod}
                   className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
-                  title="Periodo anterior"
+                  title="Mes anterior"
                 >
                   <ChevronLeft className="w-4 h-4 stroke-[1.5]" />
                 </button>
 
                 <span className="text-xs font-medium text-neutral-900 font-sans">
-                  {viewMode === "semanal" && (
-                    <>
-                      Semana del {weekDays[0]?.dayNumber} al {weekDays[weekDays.length - 1]?.dayNumber} de {currentSelectedMonth}
-                    </>
-                  )}
-                  {viewMode === "diaria" && dailyDateLabel}
-                  {viewMode === "mensual" && `${currentSelectedMonth} ${referenceDate.getFullYear()}`}
+                  {currentSelectedMonth} {referenceDate.getFullYear()}
                 </span>
 
                 <button
                   type="button"
                   onClick={handleNextPeriod}
                   className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
-                  title="Periodo siguiente"
+                  title="Mes siguiente"
                 >
                   <ChevronRight className="w-4 h-4 stroke-[1.5]" />
                 </button>
@@ -564,7 +519,7 @@ export default function PlanificacionPage() {
                   onClick={handleToday}
                   className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors font-mono cursor-pointer"
                 >
-                  {viewMode === "diaria" ? "Hoy" : "Semana actual"}
+                  Mes actual
                 </button>
               </div>
             )}
@@ -664,26 +619,6 @@ export default function PlanificacionPage() {
             </div>
           ) : (
             <>
-              {viewMode === "semanal" && (
-                <PlanificacionWeeklyMatrix
-                  days={weekDays}
-                  schedules={weeklySchedules}
-                  onSelectDay={handleSelectSpecificDay}
-                  onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
-                  selectedAdvisor={selectedAdvisor}
-                />
-              )}
-
-              {viewMode === "diaria" && (
-                <PlanificacionDailyView
-                  dateStr={toIsoDate(referenceDate)}
-                  dateLabel={dailyDateLabel}
-                  records={dailyRecords}
-                  onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
-                  selectedAdvisor={selectedAdvisor}
-                />
-              )}
-
               {viewMode === "mensual" && (
                 <PlanificacionMonthlyView
                   month={currentSelectedMonth}
@@ -702,7 +637,7 @@ export default function PlanificacionPage() {
                   operationalLoading={operationalLoading}
                   onSelectSector={(sec) => {
                     setSearchTerm(sec);
-                    setViewMode("semanal");
+                    setViewMode("mensual");
                   }}
                   onSelectAdvisor={(adv) => {
                     setSelectedAdvisor(adv === selectedAdvisor ? null : adv);
