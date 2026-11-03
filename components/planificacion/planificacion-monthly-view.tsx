@@ -3,12 +3,15 @@
 import { useState, useMemo } from "react";
 import { X } from "lucide-react";
 import { cn, formatNumber } from "@/lib/utils";
-import { PlanificacionRecord, MONTH_ORDER } from "@/lib/dashboard-data";
+import { PlanificacionRecord, Solicitud, Installation, MONTH_ORDER } from "@/lib/dashboard-data";
 
 interface PlanificacionMonthlyViewProps {
   month: string;
   year?: number;
   records: PlanificacionRecord[];
+  solicitudes?: Solicitud[];
+  installations?: Installation[];
+  selectedAdvisor?: string | null;
   onSelectDay?: (dateStr: string) => void;
   onSelectAdvisor?: (advisor: string) => void;
   selectedSector?: string | null;
@@ -19,6 +22,9 @@ export function PlanificacionMonthlyView({
   month,
   year = 2026,
   records,
+  solicitudes = [],
+  installations = [],
+  selectedAdvisor,
   onSelectDay,
   onSelectAdvisor,
   selectedSector: propSelectedSector,
@@ -38,6 +44,23 @@ export function PlanificacionMonthlyView({
     const idx = MONTH_ORDER.findIndex((m) => m.toLowerCase() === month.toLowerCase());
     return idx >= 0 ? idx : 10; // Default Noviembre (10)
   }, [month]);
+
+  // Mapeo de solicitudes e instalaciones por fecha (YYYY-MM-DD)
+  const { solByDate, instByDate } = useMemo(() => {
+    const sMap = new Map<string, number>();
+    solicitudes.forEach((s) => {
+      if (!s.fecha) return;
+      sMap.set(s.fecha, (sMap.get(s.fecha) || 0) + 1);
+    });
+
+    const iMap = new Map<string, number>();
+    installations.forEach((i) => {
+      if (!i.fecha) return;
+      iMap.set(i.fecha, (iMap.get(i.fecha) || 0) + 1);
+    });
+
+    return { solByDate: sMap, instByDate: iMap };
+  }, [solicitudes, installations]);
 
   // Construir matriz del calendario mensual
   const { calendarDays, topSectors, topAdvisors } = useMemo(() => {
@@ -65,6 +88,8 @@ export function PlanificacionMonthlyView({
       isToday: boolean;
       advisorsCount: number;
       recordsCount: number;
+      solicitudesCount: number;
+      installationsCount: number;
       topSectors: string[];
     }> = [];
 
@@ -76,6 +101,8 @@ export function PlanificacionMonthlyView({
         isToday: false,
         advisorsCount: 0,
         recordsCount: 0,
+        solicitudesCount: 0,
+        installationsCount: 0,
         topSectors: [],
       });
     }
@@ -100,12 +127,17 @@ export function PlanificacionMonthlyView({
         .slice(0, 2)
         .map(([s]) => s);
 
+      const solCount = solByDate.get(dateStr) || 0;
+      const instCount = instByDate.get(dateStr) || 0;
+
       days.push({
         dayNum: d,
         dateStr,
         isToday: dateStr === todayIso,
         advisorsCount: distinctAdvisors,
         recordsCount: dayRecs.length,
+        solicitudesCount: solCount,
+        installationsCount: instCount,
         topSectors: sortedSecs,
       });
     }
@@ -144,7 +176,7 @@ export function PlanificacionMonthlyView({
       topSectors: sortedTopSectors,
       topAdvisors: sortedTopAdvisors,
     };
-  }, [records, monthIdx, year]);
+  }, [records, monthIdx, year, solByDate, instByDate]);
 
   // Asesores a mostrar a la derecha (filtrados por sector si se seleccionó uno, o top asesores generales)
   const displayedAdvisors = useMemo(() => {
@@ -204,7 +236,7 @@ export function PlanificacionMonthlyView({
               );
             }
 
-            const hasData = day.recordsCount > 0;
+            const hasData = day.recordsCount > 0 || day.solicitudesCount > 0 || day.installationsCount > 0;
 
             return (
               <div
@@ -220,8 +252,8 @@ export function PlanificacionMonthlyView({
                   !hasData && "opacity-40"
                 )}
               >
-                {/* Número del día */}
-                <div className="flex items-center justify-between">
+                {/* Número del día e Indicadores */}
+                <div className="flex items-center justify-between gap-1">
                   <span
                     className={cn(
                       "text-xs font-mono",
@@ -230,10 +262,32 @@ export function PlanificacionMonthlyView({
                   >
                     {String(day.dayNum).padStart(2, "0")}
                   </span>
-                  {hasData && (
-                    <span className="text-[10px] text-neutral-500 font-mono">
-                      {day.advisorsCount} as.
-                    </span>
+                  {selectedAdvisor ? (
+                    <div className="flex items-center gap-1 text-[10px] font-mono shrink-0">
+                      <span
+                        className={cn(
+                          day.solicitudesCount > 0 ? "font-semibold text-neutral-950" : "text-neutral-400"
+                        )}
+                        title={`${day.solicitudesCount} solicitudes enviadas`}
+                      >
+                        {day.solicitudesCount} sol
+                      </span>
+                      <span className="text-neutral-300">·</span>
+                      <span
+                        className={cn(
+                          day.installationsCount > 0 ? "font-semibold text-neutral-950" : "text-neutral-400"
+                        )}
+                        title={`${day.installationsCount} clientes instalados`}
+                      >
+                        {day.installationsCount} inst
+                      </span>
+                    </div>
+                  ) : (
+                    hasData && (
+                      <span className="text-[10px] text-neutral-500 font-mono">
+                        {day.advisorsCount} as.
+                      </span>
+                    )
                   )}
                 </div>
 

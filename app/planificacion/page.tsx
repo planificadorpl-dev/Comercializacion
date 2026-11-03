@@ -546,6 +546,9 @@ export default function PlanificacionPage() {
               month={currentSelectedMonth}
               year={referenceDate.getFullYear()}
               records={monthlyRecords}
+              solicitudes={filteredSolicitudes}
+              installations={filteredInstallations}
+              selectedAdvisor={selectedAdvisor}
               onSelectDay={handleSelectSpecificDay}
               onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
               selectedSector={selectedSector}
