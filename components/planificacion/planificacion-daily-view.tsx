@@ -2,24 +2,110 @@
 
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { PlanificacionRecord } from "@/lib/dashboard-data";
+import { PlanificacionRecord, Solicitud, Installation } from "@/lib/dashboard-data";
+import { normGeoKey } from "@/lib/geo_normalization";
 
 interface PlanificacionDailyViewProps {
   dateStr: string;
   dateLabel: string;
   records: PlanificacionRecord[];
+  solicitudes?: Solicitud[];
+  installations?: Installation[];
   onSelectAdvisor?: (advisor: string) => void;
   selectedAdvisor?: string | null;
+}
+
+const normAdvKey = (s: string | null | undefined): string =>
+  (s || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+
+function advisorKeysMatch(keyA: string, keyB: string): boolean {
+  if (!keyA || !keyB) return false;
+  if (keyA === keyB) return true;
+  const wordsA = keyA.split(" ").filter(Boolean);
+  const wordsB = keyB.split(" ").filter(Boolean);
+  if (wordsA.length >= 2 && wordsB.length >= 2) {
+    if (wordsA[0] === wordsB[0] && wordsA[wordsA.length - 1] === wordsB[wordsB.length - 1]) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function PlanificacionDailyView({
   dateStr,
   dateLabel,
   records,
+  solicitudes = [],
+  installations = [],
   onSelectAdvisor,
   selectedAdvisor,
 }: PlanificacionDailyViewProps) {
   const [groupBy, setGroupBy] = useState<"asesor" | "territorio">("asesor");
+
+  // Mapeo de solicitudes e instalaciones del día por asesor
+  const { solByAdvisor, instByAdvisor, solByTerritory, instByTerritory } = useMemo(() => {
+    const solAdv = new Map<string, number>();
+    const instAdv = new Map<string, number>();
+    const solTerr = new Map<string, number>();
+    const instTerr = new Map<string, number>();
+
+    const isMatchDate = (itemDate: string | undefined, createdAt: string | undefined) => {
+      if (itemDate && itemDate.startsWith(dateStr)) return true;
+      if (createdAt && createdAt.startsWith(dateStr)) return true;
+      return false;
+    };
+
+    solicitudes.forEach((s) => {
+      if (!isMatchDate(s.fecha, s.created_at)) return;
+      if (s.asesor && s.asesor !== "Sin Asesor") {
+        const k = normAdvKey(s.asesor);
+        if (k) solAdv.set(k, (solAdv.get(k) || 0) + 1);
+      }
+      const tKey = normGeoKey(s.parroquia || s.municipio || s.sector);
+      if (tKey) solTerr.set(tKey, (solTerr.get(tKey) || 0) + 1);
+    });
+
+    installations.forEach((i) => {
+      if (!isMatchDate(i.fecha, i.created_at)) return;
+      if (i.asesor && i.asesor !== "Sin Asesor") {
+        const k = normAdvKey(i.asesor);
+        if (k) instAdv.set(k, (instAdv.get(k) || 0) + 1);
+      }
+      const tKey = normGeoKey(i.parroquia || i.municipio || i.sector);
+      if (tKey) instTerr.set(tKey, (instTerr.get(tKey) || 0) + 1);
+    });
+
+    return {
+      solByAdvisor: solAdv,
+      instByAdvisor: instAdv,
+      solByTerritory: solTerr,
+      instByTerritory: instTerr,
+    };
+  }, [solicitudes, installations, dateStr]);
+
+  const getAdvSolInst = (advName: string) => {
+    const targetKey = normAdvKey(advName);
+    let sol = 0;
+    let inst = 0;
+    if (!targetKey) return { sol, inst };
+
+    for (const [k, count] of solByAdvisor.entries()) {
+      if (k === targetKey || advisorKeysMatch(targetKey, k)) {
+        sol += count;
+      }
+    }
+    for (const [k, count] of instByAdvisor.entries()) {
+      if (k === targetKey || advisorKeysMatch(targetKey, k)) {
+        inst += count;
+      }
+    }
+    return { sol, inst };
+  };
 
   // Agrupación por territorio (Parroquia o Municipio)
   const territoryGroups = useMemo(() => {
@@ -103,6 +189,7 @@ export function PlanificacionDailyView({
             const ubicacion = [rec.parroquia, rec.municipio, rec.estado]
               .filter((x) => x && x !== "N/A" && x !== "Otros")
               .join(" · ");
+            const metrics = getAdvSolInst(rec.asesor);
 
             return (
               <div
@@ -140,11 +227,26 @@ export function PlanificacionDailyView({
                   )}
                 </div>
 
-                {/* Columna derecha: Modalidad de actividad */}
-                <div className="text-left sm:text-right sm:w-1/4 pl-8 sm:pl-0 shrink-0">
+                {/* Columna derecha: Modalidad de actividad y métricas de resultados */}
+                <div className="text-left sm:text-right sm:w-1/4 pl-8 sm:pl-0 shrink-0 flex flex-col sm:items-end">
                   <span className="text-xs text-neutral-600 font-sans block">
                     {actividad}
                   </span>
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono pt-0.5">
+                    <span
+                      className={metrics.sol > 0 ? "text-neutral-950 font-semibold" : "text-neutral-400"}
+                      title={`${metrics.sol} solicitudes enviadas`}
+                    >
+                      {metrics.sol} <span className="font-normal text-neutral-400">sol</span>
+                    </span>
+                    <span className="text-neutral-300">·</span>
+                    <span
+                      className={metrics.inst > 0 ? "text-neutral-950 font-semibold" : "text-neutral-400"}
+                      title={`${metrics.inst} clientes instalados`}
+                    >
+                      {metrics.inst} <span className="font-normal text-neutral-400">inst</span>
+                    </span>
+                  </div>
                 </div>
               </div>
             );
@@ -179,6 +281,7 @@ export function PlanificacionDailyView({
                 {group.items.map((item, iIdx) => {
                   const actividad = item.tipo_actividad || item.plan || "Recorrido";
                   const sector = item.sector || "Sector general";
+                  const metrics = getAdvSolInst(item.asesor);
 
                   return (
                     <div
@@ -196,9 +299,26 @@ export function PlanificacionDailyView({
                         </span>
                       </div>
 
-                      <span className="text-[11px] text-neutral-400 font-mono shrink-0 ml-4">
-                        {actividad}
-                      </span>
+                      <div className="flex items-center gap-3 shrink-0 ml-4">
+                        <span className="text-[11px] text-neutral-400 font-mono">
+                          {actividad}
+                        </span>
+                        <div className="flex items-center gap-1.5 text-[11px] font-mono">
+                          <span
+                            className={metrics.sol > 0 ? "text-neutral-950 font-semibold" : "text-neutral-400"}
+                            title={`${metrics.sol} solicitudes`}
+                          >
+                            {metrics.sol} <span className="font-normal text-neutral-400">sol</span>
+                          </span>
+                          <span className="text-neutral-300">·</span>
+                          <span
+                            className={metrics.inst > 0 ? "text-neutral-950 font-semibold" : "text-neutral-400"}
+                            title={`${metrics.inst} instalaciones`}
+                          >
+                            {metrics.inst} <span className="font-normal text-neutral-400">inst</span>
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}

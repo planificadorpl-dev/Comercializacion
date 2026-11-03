@@ -627,6 +627,8 @@ export default function PlanificacionPage() {
               dateStr={toIsoDate(referenceDate)}
               dateLabel={dailyDateLabel}
               records={dailyRecords}
+              solicitudes={rawSolicitudes}
+              installations={rawInstallations}
               onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
               selectedAdvisor={selectedAdvisor}
             />
