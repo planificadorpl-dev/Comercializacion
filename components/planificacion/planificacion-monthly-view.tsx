@@ -25,6 +25,7 @@ export function PlanificacionMonthlyView({
   onSelectSector,
 }: PlanificacionMonthlyViewProps) {
   const [internalSector, setInternalSector] = useState<string | null>(null);
+  const [showAllAdvisors, setShowAllAdvisors] = useState(false);
   const activeSector = propSelectedSector !== undefined ? propSelectedSector : internalSector;
 
   const handleToggleSector = (secName: string) => {
@@ -136,8 +137,7 @@ export function PlanificacionMonthlyView({
     });
     const sortedTopAdvisors = Array.from(advisorStats.entries())
       .map(([name, data]) => ({ name, count: data.count, sectorsCount: data.sectors.size }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
+      .sort((a, b) => b.count - a.count);
 
     return {
       calendarDays: days,
@@ -353,32 +353,46 @@ export function PlanificacionMonthlyView({
               No hay asesores asignados a este sector en el mes.
             </div>
           ) : (
-            <div className="divide-y divide-neutral-100/70">
-              {displayedAdvisors.map((adv, idx) => (
-                <div
-                  key={adv.name}
-                  onClick={() => onSelectAdvisor?.(adv.name)}
-                  className="flex items-center justify-between py-2 text-xs hover:bg-neutral-50/50 transition-colors px-1 cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-[10px] font-mono text-neutral-400 w-4 shrink-0">
-                      {String(idx + 1).padStart(2, "0")}
-                    </span>
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-medium text-neutral-900 truncate">
-                        {adv.name}
+            <div className="space-y-2">
+              <div className="divide-y divide-neutral-100/70">
+                {(showAllAdvisors || activeSector ? displayedAdvisors : displayedAdvisors.slice(0, 8)).map((adv, idx) => (
+                  <div
+                    key={adv.name}
+                    onClick={() => onSelectAdvisor?.(adv.name)}
+                    className="flex items-center justify-between py-2 text-xs hover:bg-neutral-50/50 transition-colors px-1 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-[10px] font-mono text-neutral-400 w-4 shrink-0">
+                        {String(idx + 1).padStart(2, "0")}
                       </span>
-                      <span className="text-[10px] text-neutral-400 font-mono truncate">
-                        {adv.subtext}
-                      </span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-medium text-neutral-900 truncate">
+                          {adv.name}
+                        </span>
+                        <span className="text-[10px] text-neutral-400 font-mono truncate">
+                          {adv.subtext}
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  <span className="font-mono text-xs text-neutral-800 shrink-0">
-                    {adv.count} {adv.count === 1 ? "jornada" : "jornadas"}
-                  </span>
-                </div>
-              ))}
+                    <span className="font-mono text-xs text-neutral-800 shrink-0">
+                      {adv.count} {adv.count === 1 ? "jornada" : "jornadas"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {!activeSector && displayedAdvisors.length > 8 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllAdvisors(!showAllAdvisors)}
+                  className="pt-1 text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors font-mono cursor-pointer"
+                >
+                  {showAllAdvisors
+                    ? "Ver menos"
+                    : `Ver todos los asesores (${displayedAdvisors.length})`}
+                </button>
+              )}
             </div>
           )}
         </div>
