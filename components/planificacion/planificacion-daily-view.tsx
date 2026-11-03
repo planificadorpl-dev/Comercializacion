@@ -61,7 +61,7 @@ export function PlanificacionDailyView({
     };
 
     solicitudes.forEach((s) => {
-      if (!isMatchDate(s.fecha, s.created_at)) return;
+      if (!isMatchDate(s.fecha)) return;
       if (s.asesor && s.asesor !== "Sin Asesor") {
         const k = normAdvKey(s.asesor);
         if (k) solAdv.set(k, (solAdv.get(k) || 0) + 1);
@@ -71,7 +71,7 @@ export function PlanificacionDailyView({
     });
 
     installations.forEach((i) => {
-      if (!isMatchDate(i.fecha, i.created_at)) return;
+      if (!isMatchDate(i.fecha)) return;
       if (i.asesor && i.asesor !== "Sin Asesor") {
         const k = normAdvKey(i.asesor);
         if (k) instAdv.set(k, (instAdv.get(k) || 0) + 1);

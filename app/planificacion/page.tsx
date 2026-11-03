@@ -45,6 +45,12 @@ function advisorKeysMatch(keyA: string, keyB: string): boolean {
 
 function toStandardIsoDate(val: any): string {
   if (!val) return "";
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, "0");
+    const d = String(val.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
   const str = String(val).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
   if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
@@ -65,6 +71,8 @@ function toStandardIsoDate(val: any): string {
   }
   return "";
 }
+
+const toIsoDate = toStandardIsoDate;
 
 function matchesDate(itemFecha: any, targetIso: string): boolean {
   if (!targetIso || !itemFecha) return false;
