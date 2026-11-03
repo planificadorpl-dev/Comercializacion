@@ -19,6 +19,40 @@ interface PlanificacionMonthlyViewProps {
   onSelectSector?: (sector: string | null) => void;
 }
 
+function toStandardIsoDate(val: any): string {
+  if (!val) return "";
+  const str = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+
+  const parts = str.split(/[\/\-]/).map((p) => parseInt(p, 10));
+  if (parts.length === 3) {
+    let y = parts[2];
+    let m = parts[1];
+    let d = parts[0];
+    if (parts[0] > 1000) {
+      y = parts[0];
+      m = parts[1];
+      d = parts[2];
+    }
+    if (y && m && d && !isNaN(y) && !isNaN(m) && !isNaN(d)) {
+      return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
+  }
+  return "";
+}
+
+function getMonthDayKey(val: any): string {
+  const iso = toStandardIsoDate(val);
+  if (iso) {
+    const parts = iso.split("-");
+    if (parts.length === 3) {
+      return `${parseInt(parts[1], 10)}-${parseInt(parts[2], 10)}`;
+    }
+  }
+  return "";
+}
+
 export function PlanificacionMonthlyView({
   month,
   year = 2026,
@@ -46,9 +80,10 @@ export function PlanificacionMonthlyView({
     return idx >= 0 ? idx : 10; // Default Noviembre (10)
   }, [month]);
 
-  // Mapeo de solicitudes e instalaciones por fecha (YYYY-MM-DD) y por sector canónico
-  const { solByDate, instByDate, solBySector, instBySector } = useMemo(() => {
+  // Mapeo de solicitudes e instalaciones por fecha (YYYY-MM-DD), día del mes y por sector canónico
+  const { solByDate, instByDate, solByMonthDay, instByMonthDay, solBySector, instBySector } = useMemo(() => {
     const sMap = new Map<string, number>();
+    const sMdMap = new Map<string, number>();
     const sSecMap = new Map<string, number>();
 
     const targetSecKey = activeSector ? normGeoKey(activeSector) : null;
@@ -72,11 +107,15 @@ export function PlanificacionMonthlyView({
             (targetSecKey && targetSecKey.includes(sKey));
           if (!isMatch) return;
         }
-        sMap.set(s.fecha, (sMap.get(s.fecha) || 0) + 1);
+        const iso = toStandardIsoDate(s.fecha);
+        const md = getMonthDayKey(s.fecha);
+        if (iso) sMap.set(iso, (sMap.get(iso) || 0) + 1);
+        if (md) sMdMap.set(md, (sMdMap.get(md) || 0) + 1);
       }
     });
 
     const iMap = new Map<string, number>();
+    const iMdMap = new Map<string, number>();
     const iSecMap = new Map<string, number>();
     installations.forEach((i) => {
       const iKey = normGeoKey(i.sector);
@@ -97,11 +136,21 @@ export function PlanificacionMonthlyView({
             (targetSecKey && targetSecKey.includes(iKey));
           if (!isMatch) return;
         }
-        iMap.set(i.fecha, (iMap.get(i.fecha) || 0) + 1);
+        const iso = toStandardIsoDate(i.fecha);
+        const md = getMonthDayKey(i.fecha);
+        if (iso) iMap.set(iso, (iMap.get(iso) || 0) + 1);
+        if (md) iMdMap.set(md, (iMdMap.get(md) || 0) + 1);
       }
     });
 
-    return { solByDate: sMap, instByDate: iMap, solBySector: sSecMap, instBySector: iSecMap };
+    return {
+      solByDate: sMap,
+      instByDate: iMap,
+      solByMonthDay: sMdMap,
+      instByMonthDay: iMdMap,
+      solBySector: sSecMap,
+      instBySector: iSecMap,
+    };
   }, [solicitudes, installations, activeSector]);
 
   // Construir matriz del calendario mensual
@@ -169,8 +218,9 @@ export function PlanificacionMonthlyView({
         .slice(0, 2)
         .map(([s]) => s);
 
-      const solCount = solByDate.get(dateStr) || 0;
-      const instCount = instByDate.get(dateStr) || 0;
+      const mdKey = `${monthIdx + 1}-${d}`;
+      const solCount = solByDate.get(dateStr) || solByMonthDay.get(mdKey) || 0;
+      const instCount = instByDate.get(dateStr) || instByMonthDay.get(mdKey) || 0;
 
       days.push({
         dayNum: d,
@@ -251,7 +301,7 @@ export function PlanificacionMonthlyView({
       topSectors: sortedTopSectors,
       topAdvisors: sortedTopAdvisors,
     };
-  }, [records, monthIdx, year, solByDate, instByDate, solBySector, instBySector, solicitudes, installations]);
+  }, [records, monthIdx, year, solByDate, instByDate, solByMonthDay, instByMonthDay, solBySector, instBySector, solicitudes, installations]);
 
   // Asesores a mostrar a la derecha (filtrados por sector si se seleccionó uno, o top asesores generales)
   const displayedAdvisors = useMemo(() => {
@@ -416,6 +466,10 @@ export function PlanificacionMonthlyView({
                         </span>
                       );
                     })
+                  ) : activeSector && hasResults ? (
+                    <span className="text-[11px] block truncate leading-tight font-sans font-semibold text-neutral-950">
+                      {activeSector}
+                    </span>
                   ) : day.recordsCount === 0 && !hasResults ? (
                     <span className="text-[10px] text-neutral-300 font-mono block">
                       Sin jornada
@@ -424,7 +478,7 @@ export function PlanificacionMonthlyView({
                 </div>
 
                 {/* 3. Desempeño del Asesor (solicitudes e instalaciones del sector activo) */}
-                {selectedAdvisor && hasResults && isCurrentSectorDay ? (
+                {selectedAdvisor && hasResults ? (
                   <div className="pt-1.5 border-t border-neutral-100/80 flex items-center gap-1.5 text-[10px] font-mono leading-none">
                     {day.solicitudesCount > 0 && (
                       <span
