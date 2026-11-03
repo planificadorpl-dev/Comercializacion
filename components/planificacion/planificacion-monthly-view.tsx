@@ -217,6 +217,12 @@ export function PlanificacionMonthlyView({
       solicitudesCount: number;
       installationsCount: number;
       topSectors: string[];
+      allSectorsDetail: Array<{
+        name: string;
+        advisorsCount: number;
+        solicitudesCount: number;
+        installationsCount: number;
+      }>;
     }> = [];
 
     // Relleno inicial de días vacíos antes del 1
@@ -230,6 +236,7 @@ export function PlanificacionMonthlyView({
         solicitudesCount: 0,
         installationsCount: 0,
         topSectors: [],
+        allSectorsDetail: [],
       });
     }
 
@@ -241,17 +248,63 @@ export function PlanificacionMonthlyView({
       const dayRecs = dateMap.get(dateStr) || [];
       const distinctAdvisors = new Set(dayRecs.map((r) => r.asesor)).size;
 
-      // Sectores principales de ese día
-      const sectorCounts = new Map<string, number>();
+      // Sectores de ese día con detalle
+      const daySectorMap = new Map<string, { advisors: Set<string> }>();
       dayRecs.forEach((r) => {
         if (r.sector && r.sector !== "N/A") {
-          sectorCounts.set(r.sector, (sectorCounts.get(r.sector) || 0) + 1);
+          if (!daySectorMap.has(r.sector)) {
+            daySectorMap.set(r.sector, { advisors: new Set() });
+          }
+          if (r.asesor && r.asesor !== "Sin Asesor") {
+            daySectorMap.get(r.sector)!.advisors.add(r.asesor);
+          }
         }
       });
-      const sortedSecs = Array.from(sectorCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 2)
-        .map(([s]) => s);
+
+      // Detalle de cada sector con sus sol e inst de este día específico
+      const allSectorsDetail = Array.from(daySectorMap.entries())
+        .map(([secName, secInfo]) => {
+          const sKey = normGeoKey(secName);
+          let secSol = 0;
+          let secInst = 0;
+
+          // Solicitudes del día en este sector
+          solicitudes.forEach((s) => {
+            const isSameDate = s.fecha === dateStr || (s.created_at && s.created_at.startsWith(dateStr));
+            if (!isSameDate) return;
+            const itemKey = normGeoKey(s.sector);
+            const subKey = normGeoKey(s.subsector);
+            if (itemKey === sKey || subKey === sKey || (itemKey && sKey && (itemKey.includes(sKey) || sKey.includes(itemKey)))) {
+              secSol += 1;
+            }
+          });
+
+          // Instalaciones del día en este sector
+          installations.forEach((i) => {
+            const isSameDate = i.fecha === dateStr || (i.created_at && i.created_at.startsWith(dateStr));
+            if (!isSameDate) return;
+            const itemKey = normGeoKey(i.sector);
+            const subKey = normGeoKey(i.subsector);
+            if (itemKey === sKey || subKey === sKey || (itemKey && sKey && (itemKey.includes(sKey) || sKey.includes(itemKey)))) {
+              secInst += 1;
+            }
+          });
+
+          return {
+            name: secName,
+            advisorsCount: secInfo.advisors.size,
+            solicitudesCount: secSol,
+            installationsCount: secInst,
+          };
+        })
+        .sort((a, b) => {
+          // Ordenar por actividad/instalaciones y luego solicitudes
+          if (b.installationsCount !== a.installationsCount) return b.installationsCount - a.installationsCount;
+          if (b.solicitudesCount !== a.solicitudesCount) return b.solicitudesCount - a.solicitudesCount;
+          return b.advisorsCount - a.advisorsCount;
+        });
+
+      const sortedSecs = allSectorsDetail.slice(0, 2).map((s) => s.name);
 
       const mdKey = `${monthIdx + 1}-${d}`;
       const solCount = solByDate.get(dateStr) || solByMonthDay.get(mdKey) || 0;
@@ -266,6 +319,7 @@ export function PlanificacionMonthlyView({
         solicitudesCount: solCount,
         installationsCount: instCount,
         topSectors: sortedSecs,
+        allSectorsDetail,
       });
     }
 
@@ -675,10 +729,10 @@ export function PlanificacionMonthlyView({
             const hasActivity = activeDay.recordsCount > 0 || hasResults;
 
             return (
-              <div className="p-3 bg-neutral-50/70 border border-neutral-200/60 rounded-xl space-y-2 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between pb-1.5 border-b border-neutral-200/60">
+              <div className="pt-2 pb-1 space-y-3 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between pb-1.5 border-b border-neutral-100">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold font-mono text-neutral-950">
+                    <span className="text-xs font-semibold text-neutral-900">
                       {String(activeDay.dayNum).padStart(2, "0")} de {month}
                     </span>
                     {activeDay.isToday && (
@@ -691,43 +745,16 @@ export function PlanificacionMonthlyView({
                     <button
                       type="button"
                       onClick={() => onSelectDay(activeDay.dateStr!)}
-                      className="text-[11px] font-semibold text-neutral-900 hover:text-neutral-600 transition-colors cursor-pointer"
+                      className="text-[11px] font-medium text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
                     >
                       Ver detalle del día →
                     </button>
                   )}
                 </div>
 
-                {/* Rutas y sectores con nombres completos (sin truncar) */}
-                <div className="space-y-1">
-                  <span className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider block">
-                    {selectedAdvisor ? "Ruta asignada" : "Sectores cubiertos"}
-                  </span>
-                  {activeDay.topSectors.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {activeDay.topSectors.map((sec, sIdx) => (
-                        <span
-                          key={sIdx}
-                          className="text-xs font-medium text-neutral-900 bg-white border border-neutral-200/80 px-2 py-0.5 rounded-md"
-                        >
-                          {sec}
-                        </span>
-                      ))}
-                    </div>
-                  ) : hasActivity ? (
-                    <span className="text-xs text-neutral-700">
-                      Actividad registrada en {activeSector || "el sector"}
-                    </span>
-                  ) : (
-                    <span className="text-xs text-neutral-400 italic">
-                      Sin jornada planificada para esta fecha
-                    </span>
-                  )}
-                </div>
-
-                {/* Resultados comerciales del día */}
-                <div className="pt-1 flex items-center justify-between text-xs font-mono">
-                  <div className="flex items-center gap-3">
+                {/* Resumen general del día */}
+                <div className="flex items-center justify-between text-xs font-mono pb-1 border-b border-neutral-100/60">
+                  <div className="flex items-center gap-2">
                     <span
                       className={activeDay.solicitudesCount > 0 ? "text-neutral-950 font-bold" : "text-neutral-400"}
                     >
@@ -744,6 +771,52 @@ export function PlanificacionMonthlyView({
                   {!selectedAdvisor && activeDay.advisorsCount > 0 && (
                     <span className="text-[11px] text-neutral-500 font-sans">
                       {activeDay.advisorsCount} {activeDay.advisorsCount === 1 ? "asesor desplegado" : "asesores desplegados"}
+                    </span>
+                  )}
+                </div>
+
+                {/* Lista de sectores cubiertos con sus solicitudes e instalaciones */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] text-neutral-400 font-mono block">
+                    {selectedAdvisor ? "Ruta del asesor" : "Sectores cubiertos"}
+                  </span>
+
+                  {activeDay.allSectorsDetail && activeDay.allSectorsDetail.length > 0 ? (
+                    <div className="divide-y divide-neutral-100">
+                      {activeDay.allSectorsDetail.map((sec, sIdx) => (
+                        <div
+                          key={sIdx}
+                          className="py-1.5 flex items-center justify-between text-xs transition-colors"
+                        >
+                          <div className="min-w-0 pr-2">
+                            <span className="font-medium text-neutral-900 block truncate">
+                              {sec.name}
+                            </span>
+                            {!selectedAdvisor && sec.advisorsCount > 0 && (
+                              <span className="text-[10px] text-neutral-400 font-mono">
+                                {sec.advisorsCount} {sec.advisorsCount === 1 ? "asesor" : "asesores"}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 font-mono text-[11px] shrink-0">
+                            <span className={sec.solicitudesCount > 0 ? "text-neutral-950 font-semibold" : "text-neutral-400"}>
+                              {sec.solicitudesCount} sol
+                            </span>
+                            <span className="text-neutral-300">·</span>
+                            <span className={sec.installationsCount > 0 ? "text-neutral-950 font-semibold" : "text-neutral-400"}>
+                              {sec.installationsCount} inst
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : hasActivity ? (
+                    <span className="text-xs text-neutral-700 block py-1">
+                      Actividad registrada en {activeSector || "el sector"}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-neutral-400 italic block py-1">
+                      Sin jornada planificada para esta fecha
                     </span>
                   )}
                 </div>
