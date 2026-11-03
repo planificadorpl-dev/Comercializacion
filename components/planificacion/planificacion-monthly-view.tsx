@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
+import { X } from "lucide-react";
 import { cn, formatNumber } from "@/lib/utils";
 import { PlanificacionRecord, MONTH_ORDER } from "@/lib/dashboard-data";
 
@@ -10,6 +11,8 @@ interface PlanificacionMonthlyViewProps {
   records: PlanificacionRecord[];
   onSelectDay?: (dateStr: string) => void;
   onSelectAdvisor?: (advisor: string) => void;
+  selectedSector?: string | null;
+  onSelectSector?: (sector: string | null) => void;
 }
 
 export function PlanificacionMonthlyView({
@@ -18,7 +21,18 @@ export function PlanificacionMonthlyView({
   records,
   onSelectDay,
   onSelectAdvisor,
+  selectedSector: propSelectedSector,
+  onSelectSector,
 }: PlanificacionMonthlyViewProps) {
+  const [internalSector, setInternalSector] = useState<string | null>(null);
+  const activeSector = propSelectedSector !== undefined ? propSelectedSector : internalSector;
+
+  const handleToggleSector = (secName: string) => {
+    const next = activeSector?.toLowerCase() === secName.toLowerCase() ? null : secName;
+    if (onSelectSector) onSelectSector(next);
+    setInternalSector(next);
+  };
+
   const monthIdx = useMemo(() => {
     const idx = MONTH_ORDER.findIndex((m) => m.toLowerCase() === month.toLowerCase());
     return idx >= 0 ? idx : 10; // Default Noviembre (10)
@@ -132,6 +146,40 @@ export function PlanificacionMonthlyView({
     };
   }, [records, monthIdx, year]);
 
+  // Asesores a mostrar a la derecha (filtrados por sector si se seleccionó uno, o top asesores generales)
+  const displayedAdvisors = useMemo(() => {
+    if (!activeSector) {
+      return topAdvisors.map((adv) => ({
+        name: adv.name,
+        count: adv.count,
+        subtext: `${adv.sectorsCount} ${adv.sectorsCount === 1 ? "sector cubierto" : "sectores cubiertos"}`,
+      }));
+    }
+
+    const secKey = activeSector.trim().toLowerCase();
+    const map = new Map<string, { count: number; dates: Set<string> }>();
+
+    records.forEach((r) => {
+      if (!r.asesor || r.asesor === "Sin Asesor") return;
+      if (r.sector && r.sector.trim().toLowerCase() === secKey) {
+        if (!map.has(r.asesor)) {
+          map.set(r.asesor, { count: 0, dates: new Set() });
+        }
+        const item = map.get(r.asesor)!;
+        item.count += 1;
+        if (r.fecha) item.dates.add(r.fecha);
+      }
+    });
+
+    return Array.from(map.entries())
+      .map(([name, data]) => ({
+        name,
+        count: data.count,
+        subtext: `${data.dates.size} ${data.dates.size === 1 ? "día de actividad" : "días de actividad"}`,
+      }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [activeSector, topAdvisors, records]);
+
   return (
     <div className="space-y-8 pt-2">
       {/* Cuadrícula del Calendario Mensual */}
@@ -228,73 +276,111 @@ export function PlanificacionMonthlyView({
           </div>
 
           <div className="divide-y divide-neutral-100/70">
-            {topSectors.map((sec, idx) => (
-              <div
-                key={sec.name}
-                className="flex items-center justify-between py-2 text-xs hover:bg-neutral-50/50 transition-colors px-1"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-[10px] font-mono text-neutral-400 w-4 shrink-0">
-                    {String(idx + 1).padStart(2, "0")}
-                  </span>
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-medium text-neutral-900 truncate">
-                      {sec.name}
-                    </span>
-                    {sec.parroquia && sec.parroquia !== "N/A" && (
-                      <span className="text-[10px] text-neutral-400 font-mono truncate">
-                        {sec.parroquia} {sec.municipio ? `· ${sec.municipio}` : ""}
-                      </span>
-                    )}
-                  </div>
-                </div>
+            {topSectors.map((sec, idx) => {
+              const isSelected = activeSector?.toLowerCase() === sec.name.toLowerCase();
 
-                <span className="font-mono text-xs text-neutral-800 shrink-0">
-                  {sec.count} {sec.count === 1 ? "jornada" : "jornadas"}
-                </span>
-              </div>
-            ))}
+              return (
+                <div
+                  key={sec.name}
+                  onClick={() => handleToggleSector(sec.name)}
+                  className={cn(
+                    "flex items-center justify-between py-2 text-xs transition-colors px-1 cursor-pointer",
+                    isSelected
+                      ? "bg-neutral-100/60 font-medium text-neutral-950"
+                      : "hover:bg-neutral-50/50 text-neutral-900"
+                  )}
+                  title={`Clic para filtrar asesores en ${sec.name}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-[10px] font-mono text-neutral-400 w-4 shrink-0">
+                      {String(idx + 1).padStart(2, "0")}
+                    </span>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn("truncate", isSelected ? "font-semibold text-neutral-950" : "font-medium text-neutral-900")}>
+                          {sec.name}
+                        </span>
+                        {isSelected && (
+                          <span className="text-[9px] text-neutral-400 font-mono">
+                            · Activo
+                          </span>
+                        )}
+                      </div>
+                      {sec.parroquia && sec.parroquia !== "N/A" && (
+                        <span className="text-[10px] text-neutral-400 font-mono truncate">
+                          {sec.parroquia} {sec.municipio ? `· ${sec.municipio}` : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <span className="font-mono text-xs text-neutral-800 shrink-0">
+                    {sec.count} {sec.count === 1 ? "jornada" : "jornadas"}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* 2. Asesores con mayor despliegue en el mes */}
+        {/* 2. Asesores con mayor despliegue en el mes o en el sector seleccionado */}
         <div className="space-y-3">
           <div className="border-b border-neutral-100 pb-1.5 flex items-baseline justify-between">
-            <h3 className="text-xs font-semibold text-neutral-900">
-              Asesores con mayor actividad en el mes
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-semibold text-neutral-900">
+                {activeSector ? `Asesores en ${activeSector}` : "Asesores con mayor actividad en el mes"}
+              </h3>
+              {activeSector && (
+                <button
+                  type="button"
+                  onClick={() => handleToggleSector(activeSector)}
+                  title="Quitar filtro de sector"
+                  className="text-neutral-400 hover:text-neutral-900 p-0.5 cursor-pointer transition-colors"
+                >
+                  <X className="w-3 h-3 stroke-[1.5]" />
+                </button>
+              )}
+            </div>
             <span className="text-[11px] text-neutral-400 font-mono">
-              Turnos asignados
+              {activeSector
+                ? `${displayedAdvisors.length} ${displayedAdvisors.length === 1 ? "asesor asignado" : "asesores asignados"}`
+                : "Turnos asignados"}
             </span>
           </div>
 
-          <div className="divide-y divide-neutral-100/70">
-            {topAdvisors.map((adv, idx) => (
-              <div
-                key={adv.name}
-                onClick={() => onSelectAdvisor?.(adv.name)}
-                className="flex items-center justify-between py-2 text-xs hover:bg-neutral-50/50 transition-colors px-1 cursor-pointer"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-[10px] font-mono text-neutral-400 w-4 shrink-0">
-                    {String(idx + 1).padStart(2, "0")}
-                  </span>
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-medium text-neutral-900 truncate">
-                      {adv.name}
+          {displayedAdvisors.length === 0 ? (
+            <div className="py-8 text-center text-xs text-neutral-400 font-mono">
+              No hay asesores asignados a este sector en el mes.
+            </div>
+          ) : (
+            <div className="divide-y divide-neutral-100/70">
+              {displayedAdvisors.map((adv, idx) => (
+                <div
+                  key={adv.name}
+                  onClick={() => onSelectAdvisor?.(adv.name)}
+                  className="flex items-center justify-between py-2 text-xs hover:bg-neutral-50/50 transition-colors px-1 cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-[10px] font-mono text-neutral-400 w-4 shrink-0">
+                      {String(idx + 1).padStart(2, "0")}
                     </span>
-                    <span className="text-[10px] text-neutral-400 font-mono truncate">
-                      {adv.sectorsCount} {adv.sectorsCount === 1 ? "sector cubierto" : "sectores cubiertos"}
-                    </span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-medium text-neutral-900 truncate">
+                        {adv.name}
+                      </span>
+                      <span className="text-[10px] text-neutral-400 font-mono truncate">
+                        {adv.subtext}
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                <span className="font-mono text-xs text-neutral-800 shrink-0">
-                  {adv.count} jornadas
-                </span>
-              </div>
-            ))}
-          </div>
+                  <span className="font-mono text-xs text-neutral-800 shrink-0">
+                    {adv.count} {adv.count === 1 ? "jornada" : "jornadas"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
