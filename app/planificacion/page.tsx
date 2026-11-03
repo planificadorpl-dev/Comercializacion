@@ -12,7 +12,10 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { SidebarOpenButton } from "@/components/providers/sidebar-provider";
 import {
   fetchPlanificacionData,
+  fetchRawOperationalData,
   PlanificacionRecord,
+  Installation,
+  Solicitud,
   MONTH_ORDER,
 } from "@/lib/dashboard-data";
 import { cn, formatNumber, formatProperCase } from "@/lib/utils";
@@ -20,8 +23,10 @@ import { PlanificacionMetrics } from "@/components/planificacion/planificacion-m
 import { PlanificacionWeeklyMatrix, WeekDay, AdvisorWeeklySchedule } from "@/components/planificacion/planificacion-weekly-matrix";
 import { PlanificacionDailyView } from "@/components/planificacion/planificacion-daily-view";
 import { PlanificacionMonthlyView } from "@/components/planificacion/planificacion-monthly-view";
+import { PlanificacionEfectividadView } from "@/components/planificacion/planificacion-efectividad-view";
+import { computePlanificacionAnalytics } from "@/lib/planificacion-analytics";
 
-type ViewMode = "semanal" | "diaria" | "mensual";
+type ViewMode = "semanal" | "diaria" | "mensual" | "efectividad";
 
 const normKey = (str: string | null | undefined): string =>
   (str || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -43,8 +48,9 @@ function parseDateSafe(str: string): Date | null {
     return new Date(y, m - 1, d);
   }
   const parts = clean.split(/[\/\-]/).map(Number);
-  if (parts.length === 3 && parts[2] > 1000) {
-    return new Date(parts[2], parts[1] - 1, parts[0]);
+  if (parts.length === 3) {
+    if (parts[2] > 1000) return new Date(parts[2], parts[1] - 1, parts[0]);
+    if (parts[0] > 1000) return new Date(parts[0], parts[1] - 1, parts[2]);
   }
   return null;
 }
@@ -63,6 +69,8 @@ const SPANISH_DAYS_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 export default function PlanificacionPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [records, setRecords] = useState<PlanificacionRecord[]>([]);
+  const [rawSolicitudes, setRawSolicitudes] = useState<Solicitud[]>([]);
+  const [rawInstallations, setRawInstallations] = useState<Installation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -76,18 +84,26 @@ export default function PlanificacionPage() {
   // Fecha de referencia: por defecto 2026-11-02 (o fecha actual)
   const [referenceDate, setReferenceDate] = useState<Date>(() => new Date(2026, 10, 2));
 
-  // Carga de datos de la hoja Data
+  // Carga de datos de la hoja Data y de operaciones (Solicitudes e Instalaciones)
   const loadData = useCallback(async (force = false) => {
     if (force) setRefreshing(true);
     else setLoading(true);
 
     try {
-      const data = await fetchPlanificacionData(force);
-      setRecords(data || []);
+      const [planData, opData] = await Promise.all([
+        fetchPlanificacionData(force),
+        fetchRawOperationalData(undefined, undefined, undefined, undefined, force).catch(() => null),
+      ]);
 
-      // Si hay datos, situar la fecha de referencia en la fecha más reciente
-      if (data && data.length > 0) {
-        const sortedDates = data
+      setRecords(planData || []);
+      if (opData) {
+        setRawSolicitudes(opData.solicitudes || []);
+        setRawInstallations(opData.installations || []);
+      }
+
+      // Situar la fecha de referencia en la fecha más reciente con datos
+      if (planData && planData.length > 0) {
+        const sortedDates = planData
           .map((d) => d.fecha)
           .filter(Boolean)
           .sort();
@@ -111,6 +127,11 @@ export default function PlanificacionPage() {
     loadData();
   }, [loadData]);
 
+  // Motor de Análisis de Atribución y Efectividad
+  const analytics = useMemo(() => {
+    return computePlanificacionAnalytics(records, rawSolicitudes, rawInstallations);
+  }, [records, rawSolicitudes, rawInstallations]);
+
   // Lista de meses disponibles ordenada
   const availableMonths = useMemo(() => {
     const set = new Set<string>();
@@ -129,16 +150,6 @@ export default function PlanificacionPage() {
       if (r.municipio && r.municipio !== "N/A" && r.municipio !== "Otros") {
         set.add(r.municipio);
       }
-    });
-    return Array.from(set).sort();
-  }, [records]);
-
-  // Lista de actividades disponibles para el filtro
-  const availableActividades = useMemo(() => {
-    const set = new Set<string>();
-    records.forEach((r) => {
-      const act = r.tipo_actividad || r.plan;
-      if (act && act !== "N/A") set.add(act);
     });
     return Array.from(set).sort();
   }, [records]);
@@ -183,9 +194,8 @@ export default function PlanificacionPage() {
   // Cálculos para la VISTA SEMANAL
   const { weekDays, weeklySchedules } = useMemo(() => {
     const monday = getMonday(referenceDate);
-    const todayIso = toIsoDate(new Date(2026, 10, 2)); // 02/11/2026 contexto
+    const todayIso = toIsoDate(new Date(2026, 10, 2));
 
-    // Días de lunes a sábado (6 días laborales de calle)
     const days: WeekDay[] = [];
     for (let i = 0; i < 6; i++) {
       const d = new Date(monday);
@@ -203,11 +213,8 @@ export default function PlanificacionPage() {
     }
 
     const weekDatesSet = new Set(days.map((d) => d.dateStr));
-
-    // Filtrar registros que caigan en esta semana
     const inWeekRecords = filteredRecords.filter((r) => weekDatesSet.has(r.fecha));
 
-    // Agrupar por asesor
     const advisorMap = new Map<string, {
       name: string;
       normName: string;
@@ -346,7 +353,6 @@ export default function PlanificacionPage() {
   };
 
   const handleToday = () => {
-    // Si la última fecha de registros es noviembre 2026
     const sorted = records.map((r) => r.fecha).filter(Boolean).sort();
     if (sorted.length > 0) {
       const parsed = parseDateSafe(sorted[sorted.length - 1]);
@@ -398,14 +404,14 @@ export default function PlanificacionPage() {
                 Planificación Comercial
               </h1>
               <p className="text-xs text-neutral-400 font-mono">
-                Rutas y cronograma operativo de asesores en campo
+                Rutas, cronograma y efectividad de actividades en campo
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             <span className="text-[11px] text-neutral-400 font-mono hidden sm:inline">
-              {formatNumber(records.length)} registros en hoja Data
+              {formatNumber(records.length)} jornadas planificadas
             </span>
             <button
               type="button"
@@ -423,15 +429,15 @@ export default function PlanificacionPage() {
 
         {/* Contenido principal abierto sin tarjetas encerradas */}
         <main className="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
-          {/* Fila 1: Selector de Perspectiva (Mensual, Semanal, Diaria) y Controles Temporales */}
+          {/* Fila 1: Selector de Perspectiva (Semanal, Diaria, Mensual, Efectividad) y Controles Temporales */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-100 pb-3">
             {/* Selector de Perspectiva: Botones tipográficos limpios */}
-            <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-3 text-xs overflow-x-auto no-scrollbar">
               <button
                 type="button"
                 onClick={() => setViewMode("semanal")}
                 className={cn(
-                  "transition-colors cursor-pointer py-1 text-xs",
+                  "transition-colors cursor-pointer py-1 text-xs whitespace-nowrap",
                   viewMode === "semanal"
                     ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
                     : "text-neutral-400 hover:text-neutral-700"
@@ -444,7 +450,7 @@ export default function PlanificacionPage() {
                 type="button"
                 onClick={() => setViewMode("diaria")}
                 className={cn(
-                  "transition-colors cursor-pointer py-1 text-xs",
+                  "transition-colors cursor-pointer py-1 text-xs whitespace-nowrap",
                   viewMode === "diaria"
                     ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
                     : "text-neutral-400 hover:text-neutral-700"
@@ -457,7 +463,7 @@ export default function PlanificacionPage() {
                 type="button"
                 onClick={() => setViewMode("mensual")}
                 className={cn(
-                  "transition-colors cursor-pointer py-1 text-xs",
+                  "transition-colors cursor-pointer py-1 text-xs whitespace-nowrap",
                   viewMode === "mensual"
                     ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
                     : "text-neutral-400 hover:text-neutral-700"
@@ -465,135 +471,151 @@ export default function PlanificacionPage() {
               >
                 Vista mensual
               </button>
-            </div>
-
-            {/* Controles de Navegación Temporal: Iconos puros y etiquetas naturales */}
-            <div className="flex items-center gap-3 text-xs">
-              <button
-                type="button"
-                onClick={handlePrevPeriod}
-                className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
-                title="Periodo anterior"
-              >
-                <ChevronLeft className="w-4 h-4 stroke-[1.5]" />
-              </button>
-
-              <span className="text-xs font-medium text-neutral-900 font-sans">
-                {viewMode === "semanal" && (
-                  <>
-                    Semana del {weekDays[0]?.dayNumber} al {weekDays[weekDays.length - 1]?.dayNumber} de {currentSelectedMonth}
-                  </>
-                )}
-                {viewMode === "diaria" && dailyDateLabel}
-                {viewMode === "mensual" && `${currentSelectedMonth} ${referenceDate.getFullYear()}`}
-              </span>
-
-              <button
-                type="button"
-                onClick={handleNextPeriod}
-                className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
-                title="Periodo siguiente"
-              >
-                <ChevronRight className="w-4 h-4 stroke-[1.5]" />
-              </button>
-
               <span className="text-neutral-300">·</span>
-
               <button
                 type="button"
-                onClick={handleToday}
-                className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors font-mono cursor-pointer"
+                onClick={() => setViewMode("efectividad")}
+                className={cn(
+                  "transition-colors cursor-pointer py-1 text-xs whitespace-nowrap",
+                  viewMode === "efectividad"
+                    ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
+                    : "text-neutral-400 hover:text-neutral-700"
+                )}
               >
-                {viewMode === "diaria" ? "Hoy" : "Semana actual"}
+                Efectividad y retorno
               </button>
             </div>
-          </div>
 
-          {/* Fila 2: Sub-filtros sutiles (Selector de meses en mensual, buscador en línea base) */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            {/* Si está en vista mensual: selector de meses */}
-            {viewMode === "mensual" ? (
-              <div className="flex items-center gap-3 overflow-x-auto no-scrollbar text-xs">
-                {availableMonths.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => handleSelectMonth(m)}
-                    className={cn(
-                      "transition-colors whitespace-nowrap py-1 cursor-pointer",
-                      normKey(m) === normKey(currentSelectedMonth)
-                        ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
-                        : "text-neutral-400 hover:text-neutral-700"
-                    )}
-                  >
-                    {m}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              /* En vista semanal o diaria: filtros rápidos por municipio y actividad */
-              <div className="flex items-center gap-3 overflow-x-auto no-scrollbar text-xs">
-                {/* Filtro de Municipio */}
-                <span className="text-[11px] text-neutral-400 font-mono">Municipio:</span>
+            {/* Controles de Navegación Temporal (en vistas temporalizadas) */}
+            {viewMode !== "efectividad" && (
+              <div className="flex items-center gap-3 text-xs">
                 <button
                   type="button"
-                  onClick={() => setSelectedMunicipio("all")}
-                  className={cn(
-                    "cursor-pointer transition-colors py-0.5",
-                    selectedMunicipio === "all" ? "text-neutral-950 font-semibold" : "text-neutral-400 hover:text-neutral-700"
-                  )}
+                  onClick={handlePrevPeriod}
+                  className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                  title="Periodo anterior"
                 >
-                  Todos
+                  <ChevronLeft className="w-4 h-4 stroke-[1.5]" />
                 </button>
-                {availableMunicipios.slice(0, 5).map((mun) => (
-                  <button
-                    key={mun}
-                    type="button"
-                    onClick={() => setSelectedMunicipio(mun === selectedMunicipio ? "all" : mun)}
-                    className={cn(
-                      "cursor-pointer transition-colors py-0.5 whitespace-nowrap",
-                      selectedMunicipio === mun ? "text-neutral-950 font-semibold border-b border-neutral-900" : "text-neutral-400 hover:text-neutral-700"
-                    )}
-                  >
-                    {mun}
-                  </button>
-                ))}
+
+                <span className="text-xs font-medium text-neutral-900 font-sans">
+                  {viewMode === "semanal" && (
+                    <>
+                      Semana del {weekDays[0]?.dayNumber} al {weekDays[weekDays.length - 1]?.dayNumber} de {currentSelectedMonth}
+                    </>
+                  )}
+                  {viewMode === "diaria" && dailyDateLabel}
+                  {viewMode === "mensual" && `${currentSelectedMonth} ${referenceDate.getFullYear()}`}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleNextPeriod}
+                  className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                  title="Periodo siguiente"
+                >
+                  <ChevronRight className="w-4 h-4 stroke-[1.5]" />
+                </button>
+
+                <span className="text-neutral-300">·</span>
+
+                <button
+                  type="button"
+                  onClick={handleToday}
+                  className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors font-mono cursor-pointer"
+                >
+                  {viewMode === "diaria" ? "Hoy" : "Semana actual"}
+                </button>
               </div>
             )}
-
-            {/* Buscador minimalista con línea base */}
-            <div className="flex items-center gap-1.5 w-full sm:w-64 border-b border-neutral-200 focus-within:border-neutral-900 transition-colors py-0.5">
-              <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0 stroke-[1.25]" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar asesor, ruta o sector..."
-                className="w-full bg-transparent text-xs text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm("")}
-                  className="text-neutral-400 hover:text-neutral-900 transition-colors p-0.5 cursor-pointer"
-                >
-                  <X className="w-3 h-3 stroke-[1.5]" />
-                </button>
-              )}
-            </div>
           </div>
 
-          {/* Fila 3: Cinta de Métricas Operativas Abiertas (Sin recuadros, sin iconos en títulos) */}
-          <PlanificacionMetrics
-            totalAdvisors={activeMetrics.totalAdvisors}
-            totalSectors={activeMetrics.totalSectors}
-            totalJornadas={activeMetrics.totalJornadas}
-            predominantActivity={activeMetrics.predominantActivity}
-            periodLabel={activeMetrics.periodLabel}
-          />
+          {/* Fila 2: Sub-filtros y Buscador para vistas operativas */}
+          {viewMode !== "efectividad" && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              {viewMode === "mensual" ? (
+                <div className="flex items-center gap-3 overflow-x-auto no-scrollbar text-xs">
+                  {availableMonths.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => handleSelectMonth(m)}
+                      className={cn(
+                        "transition-colors whitespace-nowrap py-1 cursor-pointer",
+                        normKey(m) === normKey(currentSelectedMonth)
+                          ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
+                          : "text-neutral-400 hover:text-neutral-700"
+                      )}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 overflow-x-auto no-scrollbar text-xs">
+                  <span className="text-[11px] text-neutral-400 font-mono">Municipio:</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMunicipio("all")}
+                    className={cn(
+                      "cursor-pointer transition-colors py-0.5",
+                      selectedMunicipio === "all" ? "text-neutral-950 font-semibold" : "text-neutral-400 hover:text-neutral-700"
+                    )}
+                  >
+                    Todos
+                  </button>
+                  {availableMunicipios.slice(0, 5).map((mun) => (
+                    <button
+                      key={mun}
+                      type="button"
+                      onClick={() => setSelectedMunicipio(mun === selectedMunicipio ? "all" : mun)}
+                      className={cn(
+                        "cursor-pointer transition-colors py-0.5 whitespace-nowrap",
+                        selectedMunicipio === mun ? "text-neutral-950 font-semibold border-b border-neutral-900" : "text-neutral-400 hover:text-neutral-700"
+                      )}
+                    >
+                      {mun}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-          {/* LÍNEA DE REFERENCIA SUTIL CON DIFUMINADO EN LOS EXTREMOS */}
-          <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-neutral-300 to-transparent my-1" />
+              {/* Buscador minimalista con línea base */}
+              <div className="flex items-center gap-1.5 w-full sm:w-64 border-b border-neutral-200 focus-within:border-neutral-900 transition-colors py-0.5">
+                <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0 stroke-[1.25]" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar asesor, ruta o sector..."
+                  className="w-full bg-transparent text-xs text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm("")}
+                    className="text-neutral-400 hover:text-neutral-900 transition-colors p-0.5 cursor-pointer"
+                  >
+                    <X className="w-3 h-3 stroke-[1.5]" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Fila 3: Cinta de Métricas Operativas (solo en vistas de cronograma) */}
+          {viewMode !== "efectividad" && (
+            <>
+              <PlanificacionMetrics
+                totalAdvisors={activeMetrics.totalAdvisors}
+                totalSectors={activeMetrics.totalSectors}
+                totalJornadas={activeMetrics.totalJornadas}
+                predominantActivity={activeMetrics.predominantActivity}
+                periodLabel={activeMetrics.periodLabel}
+              />
+              <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-neutral-300 to-transparent my-1" />
+            </>
+          )}
 
           {/* Fila 4: Visualización Principal según Modo */}
           {loading ? (
@@ -629,6 +651,19 @@ export default function PlanificacionPage() {
                   records={monthlyRecords}
                   onSelectDay={handleSelectSpecificDay}
                   onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
+                />
+              )}
+
+              {viewMode === "efectividad" && (
+                <PlanificacionEfectividadView
+                  analytics={analytics}
+                  onSelectSector={(sec) => {
+                    setSearchTerm(sec);
+                    setViewMode("semanal");
+                  }}
+                  onSelectAdvisor={(adv) => {
+                    setSelectedAdvisor(adv === selectedAdvisor ? null : adv);
+                  }}
                 />
               )}
             </>
