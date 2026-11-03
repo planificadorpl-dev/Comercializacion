@@ -101,6 +101,7 @@ export function PlanificacionMonthlyView({
 }: PlanificacionMonthlyViewProps) {
   const [internalSector, setInternalSector] = useState<string | null>(null);
   const [showAllAdvisors, setShowAllAdvisors] = useState(false);
+  const [selectedMobileDay, setSelectedMobileDay] = useState<string | null>(null);
   const activeSector = propSelectedSector !== undefined ? propSelectedSector : internalSector;
 
   const handleToggleSector = (secName: string) => {
@@ -451,8 +452,8 @@ export function PlanificacionMonthlyView({
           </div>
         )}
 
-        {/* Cabecera de días de la semana */}
-        <div className="grid grid-cols-7 border-b border-neutral-200 pb-2 text-xs text-neutral-400 font-mono text-center">
+        {/* Cabecera de días de la semana (Desktop) */}
+        <div className="hidden md:grid grid-cols-7 border-b border-neutral-200 pb-2 text-xs text-neutral-400 font-mono text-center">
           <div>Lun</div>
           <div>Mar</div>
           <div>Mié</div>
@@ -462,8 +463,8 @@ export function PlanificacionMonthlyView({
           <div>Dom</div>
         </div>
 
-        {/* Días del mes */}
-        <div className="grid grid-cols-7 divide-x divide-y divide-neutral-100/60 border-b border-neutral-100/60">
+        {/* Días del mes (Desktop) */}
+        <div className="hidden md:grid grid-cols-7 divide-x divide-y divide-neutral-100/60 border-b border-neutral-100/60">
           {calendarDays.map((day, idx) => {
             if (!day.dayNum) {
               return (
@@ -602,6 +603,153 @@ export function PlanificacionMonthlyView({
               </div>
             );
           })}
+        </div>
+
+        {/* ─── VISTA MÓVIL: MINI CALENDARIO + DETALLE LIMPIO SIN TEXTOS TRUNCADOS (< md) ─── */}
+        <div className="md:hidden space-y-4">
+          {/* Cabecera compacta móvil */}
+          <div className="grid grid-cols-7 border-b border-neutral-100 pb-1.5 text-[11px] text-neutral-400 font-mono text-center">
+            <div>Lu</div>
+            <div>Ma</div>
+            <div>Mi</div>
+            <div>Ju</div>
+            <div>Vi</div>
+            <div>Sá</div>
+            <div>Do</div>
+          </div>
+
+          {/* Cuadrícula compacta de selección de fecha */}
+          <div className="grid grid-cols-7 gap-1">
+            {calendarDays.map((day, idx) => {
+              if (!day.dayNum) {
+                return <div key={`m-empty-${idx}`} className="h-10" />;
+              }
+
+              const hasResults = day.solicitudesCount > 0 || day.installationsCount > 0;
+              const hasActivity = day.recordsCount > 0 || hasResults;
+              const isSelected = selectedMobileDay === day.dateStr;
+
+              return (
+                <button
+                  key={`m-${day.dateStr}`}
+                  type="button"
+                  onClick={() => setSelectedMobileDay(day.dateStr)}
+                  className={cn(
+                    "h-10 flex flex-col items-center justify-center rounded-md transition-all cursor-pointer relative",
+                    isSelected
+                      ? "bg-neutral-900 text-white font-bold"
+                      : day.isToday
+                      ? "border border-neutral-900/40 text-neutral-950 font-semibold"
+                      : hasActivity
+                      ? "text-neutral-900 hover:bg-neutral-100 font-medium"
+                      : "text-neutral-300 hover:text-neutral-500"
+                  )}
+                >
+                  <span className="text-xs font-mono">{day.dayNum}</span>
+                  {/* Punto sutil de actividad */}
+                  {hasActivity && !isSelected && (
+                    <span
+                      className={cn(
+                        "w-1 h-1 rounded-full mt-0.5",
+                        hasResults ? "bg-neutral-900" : "bg-neutral-400"
+                      )}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Tarjeta de detalle del día seleccionado en móvil */}
+          {(() => {
+            // Resolver día activo: el seleccionado manualmente o el primer día con actividad o el día de hoy
+            const activeDay =
+              calendarDays.find((d) => d.dateStr === selectedMobileDay) ||
+              calendarDays.find((d) => d.isToday && d.dayNum) ||
+              calendarDays.find((d) => (d.recordsCount > 0 || d.solicitudesCount > 0 || d.installationsCount > 0) && d.dayNum) ||
+              calendarDays.find((d) => Boolean(d.dayNum));
+
+            if (!activeDay || !activeDay.dateStr) return null;
+
+            const hasResults = activeDay.solicitudesCount > 0 || activeDay.installationsCount > 0;
+            const hasActivity = activeDay.recordsCount > 0 || hasResults;
+
+            return (
+              <div className="p-3 bg-neutral-50/70 border border-neutral-200/60 rounded-xl space-y-2 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between pb-1.5 border-b border-neutral-200/60">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold font-mono text-neutral-950">
+                      {String(activeDay.dayNum).padStart(2, "0")} de {month}
+                    </span>
+                    {activeDay.isToday && (
+                      <span className="text-[10px] text-neutral-400 font-mono">
+                        (Hoy)
+                      </span>
+                    )}
+                  </div>
+                  {onSelectDay && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectDay(activeDay.dateStr!)}
+                      className="text-[11px] font-semibold text-neutral-900 hover:text-neutral-600 transition-colors cursor-pointer"
+                    >
+                      Ver detalle del día →
+                    </button>
+                  )}
+                </div>
+
+                {/* Rutas y sectores con nombres completos (sin truncar) */}
+                <div className="space-y-1">
+                  <span className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider block">
+                    {selectedAdvisor ? "Ruta asignada" : "Sectores cubiertos"}
+                  </span>
+                  {activeDay.topSectors.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {activeDay.topSectors.map((sec, sIdx) => (
+                        <span
+                          key={sIdx}
+                          className="text-xs font-medium text-neutral-900 bg-white border border-neutral-200/80 px-2 py-0.5 rounded-md"
+                        >
+                          {sec}
+                        </span>
+                      ))}
+                    </div>
+                  ) : hasActivity ? (
+                    <span className="text-xs text-neutral-700">
+                      Actividad registrada en {activeSector || "el sector"}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-neutral-400 italic">
+                      Sin jornada planificada para esta fecha
+                    </span>
+                  )}
+                </div>
+
+                {/* Resultados comerciales del día */}
+                <div className="pt-1 flex items-center justify-between text-xs font-mono">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={activeDay.solicitudesCount > 0 ? "text-neutral-950 font-bold" : "text-neutral-400"}
+                    >
+                      {activeDay.solicitudesCount} sol
+                    </span>
+                    <span className="text-neutral-300">·</span>
+                    <span
+                      className={activeDay.installationsCount > 0 ? "text-neutral-950 font-bold" : "text-neutral-400"}
+                    >
+                      {activeDay.installationsCount} inst
+                    </span>
+                  </div>
+
+                  {!selectedAdvisor && activeDay.advisorsCount > 0 && (
+                    <span className="text-[11px] text-neutral-500 font-sans">
+                      {activeDay.advisorsCount} {activeDay.advisorsCount === 1 ? "asesor desplegado" : "asesores desplegados"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
