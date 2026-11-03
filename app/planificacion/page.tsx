@@ -28,7 +28,20 @@ import { PlanificacionDailyView } from "@/components/planificacion/planificacion
 type ViewMode = "mensual" | "diaria";
 
 const normKey = (str: string | null | undefined): string =>
-  (str || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  (str || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+
+function advisorKeysMatch(keyA: string, keyB: string): boolean {
+  if (!keyA || !keyB) return false;
+  if (keyA === keyB) return true;
+  const wordsA = keyA.split(" ").filter(Boolean);
+  const wordsB = keyB.split(" ").filter(Boolean);
+  if (wordsA.length >= 2 && wordsB.length >= 2) {
+    if (wordsA[0] === wordsB[0] && wordsA[wordsA.length - 1] === wordsB[wordsB.length - 1]) {
+      return true;
+    }
+  }
+  return false;
+}
 
 // Convierte objeto Date a ISO YYYY-MM-DD
 function toIsoDate(d: Date): string {
@@ -163,9 +176,32 @@ export default function PlanificacionPage() {
     return list;
   }, [records, searchTerm, selectedAdvisor, selectedSector]);
 
+  // Conjunto de claves de asesores comerciales planificados en el periodo
+  const commercialAdvisorKeys = useMemo(() => {
+    const set = new Set<string>();
+    records.forEach((r) => {
+      if (r.asesor && r.asesor !== "Sin Asesor" && r.asesor !== "Desconocido") {
+        const k = normKey(r.asesor);
+        if (k) set.add(k);
+      }
+    });
+    return set;
+  }, [records]);
+
+  const isCommercialAdvisor = useCallback((advName: string | null | undefined): boolean => {
+    if (!advName) return false;
+    const k = normKey(advName);
+    if (!k || k === "SIN ASESOR" || k === "DESCONOCIDO" || k === "PLANIFICACION") return false;
+    if (commercialAdvisorKeys.has(k)) return true;
+    for (const canonical of commercialAdvisorKeys) {
+      if (advisorKeysMatch(canonical, k)) return true;
+    }
+    return false;
+  }, [commercialAdvisorKeys]);
+
   // Solicitudes filtradas transversalmente según selección activa (periodo, asesor, sector, búsqueda, día móvil)
   const filteredSolicitudes = useMemo(() => {
-    let list = rawSolicitudes;
+    let list = rawSolicitudes.filter((s) => isCommercialAdvisor(s.asesor));
 
     if (viewMode === "diaria") {
       const dateIso = toIsoDate(referenceDate);
@@ -179,7 +215,7 @@ export default function PlanificacionPage() {
 
     if (selectedAdvisor) {
       const advNk = normKey(selectedAdvisor);
-      list = list.filter((s) => normKey(s.asesor) === advNk);
+      list = list.filter((s) => normKey(s.asesor) === advNk || advisorKeysMatch(advNk, normKey(s.asesor)));
     }
 
     if (selectedSector) {
@@ -199,11 +235,12 @@ export default function PlanificacionPage() {
     }
 
     return list;
-  }, [rawSolicitudes, viewMode, referenceDate, selectedDateFilter, currentSelectedMonth, selectedAdvisor, selectedSector, searchTerm]);
+  }, [rawSolicitudes, isCommercialAdvisor, viewMode, referenceDate, selectedDateFilter, currentSelectedMonth, selectedAdvisor, selectedSector, searchTerm]);
 
   // Instalaciones filtradas transversalmente según selección activa (periodo, asesor, sector, búsqueda, día móvil)
   const filteredInstallations = useMemo(() => {
-    let list = rawInstallations;
+    // Filtrar estrictamente a ventas conseguidas por asesores comerciales
+    let list = rawInstallations.filter((i) => isCommercialAdvisor(i.asesor));
 
     if (viewMode === "diaria") {
       const dateIso = toIsoDate(referenceDate);
@@ -217,7 +254,7 @@ export default function PlanificacionPage() {
 
     if (selectedAdvisor) {
       const advNk = normKey(selectedAdvisor);
-      list = list.filter((i) => normKey(i.asesor) === advNk);
+      list = list.filter((i) => normKey(i.asesor) === advNk || advisorKeysMatch(advNk, normKey(i.asesor)));
     }
 
     if (selectedSector) {
@@ -237,7 +274,7 @@ export default function PlanificacionPage() {
     }
 
     return list;
-  }, [rawInstallations, viewMode, referenceDate, selectedDateFilter, currentSelectedMonth, selectedAdvisor, selectedSector, searchTerm]);
+  }, [rawInstallations, isCommercialAdvisor, viewMode, referenceDate, selectedDateFilter, currentSelectedMonth, selectedAdvisor, selectedSector, searchTerm]);
 
   // Registros filtrados para el mes o día actualmente seleccionado (para métricas y listados dependientes del filtro)
   const monthlyRecords = useMemo(() => {
@@ -260,9 +297,9 @@ export default function PlanificacionPage() {
     return list;
   }, [records, currentSelectedMonth, selectedAdvisor]);
 
-  // Solicitudes del mes o día móvil (filtradas por asesor si aplica, no restringidas por sector)
+  // Solicitudes del mes o día móvil (restringidas a asesores comerciales, filtradas por asesor si aplica)
   const monthlySolicitudes = useMemo(() => {
-    let list = rawSolicitudes;
+    let list = rawSolicitudes.filter((s) => isCommercialAdvisor(s.asesor));
     if (selectedDateFilter) {
       list = list.filter((s) => s.fecha === selectedDateFilter || (s.created_at && s.created_at.startsWith(selectedDateFilter)));
     } else {
@@ -271,14 +308,14 @@ export default function PlanificacionPage() {
     }
     if (selectedAdvisor) {
       const advNk = normKey(selectedAdvisor);
-      list = list.filter((s) => normKey(s.asesor) === advNk);
+      list = list.filter((s) => normKey(s.asesor) === advNk || advisorKeysMatch(advNk, normKey(s.asesor)));
     }
     return list;
-  }, [rawSolicitudes, selectedDateFilter, currentSelectedMonth, selectedAdvisor]);
+  }, [rawSolicitudes, isCommercialAdvisor, selectedDateFilter, currentSelectedMonth, selectedAdvisor]);
 
-  // Instalaciones del mes o día móvil (filtradas por asesor si aplica, no restringidas por sector)
+  // Instalaciones del mes o día móvil (restringidas a asesores comerciales, filtradas por asesor si aplica)
   const monthlyInstallations = useMemo(() => {
-    let list = rawInstallations;
+    let list = rawInstallations.filter((i) => isCommercialAdvisor(i.asesor));
     if (selectedDateFilter) {
       list = list.filter((i) => i.fecha === selectedDateFilter || (i.created_at && i.created_at.startsWith(selectedDateFilter)));
     } else {
@@ -287,10 +324,10 @@ export default function PlanificacionPage() {
     }
     if (selectedAdvisor) {
       const advNk = normKey(selectedAdvisor);
-      list = list.filter((i) => normKey(i.asesor) === advNk);
+      list = list.filter((i) => normKey(i.asesor) === advNk || advisorKeysMatch(advNk, normKey(i.asesor)));
     }
     return list;
-  }, [rawInstallations, selectedDateFilter, currentSelectedMonth, selectedAdvisor]);
+  }, [rawInstallations, isCommercialAdvisor, selectedDateFilter, currentSelectedMonth, selectedAdvisor]);
 
   // Registros filtrados para la vista diaria
   const { dailyRecords, dailyDateLabel } = useMemo(() => {
@@ -627,8 +664,8 @@ export default function PlanificacionPage() {
               dateStr={toIsoDate(referenceDate)}
               dateLabel={dailyDateLabel}
               records={dailyRecords}
-              solicitudes={rawSolicitudes}
-              installations={rawInstallations}
+              solicitudes={filteredSolicitudes}
+              installations={filteredInstallations}
               onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
               selectedAdvisor={selectedAdvisor}
             />
