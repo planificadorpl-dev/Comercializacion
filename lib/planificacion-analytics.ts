@@ -23,6 +23,7 @@ export interface SectorHealthItem {
   trend: "ascenso" | "cuello_botella" | "declive" | "estable" | "dormida";
   trendLabel: string;
   topAdvisors: string[];
+  activities: string[];
 }
 
 export interface ActivityEffectivenessItem {
@@ -527,6 +528,19 @@ export function computePlanificacionAnalytics(
       .slice(0, 3)
       .map(([name]) => name);
 
+    // Modalidades de actividad en este sector
+    const actCounts = new Map<string, number>();
+    entry.jornadas.forEach((j) => {
+      const act = formatProperCase(j.tipo_actividad || j.plan || "Recorrido");
+      if (act && isValidGeoName(act)) {
+        actCounts.set(act, (actCounts.get(act) || 0) + 1);
+      }
+    });
+    const activities = Array.from(actCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([name]) => name);
+
     // Clasificación de Cuadrante Territorial
     let trend: SectorHealthItem["trend"] = "estable";
     let trendLabel = "Estable";
@@ -566,6 +580,7 @@ export function computePlanificacionAnalytics(
       trend,
       trendLabel,
       topAdvisors,
+      activities,
     });
   });
 
