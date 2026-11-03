@@ -522,7 +522,7 @@ export default function PlanificacionPage() {
         </header>
 
         {/* Contenido principal abierto sin tarjetas encerradas */}
-        <main className="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
+        <main className="flex-1 p-4 sm:p-6 pb-28 xl:pb-8 max-w-7xl w-full mx-auto space-y-6">
           {/* Fila 1: Título de sección "Calendario" y Controles Temporales */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-100 pb-3">
             <div className="flex items-center gap-2">
