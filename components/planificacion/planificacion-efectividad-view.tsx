@@ -55,6 +55,28 @@ type HealthFilter = "all" | "ascenso" | "cuello_botella" | "declive" | "dormida"
 const normKey = (str: string | null | undefined): string =>
   (str || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+const isValidGeoName = (val: string | null | undefined): boolean => {
+  if (!val) return false;
+  const clean = val.trim().toUpperCase();
+  return (
+    clean !== "" &&
+    clean !== "N/A" &&
+    clean !== "NA" &&
+    clean !== "OTROS" &&
+    clean !== "OTRO" &&
+    clean !== "SIN SECTOR" &&
+    clean !== "SIN ASESOR" &&
+    clean !== "DESCONOCIDO" &&
+    clean !== "CALL CENTER" &&
+    clean !== "COMERCIALIZACION" &&
+    clean !== "COMERCIALIZACION / EX-COLABORADOR" &&
+    clean !== "ALI PRIMERA" &&
+    clean !== "SEDE" &&
+    clean !== "OFICINA" &&
+    clean !== "SIN MUNICIPIO"
+  );
+};
+
 function toIsoDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -95,17 +117,22 @@ export function PlanificacionEfectividadView({
     const sToE = new Map<string, string>();
 
     Object.entries(geoHierarchy).forEach(([estadoName, munMap]) => {
+      if (!isValidGeoName(estadoName)) return;
       const eNorm = normKey(estadoName);
       Object.entries(munMap).forEach(([munName, parMap]) => {
+        if (!isValidGeoName(munName)) return;
         const mNorm = normKey(munName);
         Object.entries(parMap).forEach(([parName, secList]) => {
+          if (!isValidGeoName(parName)) return;
           const pNorm = normKey(parName);
           pToM.set(pNorm, mNorm);
           pToE.set(pNorm, eNorm);
           secList.forEach((sec) => {
-            const sNorm = normKey(sec);
-            sToM.set(sNorm, mNorm);
-            sToE.set(sNorm, eNorm);
+            if (isValidGeoName(sec)) {
+              const sNorm = normKey(sec);
+              sToM.set(sNorm, mNorm);
+              sToE.set(sNorm, eNorm);
+            }
           });
         });
       });
@@ -119,15 +146,15 @@ export function PlanificacionEfectividadView({
     };
   }, []);
 
-  // 1. Estados canónicos (Única fuente de verdad: geoHierarchy + normalización sin duplicados)
+  // 1. Estados canónicos (Única fuente de verdad: geoHierarchy + normalización sin duplicados ni N/A)
   const availableEstados = useMemo(() => {
-    const geoEstados = Object.keys(geoHierarchy);
+    const geoEstados = Object.keys(geoHierarchy).filter(isValidGeoName);
     const geoNormMap = new Map<string, string>();
     geoEstados.forEach((e) => geoNormMap.set(normKey(e), e));
 
     const extraEstados = new Set<string>();
     planRecords.forEach((r) => {
-      if (!r.estado || r.estado === "N/A" || r.estado === "Otros") return;
+      if (!isValidGeoName(r.estado)) return;
       const nk = normKey(r.estado);
       if (!geoNormMap.has(nk)) {
         extraEstados.add(formatProperCase(r.estado));
@@ -144,31 +171,19 @@ export function PlanificacionEfectividadView({
 
     // A. De geoHierarchy (estructura oficial pura)
     Object.entries(geoHierarchy).forEach(([estadoName, munMap]) => {
+      if (!isValidGeoName(estadoName)) return;
       if (!fEstNorm || normKey(estadoName) === fEstNorm) {
-        Object.keys(munMap).forEach((m) => set.add(m));
+        Object.keys(munMap).forEach((m) => {
+          if (isValidGeoName(m)) set.add(m);
+        });
       }
     });
 
-    // B. De planRecords (validando que sean municipios reales y no sedes/oficinas)
-    const EXCLUDED_NON_MUNICIPIOS = new Set([
-      "N/A",
-      "OTROS",
-      "OTRO",
-      "CALL CENTER",
-      "COMERCIALIZACION",
-      "COMERCIALIZACION / EX-COLABORADOR",
-      "ALI PRIMERA",
-      "SEDE",
-      "OFICINA",
-      "SIN MUNICIPIO",
-    ]);
-
+    // B. De planRecords
     const geoMunNormSet = new Set(Array.from(set).map(normKey));
-
     planRecords.forEach((r) => {
-      if (!r.municipio) return;
+      if (!isValidGeoName(r.municipio)) return;
       const nk = normKey(r.municipio);
-      if (EXCLUDED_NON_MUNICIPIOS.has(nk)) return;
       if (fEstNorm && normKey(r.estado) !== fEstNorm) return;
 
       if (!geoMunNormSet.has(nk)) {
@@ -180,7 +195,7 @@ export function PlanificacionEfectividadView({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [planRecords, filters.estado]);
 
-  // 3. Parroquias canónicas (filtradas por municipio y estado seleccionados)
+  // 3. Parroquias canónicas (filtradas por municipio y estado seleccionados, sin N/A)
   const availableParroquias = useMemo(() => {
     const set = new Set<string>();
     const fEstNorm = filters.estado !== "all" ? normKey(filters.estado) : "";
@@ -192,7 +207,7 @@ export function PlanificacionEfectividadView({
         Object.entries(munMap).forEach(([munName, parMap]) => {
           if (!fMunNorm || normKey(munName) === fMunNorm) {
             Object.keys(parMap).forEach((p) => {
-              if (p && p !== "N/A") set.add(p);
+              if (isValidGeoName(p)) set.add(p);
             });
           }
         });
@@ -202,7 +217,7 @@ export function PlanificacionEfectividadView({
     // B. De planRecords
     const geoParNormSet = new Set(Array.from(set).map(normKey));
     planRecords.forEach((r) => {
-      if (!r.parroquia || r.parroquia === "N/A" || r.parroquia === "Otros") return;
+      if (!isValidGeoName(r.parroquia)) return;
       const nk = normKey(r.parroquia);
       if (fEstNorm && normKey(r.estado) !== fEstNorm) return;
       if (fMunNorm && normKey(r.municipio) !== fMunNorm) return;
@@ -216,7 +231,7 @@ export function PlanificacionEfectividadView({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [planRecords, filters.estado, filters.municipio]);
 
-  // 4. Sectores canónicos según parroquia/municipio
+  // 4. Sectores canónicos según parroquia/municipio (sin N/A)
   const availableSectores = useMemo(() => {
     const set = new Set<string>();
     const fEstNorm = filters.estado !== "all" ? normKey(filters.estado) : "";
@@ -232,7 +247,7 @@ export function PlanificacionEfectividadView({
               Object.entries(parMap).forEach(([parName, secList]) => {
                 if (!fParNorm || normKey(parName) === fParNorm) {
                   secList.forEach((s) => {
-                    if (s && s !== "N/A") set.add(s);
+                    if (isValidGeoName(s)) set.add(s);
                   });
                 }
               });
@@ -244,7 +259,7 @@ export function PlanificacionEfectividadView({
 
     // De planRecords
     planRecords.forEach((r) => {
-      if (!r.sector || r.sector === "N/A" || r.sector === "Sin Sector") return;
+      if (!isValidGeoName(r.sector)) return;
       if (fEstNorm && normKey(r.estado) !== fEstNorm) return;
       if (fMunNorm && normKey(r.municipio) !== fMunNorm) return;
       if (fParNorm && normKey(r.parroquia) !== fParNorm) return;
@@ -254,9 +269,7 @@ export function PlanificacionEfectividadView({
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [planRecords, filters.estado, filters.municipio, filters.parroquia]);
 
-  // 5. ASESORES COMERCIALES ACTIVOS EN ESA FECHA:
-  // Filtro estricto: solo asesores comerciales (no taquilla, no planificacion, no tecnicos, no ex-colaboradores)
-  // y que estén efectivamente activos/programados en la fecha o rango temporal seleccionado
+  // 5. Asesores Comerciales Activos en esa fecha (excluyendo taquilla, ex-colaboradores y no comerciales)
   const availableAdvisors = useMemo(() => {
     const set = new Set<string>();
 
@@ -273,46 +286,25 @@ export function PlanificacionEfectividadView({
       return true;
     };
 
-    // A. De planificación comercial (rutas asignadas en esa fecha)
+    // A. De planificación comercial
     planRecords.forEach((r) => {
-      if (!r.asesor) return;
-      const clean = r.asesor.trim();
-      if (
-        !clean ||
-        clean === "Sin Asesor" ||
-        clean === "Desconocido" ||
-        clean === "Planificación" ||
-        clean === "Externo"
-      ) {
-        return;
-      }
-      // Solo comerciales activos (excluir taquilla, planificacion, tecnicos y ex-colaboradores)
+      if (!r.asesor || !isValidGeoName(r.asesor)) return;
       if (r.tipo_asesor && r.tipo_asesor !== "comercial") return;
       if (r.es_ex_colaborador) return;
 
       if (matchesDate(r.fecha)) {
-        set.add(clean);
+        set.add(r.asesor.trim());
       }
     });
 
-    // B. De solicitudes operativas generadas por asesores comerciales en esa fecha
+    // B. De solicitudes operativas generadas por comerciales en esa fecha
     solicitudes.forEach((s) => {
-      if (!s.asesor) return;
-      const clean = s.asesor.trim();
-      if (
-        !clean ||
-        clean === "Sin Asesor" ||
-        clean === "Desconocido" ||
-        clean === "Planificación" ||
-        clean === "Externo"
-      ) {
-        return;
-      }
+      if (!s.asesor || !isValidGeoName(s.asesor)) return;
       if (s.tipo_asesor && s.tipo_asesor !== "comercial") return;
       if (s.es_ex_colaborador) return;
 
       if (matchesDate(s.fecha)) {
-        set.add(clean);
+        set.add(s.asesor.trim());
       }
     });
 
@@ -321,8 +313,7 @@ export function PlanificacionEfectividadView({
       planRecords.forEach((r) => {
         if (
           r.asesor &&
-          r.asesor !== "Sin Asesor" &&
-          r.asesor !== "Desconocido" &&
+          isValidGeoName(r.asesor) &&
           r.tipo_asesor === "comercial" &&
           !r.es_ex_colaborador
         ) {
@@ -379,7 +370,7 @@ export function PlanificacionEfectividadView({
     const set = new Set<string>();
     planRecords.forEach((r) => {
       const act = r.tipo_actividad || r.plan;
-      if (act && act !== "N/A") set.add(act);
+      if (isValidGeoName(act)) set.add(formatProperCase(act));
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [planRecords]);
@@ -525,7 +516,7 @@ export function PlanificacionEfectividadView({
         if (directEstado !== fEst && resolvedEstado !== fEst) return false;
       }
 
-      // Resolución de municipio geográfico (sin considerar oficinas internas)
+      // Resolución de municipio geográfico
       if (fMun) {
         const resolvedMun =
           parroquiaToMun.get(normKey(i.zona)) || sectorToMun.get(normKey(i.sector));
@@ -556,14 +547,15 @@ export function PlanificacionEfectividadView({
     sectorToMun,
   ]);
 
-  // Motor de Atribución reactivo sobre datos filtrados
+  // Motor de Atribución reactivo con cálculo de Media Histórica de Zona y Conversión Real
   const activeAnalytics = useMemo(() => {
     if (planRecords.length > 0 || solicitudes.length > 0 || installations.length > 0) {
       return computePlanificacionAnalytics(
         filteredPlan,
         filteredSols,
         filteredInsts,
-        installations
+        solicitudes, // Pool histórico total para baseline de solicitudes
+        installations // Pool histórico total para baseline de instalaciones y matching por cédula
       );
     }
     return (
@@ -577,6 +569,10 @@ export function PlanificacionEfectividadView({
           medianCycleTimeDays: 0,
           totalJornadas: 0,
           instPerJornada: 0,
+          mediaDiariaGlobalSolicitudes: 0,
+          mediaDiariaGlobalInstalaciones: 0,
+          rendimientoGlobalVsMedia: 0,
+          rendimientoGlobalLabel: "Sin datos",
           risingSectorsCount: 0,
           decliningSectorsCount: 0,
           bottleneckSectorsCount: 0,
@@ -590,33 +586,37 @@ export function PlanificacionEfectividadView({
     filteredPlan,
     filteredSols,
     filteredInsts,
+    solicitudes,
     installations,
     planRecords.length,
-    solicitudes.length,
     fallbackAnalytics,
   ]);
 
   const { overall, sectorsHealth, activitiesEffectiveness, advisorsYield } = activeAnalytics;
 
-  // Filtrado de sectores por salud y búsqueda dentro de la pestaña
+  // Filtrado de sectores por término de búsqueda y por estado de salud territorial
   const filteredSectors = useMemo(() => {
     let list = sectorsHealth;
+    if (sectorSearchInTab.trim()) {
+      const term = normKey(sectorSearchInTab);
+      list = list.filter((s) => {
+        return (
+          normKey(s.sector).includes(term) ||
+          normKey(s.parroquia).includes(term) ||
+          normKey(s.municipio).includes(term) ||
+          normKey(s.estado).includes(term)
+        );
+      });
+    }
+
     if (healthFilter !== "all") {
       list = list.filter((s) => s.trend === healthFilter);
     }
-    if (sectorSearchInTab.trim()) {
-      const term = sectorSearchInTab.toLowerCase();
-      list = list.filter(
-        (s) =>
-          s.sector.toLowerCase().includes(term) ||
-          s.parroquia.toLowerCase().includes(term) ||
-          s.municipio.toLowerCase().includes(term)
-      );
-    }
-    return list;
-  }, [sectorsHealth, healthFilter, sectorSearchInTab]);
 
-  // Conteo de sectores por estado de salud
+    return list;
+  }, [sectorsHealth, sectorSearchInTab, healthFilter]);
+
+  // Conteo dinámico de cuadrantes de salud
   const healthCounts = useMemo(() => {
     const counts = { all: sectorsHealth.length, ascenso: 0, cuello_botella: 0, declive: 0, dormida: 0 };
     sectorsHealth.forEach((s) => {
@@ -676,7 +676,7 @@ export function PlanificacionEfectividadView({
             </span>
           </div>
           <p className="text-[11px] text-neutral-400 font-mono">
-            Mediana: {overall.medianCycleTimeDays} día · 88% instalado en ≤ 3 días
+            Mediana: {overall.medianCycleTimeDays} día · Verificado por cédula
           </p>
         </div>
 
@@ -694,25 +694,36 @@ export function PlanificacionEfectividadView({
             </span>
           </div>
           <p className="text-[11px] text-neutral-400 font-mono">
-            Retorno promedio por salida a campo
+            {overall.totalJornadas} salidas a campo planificadas
           </p>
         </div>
 
         <div className="space-y-1 relative">
           <div className="hidden lg:block absolute left-[-12px] top-1 bottom-1 w-[1px] bg-gradient-to-b from-transparent via-neutral-200 to-transparent pointer-events-none" />
           <span className="text-xs text-neutral-500 font-sans block">
-            Balance territorial
+            Rendimiento vs media de zona
           </span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-semibold text-emerald-700 font-mono tracking-tight">
-              +{overall.risingSectorsCount}
+            <span
+              className={cn(
+                "text-2xl font-semibold font-mono tracking-tight",
+                overall.rendimientoGlobalVsMedia > 0
+                  ? "text-emerald-700"
+                  : overall.rendimientoGlobalVsMedia < 0
+                  ? "text-neutral-600"
+                  : "text-neutral-950"
+              )}
+            >
+              {overall.rendimientoGlobalVsMedia > 0
+                ? `+${overall.rendimientoGlobalVsMedia}%`
+                : `${overall.rendimientoGlobalVsMedia}%`}
             </span>
             <span className="text-[11px] text-neutral-400 font-mono">
-              en ascenso
+              vs histórico
             </span>
           </div>
           <p className="text-[11px] text-neutral-400 font-mono">
-            {overall.decliningSectorsCount} en declive · {overall.bottleneckSectorsCount} con cuello de botella
+            Media territorial: {overall.mediaDiariaGlobalSolicitudes} sols/día · {overall.mediaDiariaGlobalInstalaciones} inst/día
           </p>
         </div>
       </div>
@@ -1216,7 +1227,7 @@ export function PlanificacionEfectividadView({
         )}
       </div>
 
-      {/* 4. VISTA A: Radar de Sectores (Ascenso vs Descenso) */}
+      {/* 4. VISTA A: Radar de Sectores (Con Media de Zona y Conversión Real) */}
       {activeTab === "sectores" && (
         <div className="space-y-4">
           {/* Sub-filtro por estado de salud territorial */}
@@ -1240,7 +1251,7 @@ export function PlanificacionEfectividadView({
                 healthFilter === "ascenso" ? "text-emerald-700 font-semibold border-b border-emerald-700" : "text-neutral-400 hover:text-neutral-700"
               )}
             >
-              En ascenso ({healthCounts.ascenso})
+              Sobre la media ({healthCounts.ascenso})
             </button>
             <button
               type="button"
@@ -1260,7 +1271,7 @@ export function PlanificacionEfectividadView({
                 healthFilter === "declive" ? "text-neutral-900 font-semibold border-b border-neutral-900" : "text-neutral-400 hover:text-neutral-700"
               )}
             >
-              En declive ({healthCounts.declive})
+              Bajo rendimiento ({healthCounts.declive})
             </button>
             <button
               type="button"
@@ -1276,7 +1287,7 @@ export function PlanificacionEfectividadView({
 
           {/* Tabla de Sectores */}
           <div className="overflow-x-auto no-scrollbar">
-            <table className="w-full text-left border-collapse text-xs min-w-[750px]">
+            <table className="w-full text-left border-collapse text-xs min-w-[850px]">
               <thead>
                 <tr className="border-b border-neutral-200 text-neutral-400 font-normal">
                   <th className="py-2.5 px-2 w-8 font-mono text-[10px]">#</th>
@@ -1284,9 +1295,10 @@ export function PlanificacionEfectividadView({
                   <th className="py-2.5 px-2 font-normal">Parroquia y Municipio</th>
                   <th className="py-2.5 px-2 text-right font-normal">Jornadas</th>
                   <th className="py-2.5 px-2 text-right font-normal">Solicitudes</th>
-                  <th className="py-2.5 px-2 text-right font-normal">Instalaciones</th>
-                  <th className="py-2.5 px-2 text-right font-normal">% Conv.</th>
-                  <th className="py-2.5 px-2 text-right font-normal">Tendencia</th>
+                  <th className="py-2.5 px-2 text-right font-normal">Media zona</th>
+                  <th className="py-2.5 px-2 text-right font-normal">Inst. reales</th>
+                  <th className="py-2.5 px-2 text-right font-normal">% Conv. real</th>
+                  <th className="py-2.5 px-2 text-right font-normal">Vs media</th>
                   <th className="py-2.5 px-2 text-right font-normal">Diagnóstico</th>
                 </tr>
               </thead>
@@ -1304,13 +1316,16 @@ export function PlanificacionEfectividadView({
                       {sec.sector}
                     </td>
                     <td className="py-2.5 px-2 text-neutral-500 font-mono text-[11px]">
-                      {[sec.parroquia, sec.municipio].filter(Boolean).join(" · ")}
+                      {[sec.parroquia, sec.municipio].filter(Boolean).join(" · ") || sec.estado}
                     </td>
                     <td className="py-2.5 px-2 text-right font-mono text-neutral-700">
                       {sec.totalJornadas}
                     </td>
                     <td className="py-2.5 px-2 text-right font-mono text-neutral-700">
                       {formatNumber(sec.solicitudesCount)}
+                    </td>
+                    <td className="py-2.5 px-2 text-right font-mono text-neutral-500">
+                      {sec.mediaDiariaSolicitudes > 0 ? `${sec.mediaDiariaSolicitudes}/d` : "—"}
                     </td>
                     <td className="py-2.5 px-2 text-right font-mono font-medium text-neutral-950">
                       {formatNumber(sec.instalacionesCount)}
@@ -1322,14 +1337,14 @@ export function PlanificacionEfectividadView({
                       <span
                         className={cn(
                           "text-[11px]",
-                          sec.deltaMoM > 0
-                            ? "text-emerald-700 font-semibold"
-                            : sec.deltaMoM < 0
+                          sec.deltaVsMedia > 0
+                            ? "text-emerald-700 font-medium"
+                            : sec.deltaVsMedia < 0
                             ? "text-neutral-500"
                             : "text-neutral-400"
                         )}
                       >
-                        {sec.deltaMoM > 0 ? `+${sec.deltaMoM}%` : `${sec.deltaMoM}%`}
+                        {sec.deltaVsMedia > 0 ? `+${sec.deltaVsMedia}%` : `${sec.deltaVsMedia}%`}
                       </span>
                     </td>
                     <td className="py-2.5 px-2 text-right font-mono text-[11px]">
@@ -1357,11 +1372,11 @@ export function PlanificacionEfectividadView({
       {activeTab === "actividades" && (
         <div className="space-y-4">
           <p className="text-xs text-neutral-400 font-mono">
-            Comparativa de volumen, conversión de clientes y retorno operativo según la modalidad desplegada en campo.
+            Comparativa de volumen, conversión determinística de clientes y rendimiento relativo a la media histórica de las zonas visitadas.
           </p>
 
           <div className="overflow-x-auto no-scrollbar">
-            <table className="w-full text-left border-collapse text-xs min-w-[700px]">
+            <table className="w-full text-left border-collapse text-xs min-w-[750px]">
               <thead>
                 <tr className="border-b border-neutral-200 text-neutral-400 font-normal">
                   <th className="py-2.5 px-2 font-normal">Modalidad de actividad</th>
@@ -1369,8 +1384,9 @@ export function PlanificacionEfectividadView({
                   <th className="py-2.5 px-2 text-right font-normal">Solicitudes / Jornada</th>
                   <th className="py-2.5 px-2 text-right font-normal">Instalaciones / Jornada</th>
                   <th className="py-2.5 px-2 text-right font-normal">Total solicitudes</th>
-                  <th className="py-2.5 px-2 text-right font-normal">Total instalaciones</th>
+                  <th className="py-2.5 px-2 text-right font-normal">Inst. reales</th>
                   <th className="py-2.5 px-2 text-right font-normal">% Conversión</th>
+                  <th className="py-2.5 px-2 text-right font-normal">Rendimiento vs media</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100/70">
@@ -1397,6 +1413,20 @@ export function PlanificacionEfectividadView({
                     <td className="py-3 px-2 text-right font-mono text-neutral-800">
                       {act.conversionRate}%
                     </td>
+                    <td className="py-3 px-2 text-right font-mono">
+                      <span
+                        className={cn(
+                          "text-[11px]",
+                          act.deltaVsMedia > 0
+                            ? "text-emerald-700 font-medium"
+                            : act.deltaVsMedia < 0
+                            ? "text-neutral-500"
+                            : "text-neutral-400"
+                        )}
+                      >
+                        {act.rendimientoLabel}
+                      </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1409,7 +1439,7 @@ export function PlanificacionEfectividadView({
       {activeTab === "asesores" && (
         <div className="space-y-4">
           <p className="text-xs text-neutral-400 font-mono">
-            Rendimiento territorial por asesor y sus sectores con mayor índice de cierre.
+            Rendimiento territorial por asesor comercial activo: conversión real verificada por cédula y desempeño vs media de las zonas atendidas.
           </p>
 
           <div className="divide-y divide-neutral-100/70">
@@ -1438,23 +1468,38 @@ export function PlanificacionEfectividadView({
                       <span className="text-neutral-700">{formatNumber(adv.solicitudesCount)}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-neutral-400 block font-sans">Instalaciones</span>
+                      <span className="text-[10px] text-neutral-400 block font-sans">Inst. reales</span>
                       <span className="font-semibold text-neutral-950">{formatNumber(adv.instalacionesCount)}</span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-neutral-400 block font-sans">Conversión</span>
+                      <span className="text-[10px] text-neutral-400 block font-sans">% Conversión</span>
                       <span className="text-emerald-700 font-semibold">{adv.conversionRate}%</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-neutral-400 block font-sans">Vs media territorial</span>
+                      <span
+                        className={cn(
+                          "font-medium",
+                          adv.rendimientoVsMedia > 0
+                            ? "text-emerald-700"
+                            : adv.rendimientoVsMedia < 0
+                            ? "text-neutral-500"
+                            : "text-neutral-400"
+                        )}
+                      >
+                        {adv.impactoLabel}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Rutas destacadas del asesor */}
+                {/* Rutas destacadas del asesor con comparativa vs media */}
                 {adv.topSectors.length > 0 && (
                   <div className="pl-8 flex items-center gap-2 flex-wrap text-[11px] font-mono text-neutral-500">
                     <span className="text-[10px] text-neutral-400">Rutas clave:</span>
                     {adv.topSectors.map((s, sIdx) => (
                       <span key={sIdx} className="bg-neutral-100/60 px-1.5 py-0.5 text-neutral-700">
-                        {s.sector} ({s.instalaciones} inst. · {s.conversionRate}%)
+                        {s.sector} ({s.solicitudes} sols · {s.instalaciones} inst. · {s.conversionRate}% conv. · media {s.mediaDiariaZona}/d)
                       </span>
                     ))}
                   </div>

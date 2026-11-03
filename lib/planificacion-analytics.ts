@@ -8,10 +8,18 @@ export interface SectorHealthItem {
   estado: string;
   totalJornadas: number;
   solicitudesCount: number;
-  instalacionesCount: number;
-  conversionRate: number; // 0 a 100
+  instalacionesCount: number; // Instalaciones convertidas verificadas de estas solicitudes
+  instalacionesTotalesZona: number; // Total de instalaciones registradas en la zona en el periodo
+  conversionRate: number; // 0 a 100% (instalacionesCount / solicitudesCount * 100)
   avgLagDays: number;
-  deltaMoM: number; // Porcentaje de cambio
+  deltaMoM: number; // Porcentaje de cambio MoM
+  // Baseline de Media Histórica de Zona (Estado, Municipio, Parroquia y Sector)
+  mediaDiariaSolicitudes: number; // Media histórica diaria de solicitudes de la zona
+  mediaDiariaInstalaciones: number; // Media histórica diaria de instalaciones de la zona
+  solicitudesEsperadas: number; // mediaDiaria * jornadas o días
+  deltaVsMedia: number; // % variación vs media histórica
+  impactoVsMedia: "sobre_media" | "en_media" | "bajo_media";
+  impactoLabel: string; // "+28% vs media", "En la media", "-35% vs media"
   trend: "ascenso" | "cuello_botella" | "declive" | "estable" | "dormida";
   trendLabel: string;
   topAdvisors: string[];
@@ -21,11 +29,14 @@ export interface ActivityEffectivenessItem {
   name: string;
   totalJornadas: number;
   solicitudesCount: number;
-  instalacionesCount: number;
+  instalacionesCount: number; // Instalaciones reales convertidas
   solicitudesPerJornada: number;
   instalacionesPerJornada: number;
-  conversionRate: number;
+  conversionRate: number; // (instalacionesCount / solicitudesCount) * 100
   avgLagDays: number;
+  mediaDiariaZona: number;
+  deltaVsMedia: number;
+  rendimientoLabel: string;
 }
 
 export interface AdvisorTerritoryYieldItem {
@@ -33,14 +44,20 @@ export interface AdvisorTerritoryYieldItem {
   normName: string;
   totalJornadas: number;
   solicitudesCount: number;
-  instalacionesCount: number;
-  conversionRate: number;
+  instalacionesCount: number; // Instalaciones reales convertidas por cédula
+  totalInstalacionesZona: number;
+  conversionRate: number; // 0 a 100%
+  mediaDiariaZonas: number;
+  solicitudesEsperadas: number;
+  rendimientoVsMedia: number;
+  impactoLabel: string;
   topSectors: Array<{
     sector: string;
     jornadas: number;
     solicitudes: number;
     instalaciones: number;
     conversionRate: number;
+    mediaDiariaZona: number;
   }>;
 }
 
@@ -49,11 +66,15 @@ export interface PlanificacionAnalyticsResult {
     totalSolicitudes: number;
     totalInstalaciones: number;
     matchedCount: number;
-    conversionRate: number;
+    conversionRate: number; // 0 a 100%
     avgCycleTimeDays: number;
     medianCycleTimeDays: number;
     totalJornadas: number;
     instPerJornada: number;
+    mediaDiariaGlobalSolicitudes: number;
+    mediaDiariaGlobalInstalaciones: number;
+    rendimientoGlobalVsMedia: number;
+    rendimientoGlobalLabel: string;
     risingSectorsCount: number;
     decliningSectorsCount: number;
     bottleneckSectorsCount: number;
@@ -68,6 +89,27 @@ const normKey = (str: string | null | undefined): string =>
 
 const cleanCedula = (c: string | null | undefined): string =>
   String(c || "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+
+const isValidGeoName = (val: string | null | undefined): boolean => {
+  if (!val) return false;
+  const clean = val.trim().toUpperCase();
+  return (
+    clean !== "" &&
+    clean !== "N/A" &&
+    clean !== "NA" &&
+    clean !== "OTROS" &&
+    clean !== "OTRO" &&
+    clean !== "SIN SECTOR" &&
+    clean !== "SIN ASESOR" &&
+    clean !== "DESCONOCIDO" &&
+    clean !== "CALL CENTER" &&
+    clean !== "COMERCIALIZACION" &&
+    clean !== "COMERCIALIZACION / EX-COLABORADOR" &&
+    clean !== "ALI PRIMERA" &&
+    clean !== "SEDE" &&
+    clean !== "OFICINA"
+  );
+};
 
 function parseDate(str: string | null | undefined): Date | null {
   if (!str) return null;
@@ -88,10 +130,20 @@ export function computePlanificacionAnalytics(
   planRecords: PlanificacionRecord[],
   solicitudes: Solicitud[],
   installations: Installation[],
-  allInstallationsForMatching?: Installation[]
+  allSolicitudesForBaseline?: Solicitud[],
+  allInstallationsForBaseline?: Installation[]
 ): PlanificacionAnalyticsResult {
-  const matchPool = allInstallationsForMatching && allInstallationsForMatching.length > 0 ? allInstallationsForMatching : installations;
-  // 1. Mapeo de Instalaciones por Cédula para Matching Determinístico
+  // 1. Pool Histórico Completo para Baselines de Zona y Matching Determinístico
+  const historicalSols =
+    allSolicitudesForBaseline && allSolicitudesForBaseline.length > 0
+      ? allSolicitudesForBaseline
+      : solicitudes;
+  const matchPool =
+    allInstallationsForBaseline && allInstallationsForBaseline.length > 0
+      ? allInstallationsForBaseline
+      : installations;
+
+  // 2. Mapeo de Instalaciones por Cédula para Matching Determinístico
   const instByCedula = new Map<string, { fecha: string; parsedDate: Date | null; inst: Installation }>();
   matchPool.forEach((inst) => {
     const ced = cleanCedula(inst.cedula);
@@ -106,9 +158,180 @@ export function computePlanificacionAnalytics(
     }
   });
 
-  // 2. Cálculo de Lag / Ciclo de Conversión Solicitud -> Instalación
+  // 3. Cálculo de Baseline Histórico por Entidad Territorial (Sector, Parroquia, Municipio, Estado)
+  interface ZoneAccumulator {
+    totalSols: number;
+    solsByDate: Set<string>;
+    totalInsts: number;
+    instsByDate: Set<string>;
+  }
+
+  const createZoneAcc = (): ZoneAccumulator => ({
+    totalSols: 0,
+    solsByDate: new Set<string>(),
+    totalInsts: 0,
+    instsByDate: new Set<string>(),
+  });
+
+  const sectorBaselines = new Map<string, ZoneAccumulator>();
+  const parroquiaBaselines = new Map<string, ZoneAccumulator>();
+  const municipioBaselines = new Map<string, ZoneAccumulator>();
+  const estadoBaselines = new Map<string, ZoneAccumulator>();
+  const allHistoricalDates = new Set<string>();
+
+  // Acumular solicitudes históricas completas
+  historicalSols.forEach((s) => {
+    const sDate = s.fecha ? s.fecha.slice(0, 10) : "";
+    if (sDate) allHistoricalDates.add(sDate);
+
+    // Sector
+    if (s.sector && isValidGeoName(s.sector)) {
+      const k = normKey(s.sector);
+      if (!sectorBaselines.has(k)) sectorBaselines.set(k, createZoneAcc());
+      const acc = sectorBaselines.get(k)!;
+      acc.totalSols++;
+      if (sDate) acc.solsByDate.add(sDate);
+    }
+    // Parroquia
+    const par = s.parroquia || s.zona;
+    if (par && isValidGeoName(par)) {
+      const k = normKey(par);
+      if (!parroquiaBaselines.has(k)) parroquiaBaselines.set(k, createZoneAcc());
+      const acc = parroquiaBaselines.get(k)!;
+      acc.totalSols++;
+      if (sDate) acc.solsByDate.add(sDate);
+    }
+    // Municipio
+    if (s.municipio && isValidGeoName(s.municipio)) {
+      const k = normKey(s.municipio);
+      if (!municipioBaselines.has(k)) municipioBaselines.set(k, createZoneAcc());
+      const acc = municipioBaselines.get(k)!;
+      acc.totalSols++;
+      if (sDate) acc.solsByDate.add(sDate);
+    }
+    // Estado
+    if (s.estado && isValidGeoName(s.estado)) {
+      const k = normKey(s.estado);
+      if (!estadoBaselines.has(k)) estadoBaselines.set(k, createZoneAcc());
+      const acc = estadoBaselines.get(k)!;
+      acc.totalSols++;
+      if (sDate) acc.solsByDate.add(sDate);
+    }
+  });
+
+  // Acumular instalaciones históricas completas
+  matchPool.forEach((i) => {
+    const iDate = i.fecha ? i.fecha.slice(0, 10) : "";
+    if (iDate) allHistoricalDates.add(iDate);
+
+    // Sector
+    if (i.sector && isValidGeoName(i.sector)) {
+      const k = normKey(i.sector);
+      if (!sectorBaselines.has(k)) sectorBaselines.set(k, createZoneAcc());
+      const acc = sectorBaselines.get(k)!;
+      acc.totalInsts++;
+      if (iDate) acc.instsByDate.add(iDate);
+    }
+    // Parroquia
+    const par = i.zona;
+    if (par && isValidGeoName(par)) {
+      const k = normKey(par);
+      if (!parroquiaBaselines.has(k)) parroquiaBaselines.set(k, createZoneAcc());
+      const acc = parroquiaBaselines.get(k)!;
+      acc.totalInsts++;
+      if (iDate) acc.instsByDate.add(iDate);
+    }
+    // Municipio
+    if (i.oficina && isValidGeoName(i.oficina)) {
+      const k = normKey(i.oficina);
+      if (!municipioBaselines.has(k)) municipioBaselines.set(k, createZoneAcc());
+      const acc = municipioBaselines.get(k)!;
+      acc.totalInsts++;
+      if (iDate) acc.instsByDate.add(iDate);
+    }
+    // Estado
+    if (i.estado && isValidGeoName(i.estado)) {
+      const k = normKey(i.estado);
+      if (!estadoBaselines.has(k)) estadoBaselines.set(k, createZoneAcc());
+      const acc = estadoBaselines.get(k)!;
+      acc.totalInsts++;
+      if (iDate) acc.instsByDate.add(iDate);
+    }
+  });
+
+  // Función jerárquica para resolver la media diaria histórica de una zona
+  const getZoneBaseline = (sector?: string, parroquia?: string, municipio?: string, estado?: string) => {
+    // 1. Sector (si tiene al menos 2 días con actividad)
+    if (sector && isValidGeoName(sector)) {
+      const acc = sectorBaselines.get(normKey(sector));
+      if (acc && acc.solsByDate.size >= 2) {
+        const activeDaysSols = Math.max(1, acc.solsByDate.size);
+        const activeDaysInsts = Math.max(1, acc.instsByDate.size);
+        return {
+          level: "sector",
+          mediaDiariaSols: Math.round((acc.totalSols / activeDaysSols) * 10) / 10,
+          mediaDiariaInsts: Math.round((acc.totalInsts / activeDaysInsts) * 10) / 10,
+        };
+      }
+    }
+    // 2. Parroquia (ej: Los Teques, Petare, Sucre, Caricuao)
+    if (parroquia && isValidGeoName(parroquia)) {
+      const acc = parroquiaBaselines.get(normKey(parroquia));
+      if (acc && acc.solsByDate.size > 0) {
+        const activeDaysSols = Math.max(1, acc.solsByDate.size);
+        const activeDaysInsts = Math.max(1, acc.instsByDate.size);
+        return {
+          level: "parroquia",
+          mediaDiariaSols: Math.round((acc.totalSols / activeDaysSols) * 10) / 10,
+          mediaDiariaInsts: Math.round((acc.totalInsts / activeDaysInsts) * 10) / 10,
+        };
+      }
+    }
+    // 3. Municipio (ej: Guaicaipuro, Libertador, Sucre)
+    if (municipio && isValidGeoName(municipio)) {
+      const acc = municipioBaselines.get(normKey(municipio));
+      if (acc && acc.solsByDate.size > 0) {
+        const activeDaysSols = Math.max(1, acc.solsByDate.size);
+        const activeDaysInsts = Math.max(1, acc.instsByDate.size);
+        return {
+          level: "municipio",
+          mediaDiariaSols: Math.round((acc.totalSols / activeDaysSols) * 10) / 10,
+          mediaDiariaInsts: Math.round((acc.totalInsts / activeDaysInsts) * 10) / 10,
+        };
+      }
+    }
+    // 4. Estado (ej: Miranda, Distrito Capital)
+    if (estado && isValidGeoName(estado)) {
+      const acc = estadoBaselines.get(normKey(estado));
+      if (acc && acc.solsByDate.size > 0) {
+        const activeDaysSols = Math.max(1, acc.solsByDate.size);
+        const activeDaysInsts = Math.max(1, acc.instsByDate.size);
+        return {
+          level: "estado",
+          mediaDiariaSols: Math.round((acc.totalSols / activeDaysSols) * 10) / 10,
+          mediaDiariaInsts: Math.round((acc.totalInsts / activeDaysInsts) * 10) / 10,
+        };
+      }
+    }
+    return {
+      level: "default",
+      mediaDiariaSols: 2.0,
+      mediaDiariaInsts: 1.5,
+    };
+  };
+
+  // Medias globales históricas
+  const totalHistoricalDays = Math.max(1, allHistoricalDates.size);
+  const mediaDiariaGlobalSolicitudes =
+    Math.round((historicalSols.length / totalHistoricalDays) * 10) / 10;
+  const mediaDiariaGlobalInstalaciones =
+    Math.round((matchPool.length / totalHistoricalDays) * 10) / 10;
+
+  // 4. Conversión Determinística Real por Cédula
+  // Una solicitud solo cuenta como conversión SI Y SOLO SI su cliente fue instalado
   let matchedCount = 0;
   const lagDaysList: number[] = [];
+
   const solWithStatus = solicitudes.map((sol) => {
     const ced = cleanCedula(sol.cedula);
     const solDate = parseDate(sol.fecha);
@@ -128,7 +351,6 @@ export function computePlanificacionAnalytics(
         }
       }
     } else {
-      // Fallback: Si el estatus de la solicitud dice "Instalado"
       const st = (sol.estatus || "").toLowerCase();
       if (st.includes("instalad")) {
         isInstalled = true;
@@ -149,7 +371,9 @@ export function computePlanificacionAnalytics(
 
   const totalSolicitudes = solicitudes.length;
   const totalInstalaciones = installations.length;
-  const conversionRate = totalSolicitudes > 0 ? Math.round((matchedCount / totalSolicitudes) * 1000) / 10 : 0;
+  // Tasa de conversión matemática real: NUNCA excede el 100%
+  const conversionRate =
+    totalSolicitudes > 0 ? Math.round((matchedCount / totalSolicitudes) * 1000) / 10 : 0;
 
   lagDaysList.sort((a, b) => a - b);
   const avgCycleTimeDays =
@@ -159,7 +383,7 @@ export function computePlanificacionAnalytics(
   const medianCycleTimeDays =
     lagDaysList.length > 0 ? lagDaysList[Math.floor(lagDaysList.length / 2)] : 1;
 
-  // 3. Agrupación por Sector: Diagnóstico Territorial (Ascenso vs Descenso)
+  // 5. Agrupación por Sector: Diagnóstico Territorial y Comparativa vs Media de Zona
   const sectorMap = new Map<
     string,
     {
@@ -179,23 +403,23 @@ export function computePlanificacionAnalytics(
     if (!sectorMap.has(key)) {
       sectorMap.set(key, {
         name: clean,
-        parroquia: formatProperCase(parroquia),
-        municipio: formatProperCase(municipio),
-        estado: formatProperCase(estado),
+        parroquia: isValidGeoName(parroquia) ? formatProperCase(parroquia) : "",
+        municipio: isValidGeoName(municipio) ? formatProperCase(municipio) : "",
+        estado: isValidGeoName(estado) ? formatProperCase(estado) : "",
         jornadas: [],
         sols: [],
         insts: [],
       });
     }
     const entry = sectorMap.get(key)!;
-    if (!entry.parroquia && parroquia) entry.parroquia = formatProperCase(parroquia);
-    if (!entry.municipio && municipio) entry.municipio = formatProperCase(municipio);
-    if (!entry.estado && estado) entry.estado = formatProperCase(estado);
+    if (!entry.parroquia && isValidGeoName(parroquia)) entry.parroquia = formatProperCase(parroquia);
+    if (!entry.municipio && isValidGeoName(municipio)) entry.municipio = formatProperCase(municipio);
+    if (!entry.estado && isValidGeoName(estado)) entry.estado = formatProperCase(estado);
     return entry;
   };
 
   planRecords.forEach((p) => {
-    if (p.sector && p.sector !== "N/A") {
+    if (p.sector && isValidGeoName(p.sector)) {
       const entry = getSectorEntry(p.sector, p.parroquia, p.municipio, p.estado);
       entry.jornadas.push(p);
     }
@@ -203,20 +427,20 @@ export function computePlanificacionAnalytics(
 
   solWithStatus.forEach((item) => {
     const s = item.sol;
-    if (s.sector && s.sector !== "N/A") {
+    if (s.sector && isValidGeoName(s.sector)) {
       const entry = getSectorEntry(s.sector, s.parroquia || s.zona, s.municipio, s.estado);
       entry.sols.push(item);
     }
   });
 
   installations.forEach((i) => {
-    if (i.sector && i.sector !== "N/A") {
+    if (i.sector && isValidGeoName(i.sector)) {
       const entry = getSectorEntry(i.sector, i.zona, i.oficina, i.estado);
       entry.insts.push(i);
     }
   });
 
-  // Fecha límite para cálculo de tendencia reciente (últimos 45 días)
+  // Ventana de tendencia MoM reciente
   const refDate = new Date(2026, 10, 2);
   const cutoffRecent = new Date(refDate);
   cutoffRecent.setDate(cutoffRecent.getDate() - 30);
@@ -226,19 +450,49 @@ export function computePlanificacionAnalytics(
   const sectorsHealth: SectorHealthItem[] = [];
 
   sectorMap.forEach((entry) => {
-    if (!entry.name || entry.name === "Sin Sector" || entry.name === "N/A") return;
+    if (!entry.name || !isValidGeoName(entry.name)) return;
 
     const totalJornadas = entry.jornadas.length;
     const solsCount = entry.sols.length;
-    const instsCount = entry.insts.length;
+    const totalInstsZona = entry.insts.length;
 
     // Solo evaluar sectores que tengan al menos alguna actividad o volumen
-    if (totalJornadas === 0 && solsCount === 0 && instsCount === 0) return;
+    if (totalJornadas === 0 && solsCount === 0 && totalInstsZona === 0) return;
 
-    // Instalaciones en periodo reciente vs periodo previo para calcular tendencia MoM
+    // Conversión real por cédula del sector
+    const matchedSolsCount = entry.sols.filter((x) => x.isInstalled).length;
+    const convRate =
+      solsCount > 0 ? Math.round((matchedSolsCount / solsCount) * 1000) / 10 : 0;
+
+    // Media histórica de la zona (Sector / Parroquia / Municipio / Estado)
+    const baseline = getZoneBaseline(entry.name, entry.parroquia, entry.municipio, entry.estado);
+    const mediaDiariaSolicitudes = baseline.mediaDiariaSols;
+    const mediaDiariaInstalaciones = baseline.mediaDiariaInsts;
+
+    // Volumen esperado de solicitudes para la intensidad de despliegue
+    const diasDespliegue = Math.max(1, totalJornadas);
+    const solsEsperadas = Math.round(mediaDiariaSolicitudes * diasDespliegue * 10) / 10;
+
+    // Lift o variación porcentual vs media histórica esperada
+    const deltaVsMedia =
+      solsEsperadas > 0
+        ? Math.round(((solsCount - solsEsperadas) / solsEsperadas) * 100)
+        : 0;
+
+    let impactoVsMedia: SectorHealthItem["impactoVsMedia"] = "en_media";
+    let impactoLabel = "En la media";
+
+    if (solsCount > 0 && deltaVsMedia >= 15) {
+      impactoVsMedia = "sobre_media";
+      impactoLabel = `+${deltaVsMedia}% vs media`;
+    } else if (solsEsperadas > 0 && deltaVsMedia <= -15) {
+      impactoVsMedia = "bajo_media";
+      impactoLabel = `${deltaVsMedia}% vs media`;
+    }
+
+    // Instalaciones recientes vs previas para MoM
     let recentInst = 0;
     let prevInst = 0;
-
     entry.insts.forEach((inst) => {
       const d = parseDate(inst.fecha);
       if (d) {
@@ -254,9 +508,7 @@ export function computePlanificacionAnalytics(
       deltaMoM = 100;
     }
 
-    const convRate = solsCount > 0 ? Math.round((instsCount / solsCount) * 100) : instsCount > 0 ? 100 : 0;
-
-    // Cálculo del promedio de lag en este sector
+    // Cálculo del promedio de lag
     const sectorLags = entry.sols.filter((x) => x.lagDays >= 0).map((x) => x.lagDays);
     const avgLag =
       sectorLags.length > 0
@@ -266,29 +518,31 @@ export function computePlanificacionAnalytics(
     // Top asesores en este sector
     const advCounts = new Map<string, number>();
     entry.jornadas.forEach((j) => {
-      if (j.asesor) advCounts.set(j.asesor, (advCounts.get(j.asesor) || 0) + 1);
+      if (j.asesor && isValidGeoName(j.asesor)) {
+        advCounts.set(j.asesor, (advCounts.get(j.asesor) || 0) + 1);
+      }
     });
     const topAdvisors = Array.from(advCounts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([name]) => name);
 
-    // Clasificación de Cuadrante de Salud
+    // Clasificación de Cuadrante Territorial
     let trend: SectorHealthItem["trend"] = "estable";
     let trendLabel = "Estable";
 
-    if (totalJornadas === 0 && (solsCount > 0 || instsCount > 0)) {
+    if (totalJornadas === 0 && solsCount > 0) {
       trend = "dormida";
-      trendLabel = "Sin planificación";
-    } else if (solsCount >= 8 && convRate < 40) {
+      trendLabel = "Orgánico sin planificación";
+    } else if (solsCount >= 5 && convRate < 35) {
       trend = "cuello_botella";
-      trendLabel = "Cuello de botella";
-    } else if (deltaMoM >= 20 || (recentInst >= 5 && deltaMoM >= 0)) {
+      trendLabel = "Cuello de botella técnico";
+    } else if (deltaVsMedia >= 15 && convRate >= 35) {
       trend = "ascenso";
-      trendLabel = "En ascenso";
-    } else if (deltaMoM <= -20 && totalJornadas > 0) {
+      trendLabel = "Sobre la media de zona";
+    } else if (deltaVsMedia <= -20 && totalJornadas > 0) {
       trend = "declive";
-      trendLabel = "En declive";
+      trendLabel = "Bajo rendimiento de zona";
     }
 
     sectorsHealth.push({
@@ -298,92 +552,78 @@ export function computePlanificacionAnalytics(
       estado: entry.estado,
       totalJornadas,
       solicitudesCount: solsCount,
-      instalacionesCount: instsCount,
+      instalacionesCount: matchedSolsCount,
+      instalacionesTotalesZona: totalInstsZona,
       conversionRate: convRate,
       avgLagDays: avgLag,
       deltaMoM,
+      mediaDiariaSolicitudes,
+      mediaDiariaInstalaciones,
+      solicitudesEsperadas: solsEsperadas,
+      deltaVsMedia,
+      impactoVsMedia,
+      impactoLabel,
       trend,
       trendLabel,
       topAdvisors,
     });
   });
 
-  // Ordenar sectores: primero por volumen de instalaciones y solicitudes
-  sectorsHealth.sort((a, b) => b.instalacionesCount - a.instalacionesCount || b.solicitudesCount - a.solicitudesCount);
+  // Ordenar sectores por solicitudes e instalaciones
+  sectorsHealth.sort(
+    (a, b) => b.solicitudesCount - a.solicitudesCount || b.instalacionesCount - a.instalacionesCount
+  );
 
-  // 4. Efectividad por Tipo de Actividad
+  // 6. Efectividad por Tipo de Actividad
   const actMap = new Map<
     string,
     {
       name: string;
       jornadas: PlanificacionRecord[];
-      solsSet: Set<string>;
-      instsSet: Set<string>;
     }
   >();
 
   planRecords.forEach((p) => {
-    const act = formatProperCase(p.tipo_actividad || p.plan || "Recorrido (Solo)");
-    if (!act || act === "N/A") return;
+    const act = formatProperCase(p.tipo_actividad || p.plan || "Recorrido");
+    if (!act || !isValidGeoName(act)) return;
     if (!actMap.has(act)) {
       actMap.set(act, {
         name: act,
         jornadas: [],
-        solsSet: new Set(),
-        instsSet: new Set(),
       });
     }
     actMap.get(act)!.jornadas.push(p);
   });
 
-  // Ventana de atribución temporal por jornada de actividad (Indexada para máxima velocidad):
+  // Indexación para velocidad de atribución
   interface PreIndexedAttributionItem {
     time: number;
     normAdv: string;
     normSec: string;
+    isInstalled: boolean;
   }
 
   const solsByAdv = new Map<string, PreIndexedAttributionItem[]>();
   const solsBySec = new Map<string, PreIndexedAttributionItem[]>();
 
-  solicitudes.forEach((s) => {
+  solWithStatus.forEach((item) => {
+    const s = item.sol;
     if (!s.fecha) return;
     const d = parseDate(s.fecha);
     if (!d) return;
-    const item: PreIndexedAttributionItem = {
+    const preItem: PreIndexedAttributionItem = {
       time: d.getTime(),
       normAdv: normKey(s.asesor),
       normSec: normKey(s.sector),
+      isInstalled: item.isInstalled,
     };
-    if (item.normAdv) {
-      if (!solsByAdv.has(item.normAdv)) solsByAdv.set(item.normAdv, []);
-      solsByAdv.get(item.normAdv)!.push(item);
+    if (preItem.normAdv) {
+      if (!solsByAdv.has(preItem.normAdv)) solsByAdv.set(preItem.normAdv, []);
+      solsByAdv.get(preItem.normAdv)!.push(preItem);
     }
-    if (item.normSec) {
-      if (!solsBySec.has(item.normSec)) solsBySec.set(item.normSec, []);
-      solsBySec.get(item.normSec)!.push(item);
-    }
-  });
-
-  const instsByAdv = new Map<string, PreIndexedAttributionItem[]>();
-  const instsBySec = new Map<string, PreIndexedAttributionItem[]>();
-
-  installations.forEach((i) => {
-    if (!i.fecha) return;
-    const d = parseDate(i.fecha);
-    if (!d) return;
-    const item: PreIndexedAttributionItem = {
-      time: d.getTime(),
-      normAdv: normKey(i.asesor),
-      normSec: normKey(i.sector),
-    };
-    if (item.normAdv) {
-      if (!instsByAdv.has(item.normAdv)) instsByAdv.set(item.normAdv, []);
-      instsByAdv.get(item.normAdv)!.push(item);
-    }
-    if (item.normSec) {
-      if (!instsBySec.has(item.normSec)) instsBySec.set(item.normSec, []);
-      instsBySec.get(item.normSec)!.push(item);
+    if (preItem.normSec) {
+      if (!solsBySec.has(preItem.normSec)) solsBySec.set(preItem.normSec, []);
+      solsBySec.get(preItem.normSec)!.push(preItem);
     }
   });
 
@@ -395,9 +635,9 @@ export function computePlanificacionAnalytics(
     if (totalJ === 0) return;
 
     let attributedSols = 0;
-    let attributedInsts = 0;
+    let matchedInsts = 0;
+    let totalExpectedSols = 0;
 
-    // Para cada jornada de esta actividad, buscar solicitudes del mismo asesor o sector en ventana [T, T+4]
     entry.jornadas.forEach((j) => {
       const jDate = parseDate(j.fecha);
       if (!jDate) return;
@@ -405,7 +645,10 @@ export function computePlanificacionAnalytics(
       const targetSec = normKey(j.sector);
       const targetAdv = normKey(j.asesor);
 
-      // Evaluar solicitudes candidatas indexadas
+      // Media esperada de la zona para esta jornada
+      const base = getZoneBaseline(j.sector, j.parroquia, j.municipio, j.estado);
+      totalExpectedSols += base.mediaDiariaSols;
+
       const candidateSols = new Set<PreIndexedAttributionItem>();
       if (targetAdv && solsByAdv.has(targetAdv)) {
         solsByAdv.get(targetAdv)!.forEach((s) => candidateSols.add(s));
@@ -418,33 +661,32 @@ export function computePlanificacionAnalytics(
         const diff = Math.round((s.time - jTime) / ONE_DAY_MS);
         if (diff >= 0 && diff <= 4) {
           attributedSols++;
-        }
-      });
-
-      // Evaluar instalaciones candidatas indexadas en ventana [T, T+14]
-      const candidateInsts = new Set<PreIndexedAttributionItem>();
-      if (targetAdv && instsByAdv.has(targetAdv)) {
-        instsByAdv.get(targetAdv)!.forEach((i) => candidateInsts.add(i));
-      }
-      if (targetSec && instsBySec.has(targetSec)) {
-        instsBySec.get(targetSec)!.forEach((i) => candidateInsts.add(i));
-      }
-
-      candidateInsts.forEach((i) => {
-        const diff = Math.round((i.time - jTime) / ONE_DAY_MS);
-        if (diff >= 0 && diff <= 14) {
-          attributedInsts++;
+          if (s.isInstalled) {
+            matchedInsts++;
+          }
         }
       });
     });
 
-    // Normalización prudencial
-    const cappedSols = Math.min(attributedSols, totalJ * 4);
-    const cappedInsts = Math.min(attributedInsts, Math.round(cappedSols * 0.8));
+    const cappedSols = Math.min(attributedSols, totalJ * 6);
+    const cappedInsts = Math.min(matchedInsts, cappedSols);
 
     const solsPerJ = totalJ > 0 ? Math.round((cappedSols / totalJ) * 10) / 10 : 0;
     const instPerJ = totalJ > 0 ? Math.round((cappedInsts / totalJ) * 10) / 10 : 0;
-    const actConvRate = cappedSols > 0 ? Math.round((cappedInsts / cappedSols) * 100) : 0;
+    const actConvRate = cappedSols > 0 ? Math.round((cappedInsts / cappedSols) * 1000) / 10 : 0;
+
+    const mediaDiariaZona = totalJ > 0 ? Math.round((totalExpectedSols / totalJ) * 10) / 10 : 1.0;
+    const deltaVsMedia =
+      totalExpectedSols > 0
+        ? Math.round(((cappedSols - totalExpectedSols) / totalExpectedSols) * 100)
+        : 0;
+
+    const rendimientoLabel =
+      deltaVsMedia >= 15
+        ? `+${deltaVsMedia}% vs media`
+        : deltaVsMedia <= -15
+        ? `${deltaVsMedia}% vs media`
+        : "En la media";
 
     activitiesEffectiveness.push({
       name: entry.name,
@@ -455,110 +697,196 @@ export function computePlanificacionAnalytics(
       instalacionesPerJornada: instPerJ,
       conversionRate: actConvRate,
       avgLagDays: avgCycleTimeDays,
+      mediaDiariaZona,
+      deltaVsMedia,
+      rendimientoLabel,
     });
   });
 
   activitiesEffectiveness.sort((a, b) => b.totalJornadas - a.totalJornadas);
 
-  // 5. Rendimiento de Asesores por Territorio
+  // 7. Rendimiento de Asesores por Territorio
   const advMap = new Map<
     string,
     {
       name: string;
       normName: string;
       jornadasCount: number;
-      sectorsMap: Map<string, { sector: string; jornadas: number; sol: number; inst: number }>;
-      solsCount: number;
-      instsCount: number;
+      sols: typeof solWithStatus;
+      insts: Installation[];
+      sectorsMap: Map<
+        string,
+        {
+          sector: string;
+          jornadas: number;
+          sol: number;
+          matched: number;
+          mediaDiaria: number;
+        }
+      >;
     }
   >();
 
   planRecords.forEach((p) => {
-    if (!p.asesor || p.asesor === "Sin Asesor") return;
+    if (!p.asesor || !isValidGeoName(p.asesor)) return;
     const nk = normKey(p.asesor);
     if (!advMap.has(nk)) {
       advMap.set(nk, {
         name: p.asesor,
         normName: nk,
         jornadasCount: 0,
+        sols: [],
+        insts: [],
         sectorsMap: new Map(),
-        solsCount: 0,
-        instsCount: 0,
       });
     }
     const a = advMap.get(nk)!;
     a.jornadasCount++;
-    if (p.sector) {
+    if (p.sector && isValidGeoName(p.sector)) {
       const sKey = normKey(p.sector);
       if (!a.sectorsMap.has(sKey)) {
-        a.sectorsMap.set(sKey, { sector: formatProperCase(p.sector), jornadas: 0, sol: 0, inst: 0 });
+        const base = getZoneBaseline(p.sector, p.parroquia, p.municipio, p.estado);
+        a.sectorsMap.set(sKey, {
+          sector: formatProperCase(p.sector),
+          jornadas: 0,
+          sol: 0,
+          matched: 0,
+          mediaDiaria: base.mediaDiariaSols,
+        });
       }
       a.sectorsMap.get(sKey)!.jornadas++;
     }
   });
 
   solWithStatus.forEach((item) => {
-    if (!item.sol.asesor) return;
+    if (!item.sol.asesor || !isValidGeoName(item.sol.asesor)) return;
     const nk = normKey(item.sol.asesor);
     if (advMap.has(nk)) {
       const a = advMap.get(nk)!;
-      a.solsCount++;
-      if (item.sol.sector) {
+      a.sols.push(item);
+      if (item.sol.sector && isValidGeoName(item.sol.sector)) {
         const sKey = normKey(item.sol.sector);
-        if (a.sectorsMap.has(sKey)) {
-          a.sectorsMap.get(sKey)!.sol++;
+        if (!a.sectorsMap.has(sKey)) {
+          const base = getZoneBaseline(
+            item.sol.sector,
+            item.sol.parroquia || item.sol.zona,
+            item.sol.municipio,
+            item.sol.estado
+          );
+          a.sectorsMap.set(sKey, {
+            sector: formatProperCase(item.sol.sector),
+            jornadas: 0,
+            sol: 0,
+            matched: 0,
+            mediaDiaria: base.mediaDiariaSols,
+          });
         }
+        const sEntry = a.sectorsMap.get(sKey)!;
+        sEntry.sol++;
+        if (item.isInstalled) sEntry.matched++;
       }
     }
   });
 
   installations.forEach((i) => {
-    if (!i.asesor) return;
+    if (!i.asesor || !isValidGeoName(i.asesor)) return;
     const nk = normKey(i.asesor);
     if (advMap.has(nk)) {
       const a = advMap.get(nk)!;
-      a.instsCount++;
-      if (i.sector) {
-        const sKey = normKey(i.sector);
-        if (a.sectorsMap.has(sKey)) {
-          a.sectorsMap.get(sKey)!.inst++;
-        }
-      }
+      a.insts.push(i);
     }
   });
 
   const advisorsYield: AdvisorTerritoryYieldItem[] = Array.from(advMap.values())
     .map((a) => {
+      const solsCount = a.sols.length;
+      const matchedSols = a.sols.filter((x) => x.isInstalled).length;
+      // Conversión real por cédula del asesor (<= 100%)
+      const convRate =
+        solsCount > 0 ? Math.round((matchedSols / solsCount) * 1000) / 10 : 0;
+
+      // Expectativa de solicitudes basada en las zonas visitadas por el asesor
+      let totalExpected = 0;
+      let totalSectorJornadas = 0;
+
+      a.sectorsMap.forEach((sec) => {
+        const jCount = Math.max(1, sec.jornadas);
+        totalExpected += sec.mediaDiaria * jCount;
+        totalSectorJornadas += jCount;
+      });
+
+      const mediaDiariaZonas =
+        totalSectorJornadas > 0
+          ? Math.round((totalExpected / totalSectorJornadas) * 10) / 10
+          : mediaDiariaGlobalSolicitudes;
+
+      const solicitudesEsperadas = Math.round(totalExpected * 10) / 10;
+      const rendimientoVsMedia =
+        solicitudesEsperadas > 0
+          ? Math.round(((solsCount - solicitudesEsperadas) / solicitudesEsperadas) * 100)
+          : 0;
+
+      const impactoLabel =
+        rendimientoVsMedia >= 15
+          ? `+${rendimientoVsMedia}% vs media`
+          : rendimientoVsMedia <= -15
+          ? `${rendimientoVsMedia}% vs media`
+          : "En la media";
+
       const topSecs = Array.from(a.sectorsMap.values())
         .map((s) => ({
           sector: s.sector,
           jornadas: s.jornadas,
           solicitudes: s.sol,
-          instalaciones: s.inst,
-          conversionRate: s.sol > 0 ? Math.round((s.inst / s.sol) * 100) : s.inst > 0 ? 100 : 0,
+          instalaciones: s.matched, // convertidas reales
+          conversionRate:
+            s.sol > 0 ? Math.round((s.matched / s.sol) * 1000) / 10 : 0,
+          mediaDiariaZona: s.mediaDiaria,
         }))
-        .sort((x, y) => y.jornadas - x.jornadas || y.instalaciones - x.instalaciones)
+        .sort((x, y) => y.solicitudes - x.solicitudes || y.jornadas - x.jornadas)
         .slice(0, 4);
-
-      const conv = a.solsCount > 0 ? Math.round((a.instsCount / a.solsCount) * 100) : a.instsCount > 0 ? 100 : 0;
 
       return {
         name: a.name,
         normName: a.normName,
         totalJornadas: a.jornadasCount,
-        solicitudesCount: a.solsCount,
-        instalacionesCount: a.instsCount,
-        conversionRate: conv,
+        solicitudesCount: solsCount,
+        instalacionesCount: matchedSols,
+        totalInstalacionesZona: a.insts.length,
+        conversionRate: convRate,
+        mediaDiariaZonas,
+        solicitudesEsperadas,
+        rendimientoVsMedia,
+        impactoLabel,
         topSectors: topSecs,
       };
     })
-    .sort((x, y) => y.instalacionesCount - x.instalacionesCount || y.totalJornadas - x.totalJornadas);
+    .sort(
+      (x, y) =>
+        y.solicitudesCount - x.solicitudesCount ||
+        y.instalacionesCount - x.instalacionesCount ||
+        y.totalJornadas - x.totalJornadas
+    );
 
   const risingSectorsCount = sectorsHealth.filter((s) => s.trend === "ascenso").length;
   const decliningSectorsCount = sectorsHealth.filter((s) => s.trend === "declive").length;
   const bottleneckSectorsCount = sectorsHealth.filter((s) => s.trend === "cuello_botella").length;
   const totalJornadas = planRecords.length;
-  const instPerJornada = totalJornadas > 0 ? Math.round((matchedCount / totalJornadas) * 10) / 10 : 0;
+  const instPerJornada =
+    totalJornadas > 0 ? Math.round((matchedCount / totalJornadas) * 10) / 10 : 0;
+
+  const expectedGlobalSols = Math.round(mediaDiariaGlobalSolicitudes * Math.max(1, totalJornadas));
+  const rendimientoGlobalVsMedia =
+    expectedGlobalSols > 0
+      ? Math.round(((totalSolicitudes - expectedGlobalSols) / expectedGlobalSols) * 100)
+      : 0;
+
+  const rendimientoGlobalLabel =
+    rendimientoGlobalVsMedia >= 15
+      ? `+${rendimientoGlobalVsMedia}% vs media histórica`
+      : rendimientoGlobalVsMedia <= -15
+      ? `${rendimientoGlobalVsMedia}% vs media histórica`
+      : "En la media histórica esperada";
 
   return {
     overall: {
@@ -570,6 +898,10 @@ export function computePlanificacionAnalytics(
       medianCycleTimeDays,
       totalJornadas,
       instPerJornada,
+      mediaDiariaGlobalSolicitudes,
+      mediaDiariaGlobalInstalaciones,
+      rendimientoGlobalVsMedia,
+      rendimientoGlobalLabel,
       risingSectorsCount,
       decliningSectorsCount,
       bottleneckSectorsCount,
@@ -579,4 +911,3 @@ export function computePlanificacionAnalytics(
     advisorsYield,
   };
 }
-

@@ -47,7 +47,9 @@ export const geoHierarchy: Record<string, Record<string, Record<string, string[]
         "Veredas de Coche"
       ],
       "El Paraíso": [
-        "N/A"
+        "El Paraíso",
+        "Las Fuentes",
+        "Montalbán"
       ],
       "El Valle": [
         "Casco Central",
@@ -59,7 +61,8 @@ export const geoHierarchy: Record<string, Record<string, Record<string, string[]
         "Prado de María"
       ],
       "La Vega": [
-        "N/A"
+        "La Vega",
+        "Los Mangos"
       ],
       "Sucre": [
         "Alta Vista",

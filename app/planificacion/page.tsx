@@ -26,11 +26,34 @@ import { PlanificacionWeeklyMatrix, WeekDay, AdvisorWeeklySchedule } from "@/com
 import { PlanificacionDailyView } from "@/components/planificacion/planificacion-daily-view";
 import { PlanificacionMonthlyView } from "@/components/planificacion/planificacion-monthly-view";
 import { PlanificacionEfectividadView } from "@/components/planificacion/planificacion-efectividad-view";
+import { geoHierarchy } from "@/lib/geo_hierarchy";
 
 type ViewMode = "semanal" | "diaria" | "mensual" | "efectividad";
 
 const normKey = (str: string | null | undefined): string =>
   (str || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const isValidGeoName = (val: string | null | undefined): boolean => {
+  if (!val) return false;
+  const clean = val.trim().toUpperCase();
+  return (
+    clean !== "" &&
+    clean !== "N/A" &&
+    clean !== "NA" &&
+    clean !== "OTROS" &&
+    clean !== "OTRO" &&
+    clean !== "SIN SECTOR" &&
+    clean !== "SIN ASESOR" &&
+    clean !== "DESCONOCIDO" &&
+    clean !== "CALL CENTER" &&
+    clean !== "COMERCIALIZACION" &&
+    clean !== "COMERCIALIZACION / EX-COLABORADOR" &&
+    clean !== "ALI PRIMERA" &&
+    clean !== "SEDE" &&
+    clean !== "OFICINA" &&
+    clean !== "SIN MUNICIPIO"
+  );
+};
 
 // Convierte objeto Date a ISO YYYY-MM-DD
 function toIsoDate(d: Date): string {
@@ -153,15 +176,22 @@ export default function PlanificacionPage() {
     );
   }, [records]);
 
-  // Lista de municipios disponibles para el filtro
+  // Lista de municipios disponibles para el filtro (solo municipios reales de la jerarquía oficial y registros válidos)
   const availableMunicipios = useMemo(() => {
     const set = new Set<string>();
+    // De geoHierarchy (fuente canónica oficial)
+    Object.values(geoHierarchy).forEach((munMap) => {
+      Object.keys(munMap).forEach((m) => {
+        if (isValidGeoName(m)) set.add(m);
+      });
+    });
+    // De records
     records.forEach((r) => {
-      if (r.municipio && r.municipio !== "N/A" && r.municipio !== "Otros") {
-        set.add(r.municipio);
+      if (isValidGeoName(r.municipio)) {
+        set.add(formatProperCase(r.municipio));
       }
     });
-    return Array.from(set).sort();
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [records]);
 
   // Mes seleccionado actual basado en referenceDate
