@@ -20,5 +20,6 @@ VALUES
   ('competencia', false, NOW(), 'sistema'),
   ('evaluaciones', true, NOW(), 'sistema'),
   ('actividades', true, NOW(), 'sistema'),
-  ('solicitudes', true, NOW(), 'sistema')
+  ('solicitudes', true, NOW(), 'sistema'),
+  ('factibilidad', true, NOW(), 'sistema')
 ON CONFLICT (id) DO NOTHING;
