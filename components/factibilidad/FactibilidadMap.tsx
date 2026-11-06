@@ -4,9 +4,11 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from "react"
 import type { OzBox } from "@/lib/ozmap-service";
 import "leaflet/dist/leaflet.css";
 
+export type MapTheme = "light" | "dark" | "satellite";
+
 interface FactibilidadMapProps {
   boxes: OzBox[];
-  theme: "dark" | "light";
+  theme: MapTheme;
   selectedBox: OzBox | null;
   onSelectBox: (box: OzBox | null) => void;
   filterType: "all" | "naps" | "mangas" | "disponibles" | "criticas" | "ocupadas";
@@ -15,17 +17,24 @@ interface FactibilidadMapProps {
   onUserCoordsChange: (coords: [number, number] | null) => void;
 }
 
-const TILES = {
-  light: {
-    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    subdomains: "abcd",
-  },
-  dark: {
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    subdomains: "abcd",
-  },
+const getTileConfig = (theme: MapTheme) => {
+  if (theme === "satellite") {
+    return {
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      className: "map-tiles-satellite",
+      maxZoom: 19,
+      attribution: "&copy; Esri, Maxar",
+    };
+  }
+
+  // Pure open raster tiles rendered with Carto Positron / Carto Dark Matter CSS filters
+  return {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    className: theme === "dark" ? "map-tiles-carto-dark" : "map-tiles-carto-light",
+    maxZoom: 19,
+    subdomains: ["a", "b", "c"],
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  };
 };
 
 export default function FactibilidadMap({
@@ -59,7 +68,7 @@ export default function FactibilidadMap({
     };
   }, []);
 
-  // Filter boxes according to selected filter and search term
+  // Filter boxes according to active tab and search query
   const filteredBoxes = useMemo(() => {
     let list = boxes;
 
@@ -93,22 +102,23 @@ export default function FactibilidadMap({
   useEffect(() => {
     if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
 
-    // Default center Caracas / Miranda
+    // Center Caracas / Altos Mirandinos
     const map = L.map(mapContainerRef.current, {
       center: [10.4674, -66.9058],
       zoom: 14,
       zoomControl: false,
       attributionControl: false,
-      preferCanvas: true, // Hardware-accelerated canvas for 6,000+ points
+      preferCanvas: true, // Hardware-accelerated canvas for 6,500+ markers
     });
 
-    // Add minimal zoom controls on bottom-right
+    // Zoom controls bottom-right
     L.control.zoom({ position: "bottomright" }).addTo(map);
 
-    const currentTile = TILES[theme];
-    const tileLayer = L.tileLayer(currentTile.url, {
-      subdomains: currentTile.subdomains,
-      maxZoom: 20,
+    const cfg = getTileConfig(theme);
+    const tileLayer = L.tileLayer(cfg.url, {
+      subdomains: cfg.subdomains || ["a", "b", "c"],
+      maxZoom: cfg.maxZoom,
+      className: cfg.className,
     }).addTo(map);
     tileLayerRef.current = tileLayer;
 
@@ -127,15 +137,16 @@ export default function FactibilidadMap({
     };
   }, [L]);
 
-  // Update Carto tile layer on theme toggle (Light / Dark)
+  // Update Tile Layer when Theme changes
   useEffect(() => {
     if (!L || !mapInstanceRef.current || !tileLayerRef.current) return;
-    const currentTile = TILES[theme];
+    const cfg = getTileConfig(theme);
     mapInstanceRef.current.removeLayer(tileLayerRef.current);
 
-    const newLayer = L.tileLayer(currentTile.url, {
-      subdomains: currentTile.subdomains,
-      maxZoom: 20,
+    const newLayer = L.tileLayer(cfg.url, {
+      subdomains: cfg.subdomains || ["a", "b", "c"],
+      maxZoom: cfg.maxZoom,
+      className: cfg.className,
     }).addTo(mapInstanceRef.current);
 
     tileLayerRef.current = newLayer;
@@ -148,7 +159,7 @@ export default function FactibilidadMap({
     const markersGroup = markersLayerRef.current;
     markersGroup.clearLayers();
 
-    const isDark = theme === "dark";
+    const isDark = theme === "dark" || theme === "satellite";
 
     filteredBoxes.forEach((box) => {
       let fillColor = "#10b981"; // Emerald (>2 disponibles)
@@ -159,7 +170,7 @@ export default function FactibilidadMap({
       } else if (box.status === "ocupada") {
         fillColor = "#ef4444"; // Rojo Saturada
       } else if (box.status === "critica") {
-        fillColor = "#f59e0b"; // Ámbar Crítica (1-2 puertos)
+        fillColor = "#f59e0b"; // Ámbar Crítica
       }
 
       const isSelected = selectedBox?.id === box.id;
@@ -171,8 +182,8 @@ export default function FactibilidadMap({
         fillColor,
         color: isSelected ? "#ffffff" : strokeColor,
         weight,
-        opacity: isSelected ? 1 : 0.65,
-        fillOpacity: isSelected ? 0.95 : 0.8,
+        opacity: isSelected ? 1 : 0.7,
+        fillOpacity: isSelected ? 0.95 : 0.85,
       });
 
       // Minimalist hover tooltip
@@ -182,7 +193,7 @@ export default function FactibilidadMap({
         }; min-width: 150px;">
           <div style="font-weight: 600; font-size: 11px; margin-bottom: 2px;">${box.name}</div>
           <div style="color: ${isDark ? "#a3a3a3" : "#737373"}; font-size: 10px; margin-bottom: 4px;">
-            ${box.boxTypeName} &bull; ${box.sector || "Sector no esp."}
+            ${box.boxTypeName} &bull; ${box.sector || "Sector general"}
           </div>
           ${
             box.isNap
@@ -262,17 +273,17 @@ export default function FactibilidadMap({
   }, [L, onUserCoordsChange]);
 
   return (
-    <div className="relative w-full h-full min-h-[450px] overflow-hidden select-none">
+    <div className="relative w-full h-full min-h-[450px] overflow-hidden select-none bg-neutral-100 dark:bg-neutral-900">
       {/* Map Element */}
       <div ref={mapContainerRef} className="w-full h-full z-0 bg-transparent" />
 
-      {/* Floating GPS Button (Rule 1 Compliant: icon + clean text, zero frame/box) */}
+      {/* Floating GPS Button */}
       <div className="absolute top-3 right-3 z-10">
         <button
           type="button"
           onClick={handleLocateMe}
           title="Centrar en mi ubicación actual"
-          className="text-xs font-mono text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1.5"
+          className="text-xs font-mono text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1.5 bg-white/70 dark:bg-neutral-900/70 backdrop-blur-xs px-2 py-1"
         >
           <span
             className={`w-2 h-2 rounded-full ${
@@ -288,6 +299,22 @@ export default function FactibilidadMap({
           background-color: transparent !important;
           outline: none;
         }
+
+        /* Carto Positron minimal light shader: Clean desaturated streets, identical to Carto Positron without watermark */
+        .map-tiles-carto-light {
+          filter: grayscale(88%) contrast(1.08) brightness(1.02) !important;
+        }
+
+        /* Carto Dark Matter minimal dark shader: Deep slate night theme, high contrast */
+        .map-tiles-carto-dark {
+          filter: invert(100%) hue-rotate(180deg) brightness(82%) contrast(115%) grayscale(30%) !important;
+        }
+
+        /* Satellite imagery shader */
+        .map-tiles-satellite {
+          filter: saturate(1.1) contrast(1.05) !important;
+        }
+
         .carto-tooltip-dark {
           background: #171717 !important;
           border: 1px solid #262626 !important;
@@ -314,4 +341,3 @@ export default function FactibilidadMap({
     </div>
   );
 }
-
