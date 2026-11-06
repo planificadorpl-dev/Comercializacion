@@ -162,6 +162,22 @@ export function clearDashboardDataCache() {
     clientCachedPlanificacion = null;
 }
 
+export function getCachedOperationalData(): {
+    installations: Installation[];
+    solicitudes: Solicitud[];
+} | null {
+    if (!clientCachedData) return null;
+    return {
+        installations: clientCachedData.instRaw || [],
+        solicitudes: clientCachedData.solRaw || [],
+    };
+}
+
+export function getCachedPlanificacionData(): PlanificacionRecord[] | null {
+    if (!clientCachedPlanificacion) return null;
+    return clientCachedPlanificacion.data || null;
+}
+
 export async function fetchRawOperationalData(
     customOverrides?: AdvisorOverridesMap,
     customAliases?: Record<string, string>,
