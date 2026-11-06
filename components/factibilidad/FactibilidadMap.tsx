@@ -34,19 +34,19 @@ const getTileConfig = (theme: MapTheme) => {
 
   if (theme === "dark") {
     return {
-      url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
       className: "map-tiles-carto-dark",
       maxZoom: 19,
-      attribution: "&copy; Esri, HERE, Garmin",
+      attribution: "&copy; Esri",
     };
   }
 
-  // Light Canvas Base (Natively minimalist monochrome, no CSS filter flicker)
+  // Light Topo Map (Complete high-resolution street coverage in Venezuela, clean & minimalist)
   return {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
     className: "map-tiles-carto-light",
     maxZoom: 19,
-    attribution: "&copy; Esri, HERE, Garmin",
+    attribution: "&copy; Esri",
   };
 };
 
@@ -499,7 +499,7 @@ function FactibilidadMapInner({
   }, [L, onUserCoordsChange]);
 
   const containerBg =
-    theme === "dark" ? "bg-[#242424]" : theme === "satellite" ? "bg-[#121212]" : "bg-[#e8ecef]";
+    theme === "dark" ? "bg-[#18181b]" : theme === "satellite" ? "bg-[#121212]" : "bg-[#f5f5f4]";
 
   return (
     <div className={`relative w-full h-full min-h-[450px] overflow-hidden select-none ${containerBg}`}>
