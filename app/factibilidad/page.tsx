@@ -8,6 +8,7 @@ import {
   Search,
   Sun,
   Moon,
+  Layers,
   MapPin,
   Copy,
   Check,
@@ -65,8 +66,8 @@ export default function FactibilidadPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Carto Theme toggle: 'dark' or 'light'
-  const [theme, setTheme] = useState<"dark" | "light">("light");
+  // Map Theme: 'light' (Carto claro), 'dark' (Carto oscuro), or 'satellite'
+  const [theme, setTheme] = useState<"light" | "dark" | "satellite">("light");
 
   // Filters
   const [filterType, setFilterType] = useState<
@@ -177,17 +178,21 @@ export default function FactibilidadPage() {
             {/* Theme switcher */}
             <button
               type="button"
-              onClick={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
+              onClick={() =>
+                setTheme((prev) => (prev === "light" ? "dark" : prev === "dark" ? "satellite" : "light"))
+              }
               className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1.5"
-              title={`Cambiar a estilo ${theme === "dark" ? "claro" : "oscuro"}`}
+              title="Cambiar capa de mapa (Carto claro / Carto oscuro / Satélite)"
             >
               {theme === "dark" ? (
-                <Sun className="w-3.5 h-3.5 stroke-[1.5]" />
-              ) : (
                 <Moon className="w-3.5 h-3.5 stroke-[1.5]" />
+              ) : theme === "satellite" ? (
+                <Layers className="w-3.5 h-3.5 stroke-[1.5]" />
+              ) : (
+                <Sun className="w-3.5 h-3.5 stroke-[1.5]" />
               )}
               <span className="hidden md:inline text-[11px]">
-                {theme === "dark" ? "Carto oscuro" : "Carto claro"}
+                {theme === "light" ? "Carto claro" : theme === "dark" ? "Carto oscuro" : "Satélite"}
               </span>
             </button>
 
