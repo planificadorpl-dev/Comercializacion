@@ -72,6 +72,7 @@ export default function FactibilidadPage() {
   // Client Coordinates Query Workflow
   const [coordInput, setCoordInput] = useState("");
   const [clientCoords, setClientCoords] = useState<[number, number] | null>(null);
+  const [flyToCoords, setFlyToCoords] = useState<[number, number] | null>(null);
   const [coordError, setCoordError] = useState<string | null>(null);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
   const [copiedCoords, setCopiedCoords] = useState(false);
@@ -168,7 +169,15 @@ export default function FactibilidadPage() {
     return analyzeFeasibility(clientCoords, boxes);
   }, [clientCoords, boxes]);
 
-  // Handle client coordinates submission
+  // Target NAP: only highlight if within 1 km
+  const targetNap = useMemo(() => {
+    const nap = feasibilityResult?.nearestAvailableNap || feasibilityResult?.nearestNap || null;
+    if (!nap || !clientCoords) return null;
+    const dist = calculateDistanceMeters(clientCoords[0], clientCoords[1], nap.lat, nap.lng);
+    return dist <= 1000 ? nap : null;
+  }, [feasibilityResult, clientCoords]);
+
+  // Handle client coordinates submission from form
   const handleQueryCoords = useCallback(
     (e?: React.FormEvent) => {
       if (e) e.preventDefault();
@@ -179,6 +188,7 @@ export default function FactibilidadPage() {
 
       if (parsed) {
         setClientCoords(parsed);
+        setFlyToCoords(parsed);
         setSelectedBox(null);
         queryNearbyBoxes(parsed[0], parsed[1]);
       } else {
@@ -188,10 +198,11 @@ export default function FactibilidadPage() {
     [coordInput, queryNearbyBoxes]
   );
 
-  // Direct map click to place client pin
+  // Direct map click to place client pin (keeps camera completely still without jump or zoom bounce)
   const handleClientCoordsFromMap = useCallback(
     (coords: [number, number] | null) => {
       setClientCoords(coords);
+      setFlyToCoords(null);
       if (coords) {
         setCoordInput(`${coords[0].toFixed(6)}, ${coords[1].toFixed(6)}`);
         setCoordError(null);
@@ -205,6 +216,7 @@ export default function FactibilidadPage() {
   // Clear client query and return to clean protected state
   const handleClearQuery = () => {
     setClientCoords(null);
+    setFlyToCoords(null);
     setCoordInput("");
     setCoordError(null);
     setSelectedBox(null);
@@ -460,7 +472,8 @@ export default function FactibilidadPage() {
             onUserCoordsChange={setUserCoords}
             clientCoords={clientCoords}
             onClientCoordsChange={handleClientCoordsFromMap}
-            targetNap={feasibilityResult?.nearestAvailableNap || feasibilityResult?.nearestNap || null}
+            targetNap={targetNap}
+            flyToCoords={flyToCoords}
           />
 
           {/* Initial Clean Guide (shown when no coordinate is queried yet) */}
@@ -521,7 +534,9 @@ export default function FactibilidadPage() {
               {feasibilityResult.nearestAvailableNap && (
                 <div className="border-t border-neutral-100 pt-2.5 space-y-1.5 text-xs font-mono">
                   <div className="flex justify-between items-center">
-                    <span className="text-neutral-400">Caja asignada:</span>
+                    <span className="text-neutral-400">
+                      {feasibilityResult.isFeasible ? "Caja asignada:" : "Caja más cercana:"}
+                    </span>
                     <span className="text-neutral-900 font-medium">
                       {feasibilityResult.nearestAvailableNap.name}
                     </span>
