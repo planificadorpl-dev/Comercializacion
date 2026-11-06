@@ -327,24 +327,25 @@ export default function FactibilidadMap({
     });
     group.addLayer(clientMarker);
 
-    // Smooth pan / fit bounds
-    if (targetNap) {
-      const bounds = L.latLngBounds([
-        [cLat, cLng],
-        [targetNap.lat, targetNap.lng],
-      ]).pad(0.35);
-      mapInstanceRef.current.fitBounds(bounds, { maxZoom: 18, animate: true });
-    } else {
-      mapInstanceRef.current.setView([cLat, cLng], 17, { animate: true });
+    // Only adjust view if the queried coordinates are not currently visible on screen
+    // (Prevents jarring camera jumping and zoom in/out bounce when user clicks on map)
+    const map = mapInstanceRef.current;
+    if (map) {
+      const isVisible = map.getBounds().contains([cLat, cLng]);
+      if (!isVisible) {
+        const currentZoom = map.getZoom();
+        const targetZoom = currentZoom < 14 ? 16 : currentZoom;
+        map.setView([cLat, cLng], targetZoom, { animate: true, duration: 0.4 });
+      }
     }
   }, [L, clientCoords, targetNap]);
 
-  // Center on selected box when clicked
+  // Gentle pan to selected box without changing zoom level
   useEffect(() => {
     if (!mapInstanceRef.current || !selectedBox) return;
-    mapInstanceRef.current.setView([selectedBox.lat, selectedBox.lng], 17, {
+    mapInstanceRef.current.panTo([selectedBox.lat, selectedBox.lng], {
       animate: true,
-      duration: 0.6,
+      duration: 0.3,
     });
   }, [selectedBox]);
 
