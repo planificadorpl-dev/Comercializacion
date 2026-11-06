@@ -62,6 +62,22 @@ export default function FactibilidadMap({
   const [L, setL] = useState<any>(null);
   const [isLocating, setIsLocating] = useState(false);
 
+  // Keep callback refs up to date so Leaflet listeners never cause map unmount/re-initialization
+  const onClientCoordsChangeRef = useRef(onClientCoordsChange);
+  useEffect(() => {
+    onClientCoordsChangeRef.current = onClientCoordsChange;
+  }, [onClientCoordsChange]);
+
+  const onSelectBoxRef = useRef(onSelectBox);
+  useEffect(() => {
+    onSelectBoxRef.current = onSelectBox;
+  }, [onSelectBox]);
+
+  const onUserCoordsChangeRef = useRef(onUserCoordsChange);
+  useEffect(() => {
+    onUserCoordsChangeRef.current = onUserCoordsChange;
+  }, [onUserCoordsChange]);
+
   // Dynamic Leaflet import on client
   useEffect(() => {
     let mounted = true;
@@ -135,10 +151,12 @@ export default function FactibilidadMap({
     const clientGroup = L.layerGroup().addTo(map);
     clientLayerRef.current = clientGroup;
 
-    // Click on map to place or move client point
+    // Click on map to place or move client point without unmounting the map
     map.on("click", (e: any) => {
       const { lat, lng } = e.latlng;
-      onClientCoordsChange([lat, lng]);
+      if (onClientCoordsChangeRef.current) {
+        onClientCoordsChangeRef.current([lat, lng]);
+      }
     });
 
     mapInstanceRef.current = map;
@@ -151,7 +169,7 @@ export default function FactibilidadMap({
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [L, onClientCoordsChange]);
+  }, [L]);
 
   // Update Tile Layer when Theme changes
   useEffect(() => {
@@ -236,12 +254,14 @@ export default function FactibilidadMap({
 
       circle.on("click", (ev: any) => {
         L.DomEvent.stopPropagation(ev);
-        onSelectBox(box);
+        if (onSelectBoxRef.current) {
+          onSelectBoxRef.current(box);
+        }
       });
 
       markersGroup.addLayer(circle);
     });
-  }, [L, filteredBoxes, selectedBox, targetNap, theme, onSelectBox]);
+  }, [L, filteredBoxes, selectedBox, targetNap, theme]);
 
   // Render Client Location, Coverage Radii (150m & 250m) and Feasibility Line
   useEffect(() => {
