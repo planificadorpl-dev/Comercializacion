@@ -39,26 +39,15 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Case 2: Full network requested (Admin only mode)
-    if (full) {
-      const boxes = await getFactibilidadBoxes(forceRefresh);
-      return NextResponse.json({
-        success: true,
-        mode: "full",
-        total: boxes.length,
-        naps: boxes.filter((b) => b.isNap).length,
-        mangas: boxes.filter((b) => !b.isNap).length,
-        data: boxes,
-      });
-    }
-
-    // Case 3: Initial empty state (Protected: zero bulk network leak)
+    // Default / Full: Return all network boxes (cached in memory)
+    const boxes = await getFactibilidadBoxes(forceRefresh);
     return NextResponse.json({
       success: true,
-      mode: "empty",
-      total: 0,
-      data: [],
-      message: "Ingresa coordenadas para consultar factibilidad en un radio protegido de 1 km.",
+      mode: "full",
+      total: boxes.length,
+      naps: boxes.filter((b) => b.isNap).length,
+      mangas: boxes.filter((b) => !b.isNap).length,
+      data: boxes,
     });
   } catch (error: any) {
     console.error("Error en API de factibilidad OZmap:", error);

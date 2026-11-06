@@ -28,25 +28,28 @@ const getTileConfig = (theme: MapTheme) => {
       url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
       className: "map-tiles-satellite",
       maxZoom: 19,
+      subdomains: "abc",
       attribution: "&copy; Esri, Maxar",
     };
   }
 
   if (theme === "dark") {
     return {
-      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+      url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
       className: "map-tiles-carto-dark",
-      maxZoom: 19,
-      attribution: "&copy; Esri",
+      maxZoom: 20,
+      subdomains: "abcd",
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     };
   }
 
-  // Light Topo Map (Complete high-resolution street coverage in Venezuela, clean & minimalist)
+  // Light: Carto Positron (Pristine, clean minimalist street map with complete Venezuela coverage)
   return {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
     className: "map-tiles-carto-light",
-    maxZoom: 19,
-    attribution: "&copy; Esri",
+    maxZoom: 20,
+    subdomains: "abcd",
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   };
 };
 
@@ -162,6 +165,7 @@ function FactibilidadMapInner({
 
     const cfg = getTileConfig(theme);
     const tileLayer = L.tileLayer(cfg.url, {
+      subdomains: cfg.subdomains || "abcd",
       maxZoom: cfg.maxZoom,
       className: cfg.className,
       updateWhenIdle: false,
@@ -214,6 +218,7 @@ function FactibilidadMapInner({
     mapInstanceRef.current.removeLayer(tileLayerRef.current);
 
     const newLayer = L.tileLayer(cfg.url, {
+      subdomains: cfg.subdomains || "abcd",
       maxZoom: cfg.maxZoom,
       className: cfg.className,
       updateWhenIdle: false,

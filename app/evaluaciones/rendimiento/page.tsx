@@ -119,6 +119,7 @@ function RendimientoContent() {
       {/* Detail Modal */}
       {viewingRecord && (
         <EvaluacionDetailModal
+          isOpen={Boolean(viewingRecord)}
           record={viewingRecord}
           onClose={() => setViewingRecord(null)}
           onEdit={() => {
