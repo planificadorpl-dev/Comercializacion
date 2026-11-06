@@ -193,19 +193,25 @@
 }
 
 /* ==========================================================================
-   Leaflet Map Styles (Factibilidad) - Clean & Fast Carto Basemap
+   Leaflet Map Styles (Factibilidad) - High Performance & Watermark-Free
    ========================================================================== */
 .leaflet-container {
-  background-color: transparent !important;
+  background-color: #f1f5f9 !important;
   outline: none;
 }
 
-.map-tiles-carto-light {
-  /* Carto Positron is natively crisp, minimalist monochrome */
+.map-tiles-clean-light {
+  filter: grayscale(82%) contrast(1.05) brightness(1.02);
+  transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
-.map-tiles-carto-dark {
-  /* Carto Dark Matter is natively dark slate */
+.map-tiles-clean-dark {
+  filter: invert(100%) hue-rotate(180deg) brightness(82%) contrast(115%) grayscale(30%);
+  transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .map-tiles-satellite {
