@@ -186,3 +186,44 @@ export async function getFactibilidadBoxes(forceRefresh = false): Promise<OzBox[
   return boxes;
 }
 
+function calcDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371e3;
+  const p1 = (lat1 * Math.PI) / 180;
+  const p2 = (lat2 * Math.PI) / 180;
+  const dp = ((lat2 - lat1) * Math.PI) / 180;
+  const dl = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dp / 2) * Math.sin(dp / 2) +
+    Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+export async function getFactibilidadBoxesInRadius(
+  lat: number,
+  lng: number,
+  radiusMeters = 1000,
+  forceRefresh = false
+): Promise<{ boxes: OzBox[]; totalInRadius: number; availableInRadius: number }> {
+  const allBoxes = await getFactibilidadBoxes(forceRefresh);
+
+  // Filter only NAPs (hide trunk mangas from advisors) within requested radius
+  const nearby = allBoxes
+    .filter((b) => b.isNap)
+    .map((b) => ({
+      box: b,
+      dist: calcDistanceMeters(lat, lng, b.lat, b.lng),
+    }))
+    .filter((item) => item.dist <= radiusMeters)
+    .sort((a, b) => a.dist - b.dist)
+    .map((item) => item.box);
+
+  const availableInRadius = nearby.filter((b) => b.availablePorts > 0).length;
+
+  return {
+    boxes: nearby,
+    totalInRadius: nearby.length,
+    availableInRadius,
+  };
+}
+
+
