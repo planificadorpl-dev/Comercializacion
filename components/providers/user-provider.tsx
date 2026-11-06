@@ -32,7 +32,7 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 // Route permission definitions
-const FIELD_OPERATIONS_ROUTES = ["/actividades", "/solicitudes", "/competencia"];
+const FIELD_OPERATIONS_ROUTES = ["/actividades", "/solicitudes", "/factibilidad", "/competencia"];
 const SUPERVISION_ROUTES = ["/", "/planificacion", "/evaluaciones"];
 const ADMIN_ROUTES = ["/admin"];
 
@@ -91,14 +91,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     // 1. Unauthenticated users must go to /login
     if (!user) {
       if (!isLoginPage) {
-        window.location.href = "/login";
+        router.push("/login");
       }
       return;
     }
 
     // 2. Authenticated user sitting on /login -> redirect to their home
     if (isLoginPage) {
-      window.location.href = user.rol === "asesor" ? "/actividades" : "/";
+      if (user.rol === "asesor") {
+        router.push("/actividades");
+      } else {
+        router.push("/");
+      }
       return;
     }
 
@@ -109,7 +113,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         ADMIN_ROUTES.some((r) => pathname.startsWith(r));
 
       if (isForbidden) {
-        window.location.href = "/actividades";
+        router.push("/actividades");
       }
     } else if (user.rol === "supervisor" || user.rol === "impulsador") {
       // Supervisores / Impulsadores can ONLY see the 3 top panels: /, /planificacion, /evaluaciones
@@ -117,22 +121,26 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         ADMIN_ROUTES.some((r) => pathname.startsWith(r));
 
       if (isForbidden) {
-        window.location.href = "/";
+        router.push("/");
       }
     }
     // Admins have access to all routes
-  }, [user, isLoading, pathname]);
+  }, [user, isLoading, pathname, router]);
 
   const handleLogin = async (credentials: { emailOrUsername: string; password: string }) => {
     const res = await loginUser(credentials);
     if (res.success && res.user) {
+      setUser(res.user);
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem("ventas_current_user", JSON.stringify(res.user));
         } catch {}
       }
-      const target = res.user.rol === "asesor" ? "/actividades" : "/";
-      window.location.href = target;
+      if (res.user.rol === "asesor") {
+        router.push("/actividades");
+      } else {
+        router.push("/");
+      }
     }
     return res;
   };
@@ -143,10 +151,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem("ventas_current_user");
       } catch {}
     }
-    try {
-      await logoutUser();
-    } catch {}
-    window.location.href = "/login";
+    setUser(null);
+    await logoutUser();
+    router.push("/login");
   };
 
   const handleImpersonate = async (targetUserId: string) => {
@@ -154,13 +161,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await impersonateUser(targetUserId);
       if (res.success && res.user) {
+        setUser(res.user);
         if (typeof window !== "undefined") {
           try {
             localStorage.setItem("ventas_current_user", JSON.stringify(res.user));
           } catch {}
         }
-        const target = res.user.rol === "asesor" ? "/actividades" : "/";
-        window.location.href = target;
+        if (res.user.rol === "asesor") {
+          router.push("/actividades");
+        } else {
+          router.push("/");
+        }
       }
       return res;
     } finally {
@@ -173,12 +184,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await stopImpersonation();
       if (res.success && res.user) {
+        setUser(res.user);
         if (typeof window !== "undefined") {
           try {
             localStorage.setItem("ventas_current_user", JSON.stringify(res.user));
           } catch {}
         }
-        window.location.href = "/admin?tab=usuarios";
+        router.push("/admin?tab=usuarios");
       }
       return res;
     } finally {

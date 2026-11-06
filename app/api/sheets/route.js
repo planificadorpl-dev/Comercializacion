@@ -36,6 +36,11 @@ function sendOptimizedResponse(request, payload, fromCache = false, preGzipped =
   });
 }
 
+// Auto-sync interval: 30 minutes
+const AUTO_SYNC_INTERVAL_MS = 30 * 60 * 1000;
+let lastAutoSyncAt = Date.now();
+let isSyncingInBackground = false;
+
 function toIsoDate(val) {
   if (!val) return "";
   if (val instanceof Date) {
@@ -68,8 +73,9 @@ function toSpanishMonth(val, fechaFallback) {
 /**
  * GET /api/sheets
  * 
- * Fetches Google Sheets spreadsheet data directly (with fast in-memory caching).
- * Falls back to PostgreSQL if Google Sheets is unreachable or in intranet mode.
+ * Supports both Native PostgreSQL (Intranet mode) and Google Sheets API (Cloud mode).
+ * If PostgreSQL contains historical data, it serves from PostgreSQL without requiring internet.
+ * Automatically synchronizes with Google Sheets in the background when stale.
  */
 export async function GET(request) {
   try {
@@ -82,6 +88,23 @@ export async function GET(request) {
     const forceRefresh = searchParams.get("refresh") === "true";
 
     const now = Date.now();
+
+    // Trigger auto-sync in background if overdue and not currently syncing
+    if (!isSyncingInBackground && (forceRefresh || now - lastAutoSyncAt > AUTO_SYNC_INTERVAL_MS)) {
+      isSyncingInBackground = true;
+      lastAutoSyncAt = now;
+      runSheetsSync()
+        .then(() => {
+          sheetsMemoryCache.clear();
+        })
+        .catch((err) => {
+          console.warn("Aviso en auto-sincronización de fondo:", err.message);
+        })
+        .finally(() => {
+          isSyncingInBackground = false;
+        });
+    }
+
     const cacheKey = `${spreadsheetId}_${sheetName}_${confSheet}_${fullMatrix}`;
 
     if (!forceRefresh && sheetsMemoryCache.has(cacheKey)) {
@@ -94,8 +117,73 @@ export async function GET(request) {
     let records = [];
     let source = "google_sheets";
 
-    // ── 1. Fetch directly from Google Sheets if spreadsheetId is provided ──────
-    if (spreadsheetId) {
+    // ── 1. Intranet First: Query Native PostgreSQL if populated ───────────────
+    try {
+      const upperSheet = sheetName.toUpperCase();
+      if (upperSheet.includes("DATA LIMPIA") || upperSheet.includes("CUADRO DIARIO")) {
+        const rows = await query("SELECT * FROM public.instalaciones ORDER BY fecha ASC");
+        if (Array.isArray(rows) && rows.length > 0) {
+          records = rows.map((r, i) => ({
+            id: r.id || i,
+            fecha: toIsoDate(r.fecha),
+            mes: r.mes || "",
+            tecnico_1: r.tecnico_1 || "",
+            tecnico_2: r.tecnico_2 || null,
+            router: r.router || "0",
+            nombre_cliente: r.nombre_cliente || "",
+            cedula: r.cedula || "",
+            zona: r.zona || "",
+            sector: r.sector || "",
+            asesor: r.asesor || "",
+            equipo: r.equipo || "",
+            estatus: r.estatus || "INSTALADO",
+            plan: r.plan || "",
+            power_go: r.power_go || "NO",
+            servicio: r.servicio || "RESIDENCIAL",
+            oficina: r.oficina || "OTROS",
+            estado: r.estado || null,
+          }));
+          source = "postgresql";
+        }
+      } else if (upperSheet.includes("SOLICITUDES")) {
+        const rows = await query("SELECT * FROM public.solicitudes ORDER BY fecha_solicitud ASC");
+        if (Array.isArray(rows) && rows.length > 0) {
+          records = rows.map((r, i) => ({
+            id: r.id || i,
+            fecha: toIsoDate(r.fecha_solicitud),
+            mes: toSpanishMonth(r.mes, r.fecha_solicitud),
+            asesor: r.promotor || r.asesor_normalizado || "Sin Asesor",
+            estatus: r.estatus || "Pendiente",
+            nombre_cliente: r.nombre_cliente || `${r.nombres || ""} ${r.apellidos || ""}`.trim(),
+            cedula: r.cedula || "",
+            plan: r.plan || "",
+            tipo_operacion: r.tipo_operacion || "Instalación",
+            power_go: r.power_go || "NO",
+            estado: r.estado || "",
+            municipio: r.municipio || "",
+            zona: r.parroquia || r.estado || "N/A",
+            sector: r.sector || "",
+            ubicacion: r.ubicacion || "",
+            canal: r.canal || "",
+            sede_taquilla: r.sede_taquilla || "",
+            fuente: r.fuente || "",
+          }));
+          source = "postgresql";
+        }
+      }
+    } catch (pgErr) {
+      // PostgreSQL not populated yet or query error, fall through to Google Sheets
+    }
+
+    // ── 2. Fallback: Google Sheets API (if not populated in PostgreSQL) ────────
+    if (records.length === 0) {
+      if (!spreadsheetId) {
+        return NextResponse.json(
+          { error: "Se requiere el parámetro 'spreadsheetId' o datos en PostgreSQL" },
+          { status: 400 }
+        );
+      }
+
       try {
         const sheets = await getSheetsClient();
         const dataResponse = await sheets.spreadsheets.values.get({
@@ -103,83 +191,18 @@ export async function GET(request) {
           range: sheetName,
         });
 
-        if (dataResponse.data && dataResponse.data.values) {
+        if (dataResponse.data.values) {
           records = parseSheetData(dataResponse.data.values, sheetName);
-          source = "google_sheets";
         }
-      } catch (sheetsErr) {
-        console.warn(`Aviso al consultar Google Sheets API (${sheetName}):`, sheetsErr.message);
+      } catch (e) {
         if (apiKey) {
-          try {
-            const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}?key=${apiKey}`;
-            const dataResponse = await fetch(dataUrl, { cache: "no-store" });
-            if (dataResponse.ok) {
-              const dataJson = await dataResponse.json();
-              records = parseSheetData(dataJson.values, sheetName);
-              source = "google_sheets";
-            }
-          } catch {}
-        }
-      }
-    }
-
-    // ── 2. Fallback: Query Native PostgreSQL if Google Sheets returned no records ─
-    if (records.length === 0) {
-      try {
-        const upperSheet = sheetName.toUpperCase();
-        if (upperSheet.includes("DATA LIMPIA") || upperSheet.includes("CUADRO DIARIO")) {
-          const rows = await query("SELECT * FROM public.instalaciones ORDER BY fecha ASC");
-          if (Array.isArray(rows) && rows.length > 0) {
-            records = rows.map((r, i) => ({
-              id: r.id || i,
-              fecha: toIsoDate(r.fecha),
-              mes: r.mes || "",
-              tecnico_1: r.tecnico_1 || "",
-              tecnico_2: r.tecnico_2 || null,
-              router: r.router || "0",
-              nombre_cliente: r.nombre_cliente || "",
-              cedula: r.cedula || "",
-              zona: r.zona || "",
-              sector: r.sector || "",
-              asesor: r.asesor || "",
-              equipo: r.equipo || "",
-              estatus: r.estatus || "INSTALADO",
-              plan: r.plan || "",
-              power_go: r.power_go || "NO",
-              servicio: r.servicio || "RESIDENCIAL",
-              oficina: r.oficina || "OTROS",
-              estado: r.estado || null,
-            }));
-            source = "postgresql";
-          }
-        } else if (upperSheet.includes("SOLICITUDES")) {
-          const rows = await query("SELECT * FROM public.solicitudes ORDER BY fecha_solicitud ASC");
-          if (Array.isArray(rows) && rows.length > 0) {
-            records = rows.map((r, i) => ({
-              id: r.id || i,
-              fecha: toIsoDate(r.fecha_solicitud),
-              mes: toSpanishMonth(r.mes, r.fecha_solicitud),
-              asesor: r.promotor || r.asesor_normalizado || "Sin Asesor",
-              estatus: r.estatus || "Pendiente",
-              nombre_cliente: r.nombre_cliente || `${r.nombres || ""} ${r.apellidos || ""}`.trim(),
-              cedula: r.cedula || "",
-              plan: r.plan || "",
-              tipo_operacion: r.tipo_operacion || "Instalación",
-              power_go: r.power_go || "NO",
-              estado: r.estado || "",
-              municipio: r.municipio || "",
-              zona: r.parroquia || r.estado || "N/A",
-              sector: r.sector || "",
-              ubicacion: r.ubicacion || "",
-              canal: r.canal || "",
-              sede_taquilla: r.sede_taquilla || "",
-              fuente: r.fuente || "",
-            }));
-            source = "postgresql";
+          const dataUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}?key=${apiKey}`;
+          const dataResponse = await fetch(dataUrl, { cache: "no-store" });
+          if (dataResponse.ok) {
+            const dataJson = await dataResponse.json();
+            records = parseSheetData(dataJson.values, sheetName);
           }
         }
-      } catch (pgErr) {
-        console.warn("PostgreSQL read skipped/fallback:", pgErr.message);
       }
     }
 

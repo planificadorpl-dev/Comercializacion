@@ -55,12 +55,9 @@ console.log("🚀 INICIANDO MIGRACIÓN A POSTGRESQL PARA LA INTRANET EMPRESARIAL
 console.log("==================================================================");
 console.log(`📡 URL Destino: ${DATABASE_URL.replace(/:[^:@]+@/, ":****@")}`);
 
-const isLocalhost = DATABASE_URL.includes("localhost") || DATABASE_URL.includes("127.0.0.1");
-
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: isLocalhost ? false : { rejectUnauthorized: false },
-  connectionTimeoutMillis: 15000,
+  connectionTimeoutMillis: 7000,
 });
 
 async function runMigration() {

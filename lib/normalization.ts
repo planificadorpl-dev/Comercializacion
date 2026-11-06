@@ -808,23 +808,10 @@ export function isAdvisorExCollaborator(
   rawName: string | null | undefined,
   overrides?: AdvisorOverridesMap
 ): boolean {
-  if (!rawName) return false;
-  const lower = rawName.toLowerCase();
-  if (
-    lower.includes("ex-colaborador") ||
-    lower.includes("ex colaborador") ||
-    lower.includes("(ex)") ||
-    lower.includes("ex-")
-  ) {
-    return true;
-  }
-  if (!overrides) return false;
+  if (!rawName || !overrides) return false;
   const match = findAdvisorOverride(rawName, overrides);
   if (match?.config?.isExCollaborator !== undefined) {
     return Boolean(match.config.isExCollaborator);
-  }
-  if (match?.config?.status === "ex") {
-    return true;
   }
   return false;
 }

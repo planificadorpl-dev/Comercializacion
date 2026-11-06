@@ -1,13 +1,14 @@
 [
   {
-    "id": "usr-sup-01",
-    "email": "hmoreno@powerlink.com",
-    "nombre": "Harry Moreno",
-    "rol": "supervisor",
-    "colaboradorId": "Harry Moreno",
+    "id": "usr-admin-01",
+    "email": "admin@powerlink.com",
+    "nombre": "Administrador General",
+    "rol": "admin",
+    "colaboradorId": "Administrador General",
     "activo": true,
-    "passwordHash": "52934f3f4f4549276b750e515b7efadc:d98b79ecf558c6257ced295f1a5ec449f48f8cc02f74edb916e2b7de8a18d550d2fa51975099a288767bd97f10d085d4a082940f54c7716f38683e8a066a9149",
-    "createdAt": "2026-10-27T10:00:00.000Z"
+    "passwordHash": "09ed55413768bbac48feb593539441c7:6b7ffe1dc5a22726b16667db3ee2d055a7fe15aadb2534d1af70264921d6eaa3ff81f1c0acfaf317e17863a6fa12df1cf02b26bc867e1b1543ff2b829f353912",
+    "createdAt": "2026-10-27T10:00:00.000Z",
+    "lastLogin": "2026-10-27T21:14:50.220Z"
   },
   {
     "id": "usr-28330213",
@@ -21,15 +22,14 @@
     "lastLogin": "2026-10-27T18:46:47.496Z"
   },
   {
-    "id": "usr-admin-01",
-    "email": "admin@powerlink.com",
-    "nombre": "Administrador General",
-    "rol": "admin",
-    "colaboradorId": "Administrador General",
+    "id": "usr-sup-01",
+    "email": "hmoreno@powerlink.com",
+    "nombre": "Harry Moreno",
+    "rol": "supervisor",
+    "colaboradorId": "Harry Moreno",
     "activo": true,
-    "passwordHash": "09ed55413768bbac48feb593539441c7:6b7ffe1dc5a22726b16667db3ee2d055a7fe15aadb2534d1af70264921d6eaa3ff81f1c0acfaf317e17863a6fa12df1cf02b26bc867e1b1543ff2b829f353912",
-    "createdAt": "2026-10-27T10:00:00.000Z",
-    "lastLogin": "2026-10-27T21:14:50.220Z"
+    "passwordHash": "52934f3f4f4549276b750e515b7efadc:d98b79ecf558c6257ced295f1a5ec449f48f8cc02f74edb916e2b7de8a18d550d2fa51975099a288767bd97f10d085d4a082940f54c7716f38683e8a066a9149",
+    "createdAt": "2026-10-27T10:00:00.000Z"
   },
   {
     "id": "usr-12880862",
@@ -211,5 +211,16 @@
     "activo": true,
     "passwordHash": "22941835dbb257e4f41be179253cb643:e50ac91109060eddfeeed04863fc309a7511254639a1438e1765c99677a2a62440204625ba61e75bf53b56a4fc581d7574fac12aa52a2ff63c2bf851bef7ec17",
     "createdAt": "2026-10-27T17:14:08.475Z"
+  },
+  {
+    "id": "usr-99999999",
+    "email": "demo.asesor@powerlink.com",
+    "nombre": "Asesor Demostracion",
+    "rol": "asesor",
+    "colaboradorId": "Asesor Demo",
+    "activo": true,
+    "passwordHash": "c760053feb10f57adf9262bf2599365f:4bb6cc88ae84a0b68a42e84700b8ebc4df436339288812a327c53eedbf396ea1d1e7a18568759b8b454d69dc1c8fcd9e6da99a9b105ab43e13b0efd76718f092",
+    "createdAt": "2026-11-04T22:33:36.825Z",
+    "lastLogin": "2026-11-05T15:49:13.255Z"
   }
 ]

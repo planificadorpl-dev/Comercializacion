@@ -34,7 +34,6 @@ export async function readModulesLocal(): Promise<SystemModule[]> {
 }
 
 export async function writeModulesLocal(modules: SystemModule[]): Promise<void> {
-  if (process.env.VERCEL) return;
   try {
     await fs.mkdir(path.dirname(MODULES_FILE_PATH), { recursive: true });
     await fs.writeFile(MODULES_FILE_PATH, JSON.stringify(modules, null, 2), "utf-8");

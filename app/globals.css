@@ -191,3 +191,67 @@
     display: none !important;
   }
 }
+
+/* ==========================================================================
+   Micro-transiciones minimalistas del proyecto (Fade & Slide sutil)
+   ========================================================================== */
+
+@keyframes pageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tabEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes itemStagger {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter-animation {
+  animation: pageEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform;
+}
+
+.tab-enter-animation {
+  animation: tabEnter 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform;
+}
+
+.stagger-1 {
+  animation: itemStagger 0.24s cubic-bezier(0.16, 1, 0.3, 1) 0.03s both;
+}
+
+.stagger-2 {
+  animation: itemStagger 0.24s cubic-bezier(0.16, 1, 0.3, 1) 0.07s both;
+}
+
+.stagger-3 {
+  animation: itemStagger 0.24s cubic-bezier(0.16, 1, 0.3, 1) 0.11s both;
+}
+
+.stagger-4 {
+  animation: itemStagger 0.24s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+

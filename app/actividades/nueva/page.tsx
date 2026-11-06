@@ -350,9 +350,9 @@ function NuevaActividadContent() {
 
           {/* PROGRESSIVE DISCLOSURE: THE REST ONLY SHOWS IF TYPE IS SELECTED */}
           {formData.type && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-top-2 duration-150">
+            <div className="space-y-6 tab-enter-animation">
               {/* BLOCK 2: MÉTRICAS DEL REPORTE */}
-              <div className="space-y-2">
+              <div className="space-y-2 stagger-1">
                 <div>
                   <h2 className="text-xs font-semibold text-neutral-900 font-sans tracking-tight">
                     Métricas del reporte
@@ -495,7 +495,7 @@ function NuevaActividadContent() {
               </div>
 
               {/* BLOCK 3: UBICACIÓN DE ACTIVIDAD (Cascading selectors) */}
-              <div className="space-y-2">
+              <div className="space-y-2 stagger-2">
                 <div>
                   <h2 className="text-xs font-semibold text-neutral-900 font-sans tracking-tight">
                     Ubicación de actividad
@@ -556,7 +556,7 @@ function NuevaActividadContent() {
               </div>
 
               {/* BLOCK 4: OBSERVACIONES */}
-              <div className="space-y-2">
+              <div className="space-y-2 stagger-3">
                 <div>
                   <h2 className="text-xs font-semibold text-neutral-900 font-sans tracking-tight">
                     Observaciones

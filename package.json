@@ -22,12 +22,14 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "@tailwindcss/postcss": "^4.3.3",
+    "@types/leaflet": "^1.9.22",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "file-saver": "^2.0.5",
     "framer-motion": "^14.0.0",
     "googleapis": "^185.0.0",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.54.0",
     "motion": "^14.0.0",
     "next": "^16.4.3",
@@ -47,6 +49,7 @@
     "@types/react": "19.3.0",
     "eslint": "^9",
     "eslint-config-next": "^16.4.3",
+    "playwright": "^1.64.1",
     "tailwindcss": "^4"
   }
 }

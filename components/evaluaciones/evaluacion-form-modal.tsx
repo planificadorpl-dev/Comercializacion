@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { X, RotateCcw, CheckCheck, ArrowLeft, ArrowRight } from "lucide-react";
+import { X, RotateCcw, CheckCheck, Save, ArrowLeft, ArrowRight } from "lucide-react";
 import {
   EVALUACION_FACTORES,
   TOTAL_EVALUACION_ITEMS,
@@ -357,6 +357,9 @@ export function EvaluacionFormModal({
             <h2 className="text-sm font-semibold text-neutral-900 font-sans tracking-tight">
               {initialData ? "Editar evaluación de asesor" : "Nueva evaluación de asesor"}
             </h2>
+            <p className="text-[11px] text-neutral-400 font-mono mt-0.5">
+              Power Link Corp, C.A. — Formato de supervisión y evaluación
+            </p>
           </div>
           <button
             type="button"
@@ -809,9 +812,10 @@ export function EvaluacionFormModal({
               <button
                 type="submit"
                 disabled={saving}
-                className="text-xs font-semibold text-neutral-900 hover:text-neutral-500 transition-colors cursor-pointer select-none py-1 px-1"
+                className="inline-flex items-center gap-2 text-xs font-semibold text-neutral-900 hover:text-neutral-600 transition-colors cursor-pointer select-none py-1.5 px-2"
               >
-                {saving ? "Guardando..." : "Guardar evaluación"}
+                <Save className="w-3.5 h-3.5 stroke-[2]" />
+                <span>{saving ? "Guardando..." : "Guardar evaluación"}</span>
               </button>
             </div>
           </div>

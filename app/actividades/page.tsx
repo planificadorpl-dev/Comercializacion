@@ -426,7 +426,7 @@ function ActividadesContent() {
 
           {/* TAB 1: JORNADA EN CURSO */}
           {activeTab === "en_curso" && (
-            <div className="space-y-4">
+            <div className="space-y-4 tab-enter-animation">
               {!isMounted || activities.length === 0 ? (
                 <div className="py-16 text-center text-xs text-neutral-400 space-y-3">
                   <p>No tienes actividades registradas en la jornada de hoy.</p>
@@ -558,7 +558,7 @@ function ActividadesContent() {
 
           {/* TAB 2: HISTORIAL */}
           {activeTab === "historial" && (
-            <div className="space-y-4">
+            <div className="space-y-4 tab-enter-animation">
               {historyLoading ? (
                 <div className="py-16 text-center text-xs text-neutral-400">
                   Cargando historial de actividades...

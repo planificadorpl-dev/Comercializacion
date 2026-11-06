@@ -35,7 +35,6 @@ import { SectorsCard } from "@/components/dashboard/sectors-card";
 import { TechniciansCard } from "@/components/dashboard/technicians-card";
 import { ConnectionTypeCard } from "@/components/dashboard/connection-type-card";
 import { PlansCard } from "@/components/dashboard/plans-card";
-import { PersonalBreakdownCard } from "@/components/dashboard/personal-breakdown-card";
 import { AdvisorConfigModal, PersonnelTab } from "@/components/dashboard/advisor-config-modal";
 import {
   AdvisorOverridesMap,
@@ -44,16 +43,11 @@ import {
   resolveAdvisorOffice,
 } from "@/lib/normalization";
 
-export function getCurrentSpanishMonth(): string {
-  const currentMonthIdx = new Date().getMonth();
-  return MONTH_ORDER[currentMonthIdx] || "Noviembre";
-}
-
 const INITIAL_FILTERS: FilterState = {
   advisors: [],
   zones: [],
   statuses: [],
-  months: [getCurrentSpanishMonth()],
+  months: ["Octubre"],
   sectors: [],
   technicians: [],
   oficinas: [],
@@ -557,7 +551,7 @@ export default function DashboardPage() {
 
   // MoM Normalized Statistics (comparing against previous month at exact same day of month)
   const momStats = useMemo(() => {
-    const selectedMonth = filters.months.length === 1 ? filters.months[0] : getCurrentSpanishMonth();
+    const selectedMonth = filters.months.length === 1 ? filters.months[0] : "OCTUBRE";
     const maxDay = getMaxDayForMonth(filteredDataWithoutMonth, selectedMonth);
     const isSingleMonth = filters.months.length === 1;
 
@@ -1750,19 +1744,6 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {/* HORIZONTAL REFERENCE LINE (Feathered at ends) */}
-          <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-neutral-300 to-transparent my-2" />
-
-          {/* ROW 3: DESGLOSE DE PERSONAL (MUDADO DESDE PLANIFICACIÓN) */}
-          <section className="w-full">
-            <PersonalBreakdownCard
-              installations={filteredData}
-              solicitudes={filteredSolicitudes}
-              selectedAdvisor={filters.advisors[0]}
-              onSelectAdvisor={handleSelectAdvisor}
-              selectedMonth={filters.months[0]}
-            />
-          </section>
         </div>
       </main>
 

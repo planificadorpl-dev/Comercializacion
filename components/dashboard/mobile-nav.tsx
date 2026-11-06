@@ -14,6 +14,7 @@ import {
   Compass,
   Plus,
   BarChart2,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/providers/sidebar-provider";
@@ -55,6 +56,7 @@ export function MobileBottomNav() {
       router.prefetch("/evaluaciones/rendimiento");
       router.prefetch("/actividades");
       router.prefetch("/solicitudes");
+      router.prefetch("/factibilidad");
       router.prefetch("/competencia");
     } catch {}
   }, [router]);
@@ -102,6 +104,13 @@ export function MobileBottomNav() {
       icon: Send,
     },
     {
+      id: "factibilidad",
+      href: "/factibilidad",
+      label: "Factibilidad de Campo",
+      desc: "Mapa Carto y cajas OZmap",
+      icon: MapPin,
+    },
+    {
       id: "competencia",
       href: "/competencia",
       label: "Estudio de Mercado",
@@ -119,6 +128,7 @@ export function MobileBottomNav() {
   const isFieldRouteActive =
     pathname.startsWith("/actividades") ||
     pathname.startsWith("/solicitudes") ||
+    pathname.startsWith("/factibilidad") ||
     pathname.startsWith("/competencia");
 
   return (
@@ -293,7 +303,7 @@ export function MobileBottomNav() {
                         : "text-neutral-400 hover:text-neutral-700"
                     )}
                   >
-                    <Icon className="w-4 h-4 stroke-[1.25]" />
+                    <Icon className="w-4 h-4 stroke-[1.5]" />
                     <span className="text-[10px] mt-0.5 leading-none">{shortLabel}</span>
                     {isActive && (
                       <span className="w-1 h-1 rounded-full bg-neutral-900 mt-1" />
@@ -309,7 +319,7 @@ export function MobileBottomNav() {
                 title="Abrir menú de navegación"
                 aria-label="Abrir menú"
               >
-                <Menu className="w-4 h-4 stroke-[1.25]" />
+                <Menu className="w-4 h-4 stroke-[1.75]" />
                 <span className="text-[10px] mt-0.5 leading-none">Menú</span>
               </button>
             </>
@@ -326,7 +336,7 @@ export function MobileBottomNav() {
                     : "text-neutral-400 hover:text-neutral-700"
                 )}
               >
-                <Home className="w-4 h-4 stroke-[1.25]" />
+                <Home className="w-4 h-4 stroke-[1.5]" />
                 <span className="text-[10px] mt-0.5 leading-none">Principal</span>
                 {pathname === "/" && (
                   <span className="w-1 h-1 rounded-full bg-neutral-900 mt-1" />
@@ -344,7 +354,7 @@ export function MobileBottomNav() {
                       : "text-neutral-400 hover:text-neutral-700"
                   )}
                 >
-                  <Calendar className="w-4 h-4 stroke-[1.25]" />
+                  <Calendar className="w-4 h-4 stroke-[1.5]" />
                   <span className="text-[10px] mt-0.5 leading-none">Planificación</span>
                   {pathname.startsWith("/planificacion") && (
                     <span className="w-1 h-1 rounded-full bg-neutral-900 mt-1" />
@@ -368,7 +378,7 @@ export function MobileBottomNav() {
                   title="Evaluación y supervisión"
                   aria-label="Evaluación y supervisión"
                 >
-                  <CheckSquare className="w-4 h-4 stroke-[1.25]" />
+                  <CheckSquare className="w-4 h-4 stroke-[1.5]" />
                   <span className="text-[10px] mt-0.5 leading-none">Evaluación</span>
                   {pathname.startsWith("/evaluaciones") && (
                     <span className="w-1 h-1 rounded-full bg-neutral-900 mt-1" />
@@ -383,7 +393,7 @@ export function MobileBottomNav() {
                 title="Abrir menú de navegación"
                 aria-label="Abrir menú"
               >
-                <Menu className="w-4 h-4 stroke-[1.25]" />
+                <Menu className="w-4 h-4 stroke-[1.75]" />
                 <span className="text-[10px] mt-0.5 leading-none">Menú</span>
               </button>
             </>
@@ -401,7 +411,7 @@ export function MobileBottomNav() {
                     : "text-neutral-400 hover:text-neutral-700"
                 )}
               >
-                <Home className="w-4 h-4 stroke-[1.25]" />
+                <Home className="w-4 h-4 stroke-[1.5]" />
                 <span className="text-[10px] mt-0.5 leading-none">Principal</span>
                 {pathname === "/" && (
                   <span className="w-1 h-1 rounded-full bg-neutral-900 mt-1" />
@@ -419,7 +429,7 @@ export function MobileBottomNav() {
                     : "text-neutral-400 hover:text-neutral-700"
                 )}
               >
-                <Calendar className="w-4 h-4 stroke-[1.25]" />
+                <Calendar className="w-4 h-4 stroke-[1.5]" />
                 <span className="text-[10px] mt-0.5 leading-none">Planificación</span>
                 {pathname.startsWith("/planificacion") && (
                   <span className="w-1 h-1 rounded-full bg-neutral-900 mt-1" />
@@ -442,7 +452,7 @@ export function MobileBottomNav() {
                 title="Evaluación y supervisión"
                 aria-label="Evaluación y supervisión"
               >
-                <CheckSquare className="w-4 h-4 stroke-[1.25]" />
+                <CheckSquare className="w-4 h-4 stroke-[1.5]" />
                 <span className="text-[10px] mt-0.5 leading-none">Evaluación</span>
                 {pathname.startsWith("/evaluaciones") && (
                   <span className="w-1 h-1 rounded-full bg-neutral-900 mt-1" />
@@ -465,7 +475,7 @@ export function MobileBottomNav() {
                 title="Operaciones de campo"
                 aria-label="Operaciones de campo"
               >
-                <Layers className="w-4 h-4 stroke-[1.25]" />
+                <Layers className="w-4 h-4 stroke-[1.5]" />
                 <span className="text-[10px] mt-0.5 leading-none">Campo</span>
                 {isFieldRouteActive && (
                   <span className="w-1 h-1 rounded-full bg-neutral-900 mt-1" />
@@ -485,7 +495,7 @@ export function MobileBottomNav() {
                 title="Abrir menú de navegación"
                 aria-label="Abrir menú"
               >
-                <Menu className="w-4 h-4 stroke-[1.25]" />
+                <Menu className="w-4 h-4 stroke-[1.75]" />
                 <span className="text-[10px] mt-0.5 leading-none">Menú</span>
                 {pathname.startsWith("/admin") && (
                   <span className="w-1 h-1 rounded-full bg-neutral-900 mt-1" />

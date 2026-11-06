@@ -48,6 +48,17 @@ export const DEFAULT_SYSTEM_MODULES: SystemModule[] = [
     updatedAt: new Date().toISOString(),
   },
   {
+    id: "factibilidad",
+    name: "Factibilidad de Campo",
+    route: "/factibilidad",
+    short: "FC",
+    description: "Mapa Carto con visualización de cajas NAP, mangas y puertos libres vía OZmap.",
+    category: "Operaciones de Campo",
+    targetRoles: ["asesor", "supervisor", "impulsador"],
+    enabledForUsers: true,
+    updatedAt: new Date().toISOString(),
+  },
+  {
     id: "actividades",
     name: "Registro de Actividades",
     route: "/actividades",

@@ -29,15 +29,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-*.log
 
 # env files (can opt-in for committing if needed)
 .env*
-
-# credentials and sensitive local data
-credentials*.json
-database_backup/
-.mcp.json
 
 # vercel
 .vercel
@@ -45,3 +39,28 @@ database_backup/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+ 
+*.mp4
+*.xlsx
+*.docx
+*.dump
+*.log
+CREDENCIALES_OZMAP.txt
+credentials*.json
+database_backup/
+ventas/
+scripts/*.png
+scripts/*.log
+scripts/chunk*.js
+scripts/beautified*.js
+scripts/extracted*.js
+scripts/test*.js
+scripts/inspect*.js
+scripts/create-demo-user.js
+scripts/sync_19_advisors.js
+scripts/auto-tour.js
+scripts/zip*.tsx
+
+ 
+db/backup_*.sql
+

@@ -1,5 +1,4 @@
 import { formatProperCase, isInstalacionStatus, isNuevoServicioStatus } from "@/lib/utils";
-import { normalizeLocation, CanonicalLocationResult } from "@/lib/geo_normalization";
 import {
     AdvisorType,
     AdvisorOverridesMap,
@@ -57,9 +56,6 @@ export interface Installation {
     servicio: string;
     oficina: string;  // Calculado: OFICINA_MAP[asesor] || "OTROS"
     estado: string | null;  // Calculado: zona → MIRANDA/ARAGUA/D.C.
-    municipio?: string;
-    parroquia?: string;
-    subsector?: string;
 }
 
 export interface Solicitud {
@@ -84,8 +80,6 @@ export interface Solicitud {
     zona: string;
     sector: string;
     ubicacion?: string;
-    parroquia?: string;
-    subsector?: string;
 }
 
 export interface MetricChart {
@@ -148,11 +142,6 @@ export const MONTH_ORDER = [
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
 ];
 
-export function getCurrentSpanishMonth(): string {
-    const currentMonthIdx = new Date().getMonth();
-    return MONTH_ORDER[currentMonthIdx] || "Noviembre";
-}
-
 export function getMonthIndex(month: string): number {
     const norm = String(month || "").trim().toUpperCase();
     const idx = MONTH_ORDER.findIndex(m => m.toUpperCase() === norm);
@@ -166,59 +155,11 @@ let clientCachedData: {
     timestamp: number;
 } | null = null;
 
-let clientCachedProcessedOps: {
-    installations: Installation[];
-    solicitudes: Solicitud[];
-    timestamp: number;
-} | null = null;
-
 const CLIENT_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
-const LOCAL_STORAGE_PLAN_KEY = "comercializacion_cache_planificacion_v4";
 
 export function clearDashboardDataCache() {
     clientCachedData = null;
-    clientCachedProcessedOps = null;
     clientCachedPlanificacion = null;
-    if (typeof window !== "undefined") {
-        try {
-            localStorage.removeItem("comercializacion_cache_planificacion_v1");
-            localStorage.removeItem("comercializacion_cache_planificacion_v2");
-            localStorage.removeItem("comercializacion_cache_planificacion_v3");
-            localStorage.removeItem(LOCAL_STORAGE_PLAN_KEY);
-        } catch (_) {}
-    }
-}
-
-export function getCachedOperationalData(): { installations: Installation[]; solicitudes: Solicitud[] } | null {
-    if (clientCachedProcessedOps && (Date.now() - clientCachedProcessedOps.timestamp < CLIENT_CACHE_TTL)) {
-        return {
-            installations: clientCachedProcessedOps.installations,
-            solicitudes: clientCachedProcessedOps.solicitudes,
-        };
-    }
-    return null;
-}
-
-export function getCachedPlanificacionData(): PlanificacionRecord[] | null {
-    if (clientCachedPlanificacion && Array.isArray(clientCachedPlanificacion.data) && clientCachedPlanificacion.data.length > 0) {
-        return clientCachedPlanificacion.data;
-    }
-    if (typeof window !== "undefined") {
-        try {
-            const rawStored = localStorage.getItem(LOCAL_STORAGE_PLAN_KEY);
-            if (rawStored) {
-                const parsed = JSON.parse(rawStored);
-                if (parsed && Array.isArray(parsed.data) && parsed.data.length > 0) {
-                    clientCachedPlanificacion = {
-                        data: parsed.data,
-                        timestamp: parsed.timestamp || Date.now(),
-                    };
-                    return parsed.data;
-                }
-            }
-        } catch (_) {}
-    }
-    return null;
 }
 
 export async function fetchRawOperationalData(
@@ -261,12 +202,10 @@ export async function fetchRawOperationalData(
                 : Promise.resolve(null),
         ]);
 
-        const jsonInst = resInst && resInst.ok
-            ? await resInst.json().catch(() => ({ success: false, data: [] }))
-            : { success: false, data: [] };
-        const jsonSol = resSol && resSol.ok
-            ? await resSol.json().catch(() => ({ success: false, data: [] }))
-            : { success: false, data: [] };
+        const [jsonInst, jsonSol] = await Promise.all([
+            resInst.json(),
+            resSol.json()
+        ]);
 
         instRaw = jsonInst.success ? jsonInst.data || [] : [];
         solRaw = jsonSol.success ? jsonSol.data || [] : [];
@@ -286,14 +225,11 @@ export async function fetchRawOperationalData(
     const activeTechAliases: Record<string, string> = customTechAliases || resOverrides?.technicianAliases || {};
 
     // Parse and title-case all fields from raw Google Sheets data (CUADRO DIARIO)
-    const clientToCanonicalLocationMap = new Map<string, CanonicalLocationResult>();
-
     const formattedInstallations: Installation[] = instRaw
         .filter((item: any) => {
             const hasFecha = item.fecha && String(item.fecha).trim() !== "" && String(item.fecha).toUpperCase() !== "FECHA";
             const hasEstatus = item.estatus && String(item.estatus).trim() !== "";
-            const hasClientOrCedula = (item.nombre_cliente && String(item.nombre_cliente).trim() !== "") || (item.cedula && String(item.cedula).trim() !== "");
-            return hasFecha && hasEstatus && hasClientOrCedula;
+            return hasFecha && hasEstatus;
         })
         .map((item: any) => {
             const normAdvisor = normalizeAdvisorName(item.asesor, activeAliases);
@@ -303,30 +239,11 @@ export async function fetchRawOperationalData(
             const normTech1 = normalizeTechnician(item.tecnico_1, activeTechOverrides, activeTechAliases);
             const normTech2 = normalizeTechnician(item.tecnico_2, activeTechOverrides, activeTechAliases);
 
-            // Normalización territorial estricta desde el Padrón del Cuadro Diario
-            const loc = normalizeLocation({
-                sector: item.sector,
-                zona: item.zona,
-                estado: item.estado,
-            });
-
-            // Registrar en el puente determinístico por cédula limpia (solo dígitos)
-            if (item.cedula) {
-                const cleanCed = String(item.cedula).replace(/[^0-9]/g, "");
-                if (cleanCed) {
-                    clientToCanonicalLocationMap.set(cleanCed, loc);
-                }
-            }
-
             return {
                 ...item,
                 mes: formatProperCase(item.mes),
-                zona: loc.zona,
-                sector: loc.sector,
-                subsector: loc.subsector,
-                municipio: loc.municipio,
-                parroquia: loc.parroquia,
-                estado: loc.estado,
+                zona: formatProperCase(item.zona),
+                sector: formatProperCase(item.sector),
                 asesor: normAdvisor,
                 tipo_asesor: advisorType,
                 es_ex_colaborador: isEx,
@@ -345,9 +262,9 @@ export async function fetchRawOperationalData(
     const clientToAdvisorMap = new Map<string, string>();
     formattedInstallations.forEach((inst) => {
         if (inst.cedula && inst.asesor) {
-            const cleanCed = String(inst.cedula).replace(/[^0-9]/g, "");
+            const cleanCed = inst.cedula.trim().toUpperCase();
             const cleanAdv = inst.asesor.trim();
-            if (cleanCed && cleanAdv !== "" && cleanAdv !== "Sin Asesor" && cleanAdv !== "Desconocido" && cleanAdv !== "Planificacion") {
+            if (cleanAdv !== "" && cleanAdv !== "Sin Asesor" && cleanAdv !== "Desconocido" && cleanAdv !== "Planificacion") {
                 clientToAdvisorMap.set(cleanCed, cleanAdv);
             }
         }
@@ -356,10 +273,10 @@ export async function fetchRawOperationalData(
     // Parse and title-case fields from SOLICITUDES
     const formattedSolicitudes: Solicitud[] = solRaw.map((item: any) => {
         let normAdvisor = normalizeAdvisorName(item.asesor, activeAliases);
-        const cleanCed = item.cedula ? String(item.cedula).replace(/[^0-9]/g, "") : "";
 
         // Si el asesor es 'Sin Asesor' o no identificado, intentar recuperar el asesor legítimo por la cédula del cliente en CUADRO DIARIO
-        if ((normAdvisor === "Sin Asesor" || !normAdvisor || normAdvisor.toLowerCase().includes("no identificado")) && cleanCed) {
+        if ((normAdvisor === "Sin Asesor" || !normAdvisor || normAdvisor.toLowerCase().includes("no identificado")) && item.cedula) {
+            const cleanCed = String(item.cedula).trim().toUpperCase();
             if (clientToAdvisorMap.has(cleanCed)) {
                 normAdvisor = clientToAdvisorMap.get(cleanCed)!;
             }
@@ -369,31 +286,11 @@ export async function fetchRawOperationalData(
         const sedeTaquilla = item.sede_taquilla || resolveAdvisorOffice(normAdvisor, activeOverrides);
         const isEx = isAdvisorExCollaborator(normAdvisor, activeOverrides);
 
-        // PUENTE DETERMINÍSTICO POR CÉDULA:
-        // Si el cliente ya fue instalado en CUADRO DIARIO, adoptar el sector y zona oficial validado por el técnico
-        let loc: CanonicalLocationResult;
-        if (cleanCed && clientToCanonicalLocationMap.has(cleanCed)) {
-            loc = clientToCanonicalLocationMap.get(cleanCed)!;
-        } else {
-            loc = normalizeLocation({
-                sector: item.sector,
-                ubicacion: item.ubicacion,
-                zona: item.zona,
-                parroquia: item.parroquia,
-                municipio: item.municipio,
-                estado: item.estado,
-            });
-        }
-
         return {
             ...item,
             mes: formatProperCase(item.mes),
-            zona: loc.zona,
-            sector: loc.sector,
-            subsector: loc.subsector,
-            municipio: loc.municipio,
-            parroquia: loc.parroquia,
-            estado: loc.estado,
+            zona: formatProperCase(item.zona),
+            sector: formatProperCase(item.sector),
             asesor: normAdvisor,
             tipo_asesor: advisorType,
             es_ex_colaborador: isEx,
@@ -402,14 +299,10 @@ export async function fetchRawOperationalData(
             fuente: item.fuente || "",
             estatus: formatProperCase(item.estatus),
             plan: formatProperCase(item.plan),
+            estado: formatProperCase(item.estado),
+            municipio: formatProperCase(item.municipio),
         };
     });
-
-    clientCachedProcessedOps = {
-        installations: formattedInstallations,
-        solicitudes: formattedSolicitudes,
-        timestamp: now,
-    };
 
     return {
         installations: formattedInstallations,
@@ -794,15 +687,12 @@ export interface PlanificacionRecord {
     mes: string;
     asesor: string;
     sector: string;
-    subsector?: string;
     estatus: string;
     estado: string;
     zona?: string;
     servicio?: string;
     oficina?: string;
     municipio?: string;
-    parroquia?: string;
-    tipo_actividad?: string;
     power_go?: string;
     plan?: string;
     tipo_asesor?: AdvisorType;
@@ -822,45 +712,20 @@ export async function fetchPlanificacionData(forceRefresh = false): Promise<Plan
         return clientCachedPlanificacion.data;
     }
 
-    // Try reading from localStorage for instant retrieval on client
-    if (!forceRefresh && typeof window !== "undefined") {
-        try {
-            const rawStored = localStorage.getItem(LOCAL_STORAGE_PLAN_KEY);
-            if (rawStored) {
-                const parsed = JSON.parse(rawStored);
-                if (parsed && Array.isArray(parsed.data) && parsed.data.length > 0 && (now - (parsed.timestamp || 0) < CLIENT_CACHE_TTL)) {
-                    clientCachedPlanificacion = {
-                        data: parsed.data,
-                        timestamp: parsed.timestamp || now,
-                    };
-                    // Silently revalidate in background if older than 3 minutes
-                    if (now - (parsed.timestamp || 0) > 3 * 60 * 1000) {
-                        setTimeout(() => fetchPlanificacionData(true).catch(() => {}), 150);
-                    }
-                    return parsed.data;
-                }
-            }
-        } catch (_) {}
-    }
-
     try {
         const refreshParam = forceRefresh ? "&refresh=true" : "";
         const url = `/api/sheets?spreadsheetId=${PLANIFICACION_SPREADSHEET_ID}&sheetName=${encodeURIComponent(PLANIFICACION_SHEET_NAME)}${refreshParam}`;
-        
-        // Fetch planning sheet and advisor configuration concurrently in parallel
-        const [res, configRes] = await Promise.all([
-            fetch(url),
-            fetch(`/api/advisors/config?t=${Date.now()}`, {
-                cache: "no-store",
-                headers: { "Cache-Control": "no-cache" }
-            }).then(r => r.json()).catch(() => null),
-        ]);
-
-        const json = res.ok ? await res.json().catch(() => ({ success: false, data: [] })) : { success: false, data: [] };
+        const res = await fetch(url);
+        const json = await res.json();
 
         if (!json.success || !Array.isArray(json.data)) {
             return [];
         }
+
+        const configRes = await fetch(`/api/advisors/config?t=${Date.now()}`, {
+            cache: "no-store",
+            headers: { "Cache-Control": "no-cache" }
+        }).then(r => r.json()).catch(() => null);
 
         const overrides: AdvisorOverridesMap = configRes?.overrides || {};
         const aliases: Record<string, string> = configRes?.aliases || {};
@@ -877,32 +742,20 @@ export async function fetchPlanificacionData(forceRefresh = false): Promise<Plan
                 const sedeTaquilla = resolveAdvisorOffice(normAdvisor, overrides);
                 const isEx = isAdvisorExCollaborator(normAdvisor, overrides);
 
-                // Normalización territorial estricta hacia el Padrón Oficial del Cuadro Diario
-                const loc = normalizeLocation({
-                    sector: item.sector,
-                    zona: item.zona,
-                    parroquia: item.parroquia,
-                    municipio: item.municipio,
-                    estado: item.estado,
-                });
-
                 return {
                     id: item.id,
                     fecha: item.fecha,
                     mes: formatProperCase(item.mes),
                     asesor: normAdvisor,
-                    sector: loc.sector,
-                    subsector: loc.subsector,
+                    sector: formatProperCase(item.sector),
                     estatus: formatProperCase(item.estatus || "Planificado"),
-                    estado: loc.estado,
-                    zona: loc.zona,
+                    estado: formatProperCase(item.estado || "N/A"),
+                    zona: formatProperCase(item.zona || ""),
                     servicio: formatProperCase(item.servicio || "Residencial"),
                     oficina: formatProperCase(item.oficina || ""),
-                    municipio: loc.municipio,
+                    municipio: formatProperCase(item.municipio || item.oficina || ""),
                     power_go: item.power_go || "NO",
                     plan: formatProperCase(item.plan || ""),
-                    parroquia: loc.parroquia,
-                    tipo_actividad: formatProperCase(item.tipo_actividad || item.plan || "Recorrido"),
                     tipo_asesor: advisorType,
                     es_ex_colaborador: isEx,
                     sede_taquilla: sedeTaquilla,
@@ -914,15 +767,6 @@ export async function fetchPlanificacionData(forceRefresh = false): Promise<Plan
             data: formatted,
             timestamp: now,
         };
-
-        if (typeof window !== "undefined") {
-            try {
-                localStorage.setItem(LOCAL_STORAGE_PLAN_KEY, JSON.stringify({
-                    data: formatted,
-                    timestamp: now,
-                }));
-            } catch (_) {}
-        }
 
         return formatted;
     } catch (err) {

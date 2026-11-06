@@ -286,7 +286,8 @@ export function SalesTrendBarChart({
         <DayByDayComparisonCard
           installations={installations}
           solicitudes={solicitudes}
-          defaultMonthB={selectedMonth}
+          defaultMonthA="Septiembre"
+          defaultMonthB={selectedMonth || "Octubre"}
           onSelectDate={onSelectDate}
           selectedDate={selectedDate}
           className="p-0"

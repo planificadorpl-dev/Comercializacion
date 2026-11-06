@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
-import { ChevronLeft, Plus, X, MapPin, ChevronRight, RotateCw, Search } from "lucide-react";
+import { ChevronLeft, Plus, X, MapPin, ChevronRight, RotateCw } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { SidebarOpenButton, SidebarMobileButton } from "@/components/providers/sidebar-provider";
 import { CustomDropdown } from "@/components/ui/custom-dropdown";
@@ -11,7 +11,6 @@ import { ToastPill } from "@/components/ui/toast-pill";
 import { createClient } from "@/lib/supabase/client";
 import { addGeodata, deleteGeodata, syncGeodataFromSheets } from "@/app/actions/ventas";
 import { geoHierarchy as defaultGeoHierarchy } from "@/lib/geo_hierarchy";
-import { DEFAULT_GEO_ALIASES, CANONICAL_ZONES_CONFIG } from "@/lib/geo_normalization";
 import { cn } from "@/lib/utils";
 
 // Client module-level cache for instant transitions
@@ -22,8 +21,6 @@ function GeodataAdminContent() {
   const [geodata, setGeodata] = useState<any[]>(() => cachedGeodata);
   const [loading, setLoading] = useState(!hasLoadedGeodata);
   const [syncingSheets, setSyncingSheets] = useState(false);
-  const [activeTab, setActiveTab] = useState<"padron" | "homologacion">("padron");
-  const [aliasSearch, setAliasSearch] = useState("");
 
   // Active navigation
   const [selectedEstado, setSelectedEstado] = useState("Miranda");
@@ -205,31 +202,6 @@ function GeodataAdminContent() {
     }
   };
 
-  const aliasList = useMemo(() => {
-    const list = Object.entries(DEFAULT_GEO_ALIASES).map(([rawKey, target]) => {
-      const zConfig = CANONICAL_ZONES_CONFIG[target.canonicalZone];
-      return {
-        key: rawKey,
-        targetSector: target.canonicalSector,
-        targetZone: target.canonicalZone,
-        parroquia: target.parroquiaOverride || zConfig?.parroquiasMap?.[target.canonicalSector] || zConfig?.parroquiaDefault || "General",
-        municipio: zConfig?.municipio || "General",
-        estado: zConfig?.estado || "Miranda",
-      };
-    });
-
-    if (!aliasSearch.trim()) return list;
-    const term = aliasSearch.trim().toUpperCase();
-    return list.filter((a) => {
-      return (
-        a.key.includes(term) ||
-        a.targetSector.toUpperCase().includes(term) ||
-        a.targetZone.toUpperCase().includes(term) ||
-        a.parroquia.toUpperCase().includes(term)
-      );
-    });
-  }, [aliasSearch]);
-
   return (
     <div className="flex min-h-screen bg-[#FDFDFD] text-neutral-900 font-sans antialiased selection:bg-neutral-900 selection:text-white">
       <Sidebar activeSection="admin" />
@@ -259,211 +231,119 @@ function GeodataAdminContent() {
 
         {/* Content */}
         <div className="p-4 sm:p-6 max-w-4xl w-full mx-auto space-y-6">
-          {/* Sub-tab Switcher: Padrón Oficial vs Homologación de Variantes */}
-          <div className="flex items-center gap-3 border-b border-neutral-100 pb-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setActiveTab("padron")}
-              className={cn(
-                "cursor-pointer transition-colors py-1 whitespace-nowrap",
-                activeTab === "padron"
-                  ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
-                  : "text-neutral-400 hover:text-neutral-700"
-              )}
-            >
-              Padrón oficial ({geodata.length} sectores)
-            </button>
-            <span className="text-neutral-300">·</span>
-            <button
-              type="button"
-              onClick={() => setActiveTab("homologacion")}
-              className={cn(
-                "cursor-pointer transition-colors py-1 whitespace-nowrap",
-                activeTab === "homologacion"
-                  ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
-                  : "text-neutral-400 hover:text-neutral-700"
-              )}
-            >
-              Homologación de variantes ({aliasList.length} alias activos)
-            </button>
+          {/* Breadcrumb Filter Cascade */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-4 border-b border-neutral-200 text-xs">
+            <div className="space-y-1">
+              <label className="text-[11px] text-neutral-400 block">1. Estado</label>
+              <CustomDropdown
+                value={selectedEstado}
+                options={estadosList}
+                onChange={(val) => {
+                  setSelectedEstado(val);
+                  setSelectedMunicipio("");
+                  setSelectedParroquia("");
+                }}
+                compact
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] text-neutral-400 block">2. Municipio</label>
+              <CustomDropdown
+                value={selectedMunicipio}
+                options={municipiosList}
+                onChange={(val) => {
+                  setSelectedMunicipio(val);
+                  setSelectedParroquia("");
+                }}
+                compact
+                disabled={municipiosList.length === 0}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] text-neutral-400 block">3. Parroquia</label>
+              <CustomDropdown
+                value={selectedParroquia}
+                options={parroquiasList}
+                onChange={setSelectedParroquia}
+                compact
+                disabled={parroquiasList.length === 0}
+              />
+            </div>
           </div>
 
-          {activeTab === "padron" ? (
-            <>
-              {/* Breadcrumb Filter Cascade */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-4 border-b border-neutral-200 text-xs">
-                <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-400 block">1. Estado</label>
-                  <CustomDropdown
-                    value={selectedEstado}
-                    options={estadosList}
-                    onChange={(val) => {
-                      setSelectedEstado(val);
-                      setSelectedMunicipio("");
-                      setSelectedParroquia("");
-                    }}
-                    compact
-                  />
-                </div>
+          {/* Sectores List */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-neutral-500 font-medium">
+                Sectores en {selectedParroquia || "la zona"} ({sectoresList.length})
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSyncSheets}
+                  disabled={syncingSheets || loading}
+                  className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40 select-none"
+                  title="Sincronizar sectores con Google Sheets"
+                  aria-label="Sincronizar sectores con Google Sheets"
+                >
+                  <RotateCw className={cn("w-4 h-4 stroke-[1.75]", syncingSheets && "animate-spin text-neutral-900")} />
+                </button>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-400 block">2. Municipio</label>
-                  <CustomDropdown
-                    value={selectedMunicipio}
-                    options={municipiosList}
-                    onChange={(val) => {
-                      setSelectedMunicipio(val);
-                      setSelectedParroquia("");
-                    }}
-                    compact
-                    disabled={municipiosList.length === 0}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-400 block">3. Parroquia</label>
-                  <CustomDropdown
-                    value={selectedParroquia}
-                    options={parroquiasList}
-                    onChange={setSelectedParroquia}
-                    compact
-                    disabled={parroquiasList.length === 0}
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(true)}
+                  disabled={!selectedParroquia}
+                  className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40 select-none"
+                  title="Añadir nuevo sector"
+                  aria-label="Añadir nuevo sector"
+                >
+                  <Plus className="w-4 h-4 stroke-[2]" />
+                </button>
               </div>
+            </div>
 
-              {/* Sectores List */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-500 font-medium">
-                    Sectores en {selectedParroquia || "la zona"} ({sectoresList.length})
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSyncSheets}
-                      disabled={syncingSheets || loading}
-                      className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40 select-none"
-                      title="Sincronizar sectores con Google Sheets"
-                      aria-label="Sincronizar sectores con Google Sheets"
-                    >
-                      <RotateCw className={cn("w-4 h-4 stroke-[1.75]", syncingSheets && "animate-spin text-neutral-900")} />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsAddModalOpen(true)}
-                      disabled={!selectedParroquia}
-                      className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40 select-none"
-                      title="Añadir nuevo sector"
-                      aria-label="Añadir nuevo sector"
-                    >
-                      <Plus className="w-4 h-4 stroke-[2]" />
-                    </button>
-                  </div>
-                </div>
-
-                {loading ? (
-                  <div className="py-16 text-center text-xs text-neutral-400">
-                    Cargando localidades...
-                  </div>
-                ) : sectoresList.length === 0 ? (
-                  <div className="py-16 text-center text-xs text-neutral-400 space-y-2">
-                    <p>No hay sectores registrados en esta parroquia.</p>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddModalOpen(true)}
-                      className="text-neutral-900 hover:text-neutral-600 font-semibold cursor-pointer"
-                    >
-                      Añadir primer sector
-                    </button>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-neutral-100 border-b border-neutral-100">
-                    {sectoresList.map((item) => (
-                      <div
-                        key={item.id}
-                        className="group p-3 flex items-center justify-between hover:bg-neutral-50/60 transition-colors text-xs"
-                      >
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                          <span className="font-medium text-neutral-900">{item.sector}</span>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setItemToDelete(item)}
-                          className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-150 text-neutral-400 hover:text-neutral-900 cursor-pointer p-1"
-                          title="Eliminar sector"
-                        >
-                          <X className="w-3.5 h-3.5 stroke-[1.5]" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            {loading ? (
+              <div className="py-16 text-center text-xs text-neutral-400">
+                Cargando localidades...
               </div>
-            </>
-          ) : (
-            <div className="space-y-4 text-xs">
-              {/* Buscador de Alias y Variantes */}
-              <div className="flex items-center justify-between gap-4 pb-2 border-b border-neutral-100">
-                <div className="flex items-center gap-2 flex-1 max-w-md border-b border-neutral-200 focus-within:border-neutral-900 transition-colors py-1">
-                  <Search className="w-3.5 h-3.5 text-neutral-400 stroke-[1.25]" />
-                  <input
-                    type="text"
-                    value={aliasSearch}
-                    onChange={(e) => setAliasSearch(e.target.value)}
-                    placeholder="Buscar variante o sector canónico..."
-                    className="w-full bg-transparent text-xs text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
-                  />
-                  {aliasSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setAliasSearch("")}
-                      className="text-neutral-400 hover:text-neutral-900 transition-colors p-0.5 cursor-pointer"
-                    >
-                      <X className="w-3 h-3 stroke-[1.5]" />
-                    </button>
-                  )}
-                </div>
-                <span className="text-[11px] text-neutral-400 font-mono">
-                  {aliasList.length} reglas activas
-                </span>
+            ) : sectoresList.length === 0 ? (
+              <div className="py-16 text-center text-xs text-neutral-400 space-y-2">
+                <p>No hay sectores registrados en esta parroquia.</p>
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="text-neutral-900 hover:text-neutral-600 font-semibold cursor-pointer"
+                >
+                  Añadir primer sector
+                </button>
               </div>
-
-              {/* Lista de Alias y Mapeos Canónicos */}
+            ) : (
               <div className="divide-y divide-neutral-100 border-b border-neutral-100">
-                {aliasList.map((a) => (
+                {sectoresList.map((item) => (
                   <div
-                    key={a.key}
-                    className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-neutral-50/60 transition-colors"
+                    key={item.id}
+                    className="group p-3 flex items-center justify-between hover:bg-neutral-50/60 transition-colors text-xs"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-mono text-neutral-500 text-[11px]">
-                        "{a.key}"
-                      </span>
-                      <span className="text-neutral-300">→</span>
-                      <span className="font-semibold text-neutral-900 truncate">
-                        {a.targetSector}
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                      <span className="font-medium text-neutral-900">{item.sector}</span>
                     </div>
 
-                    <div className="flex items-center gap-3 text-[11px] text-neutral-400 font-mono shrink-0">
-                      <span>{a.parroquia}</span>
-                      <span>·</span>
-                      <span>{a.municipio}</span>
-                      <span>·</span>
-                      <span className="text-neutral-600">{a.estado}</span>
-                      <span className="text-neutral-700 font-sans text-[10px]">
-                        ✓ Canónico
-                      </span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setItemToDelete(item)}
+                      className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-150 text-neutral-400 hover:text-neutral-900 cursor-pointer p-1"
+                      title="Eliminar sector"
+                    >
+                      <X className="w-3.5 h-3.5 stroke-[1.5]" />
+                    </button>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </main>
 

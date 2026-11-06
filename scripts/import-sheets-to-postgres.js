@@ -51,12 +51,9 @@ const DATABASE_URL =
 const SPREADSHEET_ID =
   process.env.SPREADSHEET_ID || "1UZvhPyYhw8NV-_wwPESWQiGfqnwkASABr4JSBPRJoUw";
 
-const isLocalhost = DATABASE_URL.includes("localhost") || DATABASE_URL.includes("127.0.0.1");
-
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: isLocalhost ? false : { rejectUnauthorized: false },
-  connectionTimeoutMillis: 15000,
+  connectionTimeoutMillis: 7000,
 });
 
 async function getSheetsClient() {

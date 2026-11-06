@@ -44,6 +44,21 @@
     "updatedBy": "sistema"
   },
   {
+    "id": "factibilidad",
+    "name": "Factibilidad de Campo",
+    "route": "/factibilidad",
+    "short": "FC",
+    "description": "Mapa Carto con visualización de cajas NAP, mangas y puertos libres vía OZmap.",
+    "category": "Operaciones de Campo",
+    "targetRoles": [
+      "asesor",
+      "supervisor",
+      "impulsador"
+    ],
+    "enabledForUsers": true,
+    "updatedAt": "2026-11-06T17:30:15.446Z"
+  },
+  {
     "id": "actividades",
     "name": "Registro de Actividades",
     "route": "/actividades",

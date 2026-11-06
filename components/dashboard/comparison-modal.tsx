@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { X, ArrowLeftRight, Calendar, Users, Wrench, MapPin, Check, Sparkles } from "lucide-react";
 import { cn, formatNumber, formatProperCase } from "@/lib/utils";
-import { Installation, Solicitud, MONTH_ORDER } from "@/lib/dashboard-data";
+import { Installation, Solicitud } from "@/lib/dashboard-data";
 import {
   compareMonthsMTD,
   compareAdvisors,
@@ -44,12 +44,8 @@ export function ComparisonModal({
     return options.months.filter(Boolean);
   }, [options.months]);
 
-  const currentIdx = new Date().getMonth();
-  const defaultMonthA = MONTH_ORDER[currentIdx] || "Noviembre";
-  const defaultMonthB = currentIdx > 0 ? MONTH_ORDER[currentIdx - 1] : "Octubre";
-
-  const [monthA, setMonthA] = useState<string>(defaultMonthA);
-  const [monthB, setMonthB] = useState<string>(defaultMonthB);
+  const [monthA, setMonthA] = useState<string>("Octubre");
+  const [monthB, setMonthB] = useState<string>("Septiembre");
   const [useMTD, setUseMTD] = useState<boolean>(true);
 
   // Tab 2 state: Advisor vs Advisor

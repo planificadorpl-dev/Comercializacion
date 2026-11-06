@@ -1,53 +1,33 @@
-import { Pool, PoolClient, PoolConfig } from "pg";
+import { Pool, PoolClient } from "pg";
 
 /**
- * PostgreSQL Client and Connection Pool for Vercel Serverless & Supabase Cloud.
+ * Native PostgreSQL Client and Connection Pool for Corporate Intranet.
  * Configured via process.env.DATABASE_URL.
  */
 
-declare global {
-  var __pgPool: Pool | undefined;
-}
+let poolInstance: Pool | null = null;
 
 export function isDatabaseConfigured(): boolean {
-  return Boolean(
-    (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== "") ||
-    (process.env.POSTGRES_URL && process.env.POSTGRES_URL.trim() !== "")
-  );
+  return Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== "");
 }
 
 export function getPool(): Pool {
-  if (globalThis.__pgPool) {
-    return globalThis.__pgPool;
+  if (!poolInstance) {
+    const connectionString =
+      process.env.DATABASE_URL ||
+      "postgresql://postgres:postgres@localhost:5432/ventas_intranet";
+
+    poolInstance = new Pool({
+      connectionString,
+      max: 20, // Max clients in pool
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 6000,
+    });
+
+    poolInstance.on("error", (err) => {
+      console.error("Error inesperado en cliente idle de PostgreSQL:", err);
+    });
   }
-
-  const connectionString =
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
-    "postgresql://postgres:postgres@localhost:5432/ventas_intranet";
-
-  const isLocalhost =
-    connectionString.includes("localhost") ||
-    connectionString.includes("127.0.0.1");
-
-  const poolConfig: PoolConfig = {
-    connectionString,
-    // Supabase and cloud PostgreSQL require SSL
-    ssl: isLocalhost ? false : { rejectUnauthorized: false },
-    // Optimized for Vercel serverless functions and Supabase pooler
-    max: process.env.NODE_ENV === "production" ? 10 : 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
-    statement_timeout: 8000, // Prevent serverless queries from hanging indefinitely
-  };
-
-  const poolInstance = new Pool(poolConfig);
-
-  poolInstance.on("error", (err) => {
-    console.error("Error inesperado en cliente idle de PostgreSQL / Supabase:", err);
-  });
-
-  globalThis.__pgPool = poolInstance;
   return poolInstance;
 }
 

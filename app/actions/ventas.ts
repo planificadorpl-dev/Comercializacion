@@ -6,8 +6,6 @@ import { revalidatePath } from "next/cache";
 import { getSheetsClient } from "@/app/lib/googleAuth";
 import { geoHierarchy as fallbackGeoHierarchy } from "@/lib/geo_hierarchy";
 import { formatProperCase } from "@/lib/utils";
-import { getCurrentSpanishMonth } from "@/lib/dashboard-data";
-import { normalizeLocation, isValidGeoName } from "@/lib/geo_normalization";
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -39,11 +37,10 @@ export async function getVentasConfig() {
     if (geodataRows && geodataRows.length > 0) {
       const geoHierarchy: Record<string, Record<string, Record<string, string[]>>> = {};
       geodataRows.forEach((row: any) => {
-        const e = formatProperCase(row.estado);
-        const m = formatProperCase(row.municipio);
-        const p = formatProperCase(row.parroquia);
-        const s = formatProperCase(row.sector);
-        if (!isValidGeoName(e) || !isValidGeoName(m) || !isValidGeoName(p) || !isValidGeoName(s)) return;
+        const e = row.estado || "N/A";
+        const m = row.municipio || "N/A";
+        const p = row.parroquia || "N/A";
+        const s = row.sector || "N/A";
         if (!geoHierarchy[e]) geoHierarchy[e] = {};
         if (!geoHierarchy[e][m]) geoHierarchy[e][m] = {};
         if (!geoHierarchy[e][m][p]) geoHierarchy[e][m][p] = [];
@@ -79,11 +76,10 @@ export async function getVentasConfig() {
 
     if (geodataRes.data && geodataRes.data.length > 0) {
       geodataRes.data.forEach((row: any) => {
-        const e = formatProperCase(row.estado);
-        const m = formatProperCase(row.municipio);
-        const p = formatProperCase(row.parroquia);
-        const s = formatProperCase(row.sector);
-        if (!isValidGeoName(e) || !isValidGeoName(m) || !isValidGeoName(p) || !isValidGeoName(s)) return;
+        const e = row.estado || "N/A";
+        const m = row.municipio || "N/A";
+        const p = row.parroquia || "N/A";
+        const s = row.sector || "N/A";
         if (!geoHierarchy[e]) geoHierarchy[e] = {};
         if (!geoHierarchy[e][m]) geoHierarchy[e][m] = {};
         if (!geoHierarchy[e][m][p]) geoHierarchy[e][m][p] = [];
@@ -178,47 +174,49 @@ export async function syncGeodataFromSheets(): Promise<{
       });
     }
 
-    // 2. Leer hoja de Cuadro Diario (Padrón Maestro de Sectores Oficiales)
-    const cuadroDiarioSpreadsheetId = "1rAV3gl6BWKRnXuC8IO6e7r2yPaEnWmuAOW_gyic5RiQ";
-    const cdRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: cuadroDiarioSpreadsheetId,
-      range: "CUADRO DIARIO!A2:L",
+    // 2. Leer hoja de Planificación
+    const planSpreadsheetId = "1_PzDJLZ8jnPTZq9PgQMLfomwBwles8XOd8RD5Ksko2Y";
+    const planRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: planSpreadsheetId,
+      range: "Data!A:G",
     });
 
-    const rows = cdRes.data.values || [];
+    const rows = planRes.data.values || [];
     if (rows.length < 2) {
       return {
         success: true,
         importedCount: 0,
         totalFound: 0,
-        message: "No se encontraron filas de sectores en el Cuadro Diario.",
+        message: "No se encontraron filas de sectores en la hoja de planificación.",
       };
     }
+
+    const header = rows[0].map((h: string) => (h || "").trim().toLowerCase());
+    const estIdx = header.findIndex((h: string) => h.includes("estado"));
+    const munIdx = header.findIndex((h: string) => h.includes("municipio") || h.includes("oficina"));
+    const parIdx = header.findIndex((h: string) => h.includes("parroquia"));
+    const secIdx = header.findIndex((h: string) => h.includes("sector"));
 
     const newRowsToInsert: Array<{ estado: string; municipio: string; parroquia: string; sector: string }> = [];
     const pendingSet = new Set<string>();
 
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      const rawZona = row[10] ? String(row[10]).trim() : "";
-      const rawSector = row[11] ? String(row[11]).trim() : "";
-      if (!rawSector || !isValidGeoName(rawSector) || rawSector.toUpperCase() === "SECTOR") continue;
+      const sector = secIdx !== -1 && row[secIdx] ? String(row[secIdx]).trim() : "";
+      if (!sector || sector.toUpperCase() === "N/A" || sector.toUpperCase() === "SECTOR") continue;
 
-      const loc = normalizeLocation({
-        sector: rawSector,
-        zona: rawZona,
-      });
+      const estado = estIdx !== -1 && row[estIdx] ? String(row[estIdx]).trim() : "Miranda";
+      const municipio = munIdx !== -1 && row[munIdx] ? String(row[munIdx]).trim() : "General";
+      const parroquia = parIdx !== -1 && row[parIdx] ? String(row[parIdx]).trim() : "General";
 
-      if (!isValidGeoName(loc.sector) || !isValidGeoName(loc.municipio) || !isValidGeoName(loc.estado)) continue;
-
-      const dedupeKey = `${loc.estado.toLowerCase()}|${loc.municipio.toLowerCase()}|${loc.parroquia.toLowerCase()}|${loc.sector.toLowerCase()}`;
+      const dedupeKey = `${estado.toLowerCase()}|${municipio.toLowerCase()}|${parroquia.toLowerCase()}|${sector.toLowerCase()}`;
       if (!existingSet.has(dedupeKey) && !pendingSet.has(dedupeKey)) {
         pendingSet.add(dedupeKey);
         newRowsToInsert.push({
-          estado: loc.estado,
-          municipio: loc.municipio,
-          parroquia: loc.parroquia,
-          sector: loc.sector,
+          estado: formatProperCase(estado),
+          municipio: formatProperCase(municipio),
+          parroquia: formatProperCase(parroquia),
+          sector: formatProperCase(sector),
         });
       }
     }
@@ -246,8 +244,8 @@ export async function syncGeodataFromSheets(): Promise<{
       totalFound: rows.length - 1,
       message:
         insertedCount > 0
-          ? `Se importaron ${insertedCount} sectores oficiales desde el Cuadro Diario.`
-          : "Todos los sectores del Cuadro Diario ya están sincronizados en PostgreSQL.",
+          ? `Se importaron ${insertedCount} sectores nuevos en PostgreSQL.`
+          : "Todos los sectores de Google Sheets ya están sincronizados en PostgreSQL.",
     };
   } catch (error: any) {
     console.error("Error en syncGeodataFromSheets:", error);
@@ -568,60 +566,31 @@ export async function getSolicitudes(filters?: {
 }
 
 export async function saveSolicitud(solicitud: any) {
-  // Normalize fields
-  const fechaSol = solicitud.fecha_solicitud || new Date().toISOString();
-  const nombreComp = solicitud.nombre_cliente || `${solicitud.nombres || ""} ${solicitud.apellidos || ""}`.trim();
-  const telPrinc = solicitud.telefono_principal || solicitud.telefono || null;
-  const telSec = solicitud.telefono_secundario || null;
-  const isPowerGo = solicitud.power_go === true || String(solicitud.power_go).toUpperCase() === "SI";
-  const mes = solicitud.mes || getCurrentSpanishMonth();
-
   // 1. PostgreSQL
   try {
     const row = await queryRow(
       `INSERT INTO public.solicitudes (
-         fecha_solicitud, fecha_disponibilidad, fecha_nacimiento,
-         nombres, apellidos, nombre_cliente, cedula, genero,
-         telefono_principal, telefono_secundario, telefono, correo,
-         direccion, ubicacion, estado, municipio, parroquia, sector,
-         tipo_servicio, plan, tipo_operacion, promotor, asesor_normalizado,
-         contrato_anterior, power_go, fuente, observaciones, estatus, mes, created_at
-       ) VALUES (
-         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-         $21, $22, $23, $24, $25, $26, $27, $28, $29, NOW()
-       )
+         fecha_solicitud, promotor, fuente, nombres, apellidos, cedula,
+         telefono, plan, estado, municipio, parroquia, sector, estatus,
+         tipo_operacion, power_go, created_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
        RETURNING *`,
       [
-        fechaSol,
-        solicitud.fecha_disponibilidad || null,
-        solicitud.fecha_nacimiento || null,
+        solicitud.fecha_solicitud || new Date().toISOString(),
+        solicitud.promotor || null,
+        solicitud.fuente || null,
         solicitud.nombres || null,
         solicitud.apellidos || null,
-        nombreComp || null,
         solicitud.cedula || null,
-        solicitud.genero || "No especificado",
-        telPrinc,
-        telSec,
-        telPrinc,
-        solicitud.correo || null,
-        solicitud.direccion || null,
-        solicitud.ubicacion || solicitud.direccion || null,
+        solicitud.telefono || null,
+        solicitud.plan || null,
         solicitud.estado || null,
         solicitud.municipio || null,
         solicitud.parroquia || null,
         solicitud.sector || null,
-        solicitud.tipo_servicio || "Domiciliario",
-        solicitud.plan || null,
-        solicitud.tipo_operacion || "Instalación",
-        solicitud.promotor || null,
-        solicitud.asesor_normalizado || solicitud.promotor || null,
-        solicitud.contrato_anterior || "NO",
-        isPowerGo,
-        solicitud.fuente || null,
-        solicitud.observaciones || null,
         solicitud.estatus || "Pendiente",
-        mes,
+        solicitud.tipo_operacion || "Instalación",
+        solicitud.power_go || "NO",
       ]
     );
     if (row) return row;
@@ -631,20 +600,9 @@ export async function saveSolicitud(solicitud: any) {
 
   // 2. Supabase fallback
   const supabase = await createClient();
-  const supabasePayload = {
-    ...solicitud,
-    fecha_solicitud: fechaSol,
-    nombre_cliente: nombreComp,
-    telefono_principal: telPrinc,
-    telefono_secundario: telSec,
-    telefono: telPrinc,
-    power_go: isPowerGo,
-    contrato_anterior: solicitud.contrato_anterior || "NO",
-    mes,
-  };
   const { data, error } = await supabase
     .from("solicitudes")
-    .insert([supabasePayload])
+    .insert([solicitud])
     .select()
     .single();
 

@@ -42,12 +42,9 @@ const DATABASE_URL =
   process.env.DATABASE_URL ||
   "postgresql://postgres:Jmlr25531617+-@localhost:5432/ventas_intranet";
 
-const isLocalhost = DATABASE_URL.includes("localhost") || DATABASE_URL.includes("127.0.0.1");
-
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: isLocalhost ? false : { rejectUnauthorized: false },
-  connectionTimeoutMillis: 15000,
+  connectionTimeoutMillis: 10000,
 });
 
 async function getSheetsClient() {

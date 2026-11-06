@@ -43,6 +43,7 @@ const DEFAULT_NAV_GROUPS: NavGroup[] = [
     items: [
       { id: "actividades", label: "Registro de Actividades", short: "RA", href: "/actividades", badge: null },
       { id: "solicitudes", label: "Solicitudes de Servicio", short: "SS", href: "/solicitudes", badge: null },
+      { id: "factibilidad", label: "Factibilidad", short: "FC", href: "/factibilidad", badge: null },
       { id: "competencia", label: "Estudio de Mercado", short: "EM", href: "/competencia", badge: null },
     ],
   },

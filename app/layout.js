@@ -14,12 +14,8 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata = {
-  title: "Comercialización",
-  description: "Panel de control para monitoreo y análisis de rendimiento de comercialización con datos sincronizados en tiempo real",
-  icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg",
-  },
+  title: "Buildly - Rendimiento Operativo y Comercial",
+  description: "Panel de control para monitoreo y análisis de rendimiento operativo y comercial con datos sincronizados en tiempo real",
 };
 
 export const viewport = {
