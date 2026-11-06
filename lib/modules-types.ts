@@ -69,4 +69,15 @@ export const DEFAULT_SYSTEM_MODULES: SystemModule[] = [
     enabledForUsers: true,
     updatedAt: new Date().toISOString(),
   },
+  {
+    id: "factibilidad",
+    name: "Factibilidad",
+    route: "/factibilidad",
+    short: "FC",
+    description: "Consulta de factibilidad técnica, cobertura y puertos de cajas NAP en tiempo real vía OZmap.",
+    category: "Operaciones de Campo",
+    targetRoles: ["asesor", "supervisor", "impulsador"],
+    enabledForUsers: true,
+    updatedAt: new Date().toISOString(),
+  },
 ];
