@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   Compass,
+  MapPin,
   Plus,
   BarChart2,
 } from "lucide-react";
@@ -55,6 +56,7 @@ export function MobileBottomNav() {
       router.prefetch("/evaluaciones/rendimiento");
       router.prefetch("/actividades");
       router.prefetch("/solicitudes");
+      router.prefetch("/factibilidad");
       router.prefetch("/competencia");
     } catch {}
   }, [router]);
@@ -102,6 +104,13 @@ export function MobileBottomNav() {
       icon: Send,
     },
     {
+      id: "factibilidad",
+      href: "/factibilidad",
+      label: "Factibilidad",
+      desc: "Mapa de cajas NAP y puertos",
+      icon: MapPin,
+    },
+    {
       id: "competencia",
       href: "/competencia",
       label: "Estudio de Mercado",
@@ -119,6 +128,7 @@ export function MobileBottomNav() {
   const isFieldRouteActive =
     pathname.startsWith("/actividades") ||
     pathname.startsWith("/solicitudes") ||
+    pathname.startsWith("/factibilidad") ||
     pathname.startsWith("/competencia");
 
   return (
