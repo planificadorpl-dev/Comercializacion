@@ -191,3 +191,77 @@
     display: none !important;
   }
 }
+
+/* ==========================================================================
+   Leaflet Map Styles (Factibilidad) - Statically Loaded to Prevent Flickering
+   ========================================================================== */
+.leaflet-container {
+  background-color: #f8fafc !important;
+  outline: none;
+}
+
+.map-tiles-carto-light {
+  filter: grayscale(88%) contrast(1.08) brightness(1.02) !important;
+}
+
+.map-tiles-carto-dark {
+  filter: invert(100%) hue-rotate(180deg) brightness(82%) contrast(115%) grayscale(30%) !important;
+}
+
+.map-tiles-satellite {
+  filter: saturate(1.1) contrast(1.05) !important;
+}
+
+.carto-tooltip-dark {
+  background: #171717 !important;
+  border: 1px solid #262626 !important;
+  color: #fafafa !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+  padding: 6px 9px !important;
+  border-radius: 4px !important;
+}
+.carto-tooltip-dark .leaflet-tooltip-tip {
+  background: #171717 !important;
+}
+
+.carto-tooltip-light {
+  background: #ffffff !important;
+  border: 1px solid #e5e5e5 !important;
+  color: #171717 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08) !important;
+  padding: 6px 9px !important;
+  border-radius: 4px !important;
+}
+.carto-tooltip-light .leaflet-tooltip-tip {
+  background: #ffffff !important;
+}
+
+.client-pin-tooltip {
+  background: #8b5cf6 !important;
+  border: none !important;
+  color: #ffffff !important;
+  font-family: system-ui, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 3px 8px !important;
+  border-radius: 4px !important;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4) !important;
+}
+.client-pin-tooltip .leaflet-tooltip-tip {
+  background: #8b5cf6 !important;
+}
+
+.feasibility-dist-badge {
+  background: #171717 !important;
+  color: #ffffff !important;
+  border: 1px solid #333333 !important;
+  font-family: monospace !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+}
+.feasibility-dist-badge .leaflet-tooltip-tip {
+  background: #171717 !important;
+}
+

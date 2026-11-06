@@ -19,6 +19,7 @@ interface FactibilidadMapProps {
   clientCoords: [number, number] | null;
   onClientCoordsChange: (coords: [number, number] | null) => void;
   targetNap: OzBox | null;
+  flyToCoords?: [number, number] | null;
 }
 
 const getTileConfig = (theme: MapTheme) => {
@@ -31,16 +32,25 @@ const getTileConfig = (theme: MapTheme) => {
     };
   }
 
+  if (theme === "dark") {
+    return {
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+      className: "map-tiles-carto-dark",
+      maxZoom: 19,
+      attribution: "&copy; Esri, HERE, Garmin",
+    };
+  }
+
+  // Light Canvas Base (Natively minimalist monochrome, no CSS filter flicker)
   return {
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    className: theme === "dark" ? "map-tiles-carto-dark" : "map-tiles-carto-light",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    className: "map-tiles-carto-light",
     maxZoom: 19,
-    subdomains: ["a", "b", "c"],
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    attribution: "&copy; Esri, HERE, Garmin",
   };
 };
 
-export default function FactibilidadMap({
+function FactibilidadMapInner({
   boxes,
   theme,
   selectedBox,
@@ -52,17 +62,30 @@ export default function FactibilidadMap({
   clientCoords,
   onClientCoordsChange,
   targetNap,
+  flyToCoords,
 }: FactibilidadMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const markersLayerRef = useRef<any>(null);
+  const markersMapRef = useRef<Map<string, any>>(new Map());
   const userMarkerRef = useRef<any>(null);
   const clientLayerRef = useRef<any>(null);
+
+  // Client visual element refs for in-place updates (no clearLayers flicker)
+  const clientMarkerRef = useRef<any>(null);
+  const kmCircleRef = useRef<any>(null);
+  const optCircleRef = useRef<any>(null);
+  const maxCircleRef = useRef<any>(null);
+  const polylineRef = useRef<any>(null);
+
+  // Flag to prevent marker click from leaking to map click
+  const isClickingMarkerRef = useRef(false);
+
   const [L, setL] = useState<any>(null);
   const [isLocating, setIsLocating] = useState(false);
 
-  // Keep callback refs up to date so Leaflet listeners never cause map unmount/re-initialization
+  // Keep callback refs stable
   const onClientCoordsChangeRef = useRef(onClientCoordsChange);
   useEffect(() => {
     onClientCoordsChangeRef.current = onClientCoordsChange;
@@ -78,7 +101,7 @@ export default function FactibilidadMap({
     onUserCoordsChangeRef.current = onUserCoordsChange;
   }, [onUserCoordsChange]);
 
-  // Dynamic Leaflet import on client
+  // Load Leaflet once on client
   useEffect(() => {
     let mounted = true;
     import("leaflet").then((mod) => {
@@ -130,29 +153,35 @@ export default function FactibilidadMap({
       zoom: 14,
       zoomControl: false,
       attributionControl: false,
-      preferCanvas: true,
+      preferCanvas: false, // SVG paths allow crisp, in-place style updates without full-canvas clearing
+      fadeAnimation: true,
+      zoomAnimation: true,
     });
 
     L.control.zoom({ position: "bottomright" }).addTo(map);
 
     const cfg = getTileConfig(theme);
     const tileLayer = L.tileLayer(cfg.url, {
-      subdomains: cfg.subdomains || ["a", "b", "c"],
       maxZoom: cfg.maxZoom,
       className: cfg.className,
+      updateWhenIdle: false,
+      updateWhenZooming: false,
+      keepBuffer: 6,
     }).addTo(map);
     tileLayerRef.current = tileLayer;
 
-    // Layer for all boxes
+    // Layer groups
     const markersGroup = L.layerGroup().addTo(map);
     markersLayerRef.current = markersGroup;
 
-    // Layer for client pin, radiuses, and connection line
     const clientGroup = L.layerGroup().addTo(map);
     clientLayerRef.current = clientGroup;
 
-    // Click on map to place or move client point without unmounting the map
+    // Click on map to place or move client point (guaranteed isolated from marker clicks)
     map.on("click", (e: any) => {
+      if (isClickingMarkerRef.current || e.originalEvent?._stopped) {
+        return;
+      }
       const { lat, lng } = e.latlng;
       if (onClientCoordsChangeRef.current) {
         onClientCoordsChangeRef.current([lat, lng]);
@@ -161,11 +190,18 @@ export default function FactibilidadMap({
 
     mapInstanceRef.current = map;
 
-    setTimeout(() => {
-      map.invalidateSize();
-    }, 250);
+    // ResizeObserver prevents black/unloaded strips when layout dimensions adjust
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize({ debounceMoveEvents: true });
+      }
+    });
+    if (mapContainerRef.current) {
+      resizeObserver.observe(mapContainerRef.current);
+    }
 
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -178,20 +214,40 @@ export default function FactibilidadMap({
     mapInstanceRef.current.removeLayer(tileLayerRef.current);
 
     const newLayer = L.tileLayer(cfg.url, {
-      subdomains: cfg.subdomains || ["a", "b", "c"],
       maxZoom: cfg.maxZoom,
       className: cfg.className,
+      updateWhenIdle: false,
+      updateWhenZooming: false,
+      keepBuffer: 6,
     }).addTo(mapInstanceRef.current);
 
     tileLayerRef.current = newLayer;
   }, [theme, L]);
 
-  // Render Box Markers
+  // Smooth camera flight when explicitly triggered from search bar or GPS
+  useEffect(() => {
+    if (!mapInstanceRef.current || !flyToCoords) return;
+    mapInstanceRef.current.flyTo(flyToCoords, 16, {
+      duration: 0.8,
+      easeLinearity: 0.25,
+    });
+  }, [flyToCoords]);
+
+  // Render & Update Box Markers IN-PLACE (ZERO full layer wiping)
   useEffect(() => {
     if (!L || !markersLayerRef.current || !mapInstanceRef.current) return;
 
     const markersGroup = markersLayerRef.current;
-    markersGroup.clearLayers();
+    const markersMap = markersMapRef.current;
+    const currentIds = new Set(filteredBoxes.map((b) => b.id));
+
+    // Remove markers that are no longer in filteredBoxes
+    for (const [id, marker] of markersMap.entries()) {
+      if (!currentIds.has(id)) {
+        markersGroup.removeLayer(marker);
+        markersMap.delete(id);
+      }
+    }
 
     const isDark = theme === "dark" || theme === "satellite";
 
@@ -211,163 +267,199 @@ export default function FactibilidadMap({
       const isSelected = selectedBox?.id === box.id;
       const radius = isTarget || isSelected ? 8.5 : box.isNap ? 5 : 4;
       const weight = isTarget ? 3 : isSelected ? 2.5 : 1;
+      const color = isTarget ? "#0284c7" : isSelected ? "#ffffff" : strokeColor;
+      const opacity = isTarget || isSelected ? 1 : 0.75;
+      const fillOpacity = isTarget || isSelected ? 1 : 0.85;
 
-      const circle = L.circleMarker([box.lat, box.lng], {
-        radius,
-        fillColor,
-        color: isTarget ? "#0284c7" : isSelected ? "#ffffff" : strokeColor,
-        weight,
-        opacity: isTarget || isSelected ? 1 : 0.7,
-        fillOpacity: isTarget || isSelected ? 1 : 0.85,
-      });
+      const existingMarker = markersMap.get(box.id);
 
-      const tooltipContent = `
-        <div style="font-family: system-ui, sans-serif; font-size: 11px; line-height: 1.35; color: ${
-          isDark ? "#fafafa" : "#171717"
-        }; min-width: 150px;">
-          <div style="font-weight: 600; font-size: 11px; margin-bottom: 2px;">${box.name}</div>
-          <div style="color: ${isDark ? "#a3a3a3" : "#737373"}; font-size: 10px; margin-bottom: 4px;">
-            ${box.boxTypeName} &bull; ${box.sector || "Sector general"}
-          </div>
-          ${
-            box.isNap
-              ? `
-            <div style="display: flex; justify-content: space-between; border-top: 1px solid ${
-              isDark ? "#333" : "#e5e5e5"
-            }; padding-top: 3px; font-size: 10px;">
-              <span>Puertos libres:</span>
-              <strong style="color: ${
-                box.availablePorts > 2 ? "#10b981" : box.availablePorts > 0 ? "#f59e0b" : "#ef4444"
-              };">${box.availablePorts} de ${box.totalPorts}</strong>
+      if (existingMarker) {
+        // Marker already on map: update style smoothly in-place!
+        existingMarker.setStyle({
+          fillColor,
+          color,
+          weight,
+          opacity,
+          fillOpacity,
+        });
+        existingMarker.setRadius(radius);
+      } else {
+        // New marker: create and add
+        const circle = L.circleMarker([box.lat, box.lng], {
+          radius,
+          fillColor,
+          color,
+          weight,
+          opacity,
+          fillOpacity,
+        });
+
+        const tooltipContent = `
+          <div style="font-family: system-ui, sans-serif; font-size: 11px; line-height: 1.35; color: ${
+            isDark ? "#fafafa" : "#171717"
+          }; min-width: 150px;">
+            <div style="font-weight: 600; font-size: 11px; margin-bottom: 2px;">${box.name}</div>
+            <div style="color: ${isDark ? "#a3a3a3" : "#737373"}; font-size: 10px; margin-bottom: 4px;">
+              ${box.boxTypeName} &bull; ${box.sector || "Sector general"}
             </div>
-          `
-              : ""
+            ${
+              box.isNap
+                ? `
+              <div style="display: flex; justify-content: space-between; border-top: 1px solid ${
+                isDark ? "#333" : "#e5e5e5"
+              }; padding-top: 3px; font-size: 10px;">
+                <span>Puertos libres:</span>
+                <strong style="color: ${
+                  box.availablePorts > 2 ? "#10b981" : box.availablePorts > 0 ? "#f59e0b" : "#ef4444"
+                };">${box.availablePorts} de ${box.totalPorts}</strong>
+              </div>
+            `
+                : ""
+            }
+          </div>
+        `;
+
+        circle.bindTooltip(tooltipContent, {
+          direction: "top",
+          offset: [0, -6],
+          className: isDark ? "carto-tooltip-dark" : "carto-tooltip-light",
+        });
+
+        // Click on marker: isolates event so map click never triggers
+        circle.on("click", (ev: any) => {
+          isClickingMarkerRef.current = true;
+          if (ev.originalEvent) {
+            L.DomEvent.stopPropagation(ev.originalEvent);
+            ev.originalEvent._stopped = true;
           }
-        </div>
-      `;
+          setTimeout(() => {
+            isClickingMarkerRef.current = false;
+          }, 200);
 
-      circle.bindTooltip(tooltipContent, {
-        direction: "top",
-        offset: [0, -6],
-        className: isDark ? "carto-tooltip-dark" : "carto-tooltip-light",
-      });
+          if (onSelectBoxRef.current) {
+            onSelectBoxRef.current(box);
+          }
+        });
 
-      circle.on("click", (ev: any) => {
-        L.DomEvent.stopPropagation(ev);
-        if (onSelectBoxRef.current) {
-          onSelectBoxRef.current(box);
-        }
-      });
-
-      markersGroup.addLayer(circle);
+        markersGroup.addLayer(circle);
+        markersMap.set(box.id, circle);
+      }
     });
-  }, [L, filteredBoxes, selectedBox, targetNap, theme]);
+  }, [L, filteredBoxes, selectedBox?.id, targetNap?.id, theme]);
 
-  // Render Client Location, Coverage Radii (150m & 250m) and Feasibility Line
+  // Render & Update Client Location, Radii and Feasibility Line IN-PLACE
   useEffect(() => {
     if (!L || !clientLayerRef.current || !mapInstanceRef.current) return;
-
     const group = clientLayerRef.current;
-    group.clearLayers();
 
-    if (!clientCoords) return;
+    if (!clientCoords) {
+      group.clearLayers();
+      clientMarkerRef.current = null;
+      kmCircleRef.current = null;
+      optCircleRef.current = null;
+      maxCircleRef.current = null;
+      polylineRef.current = null;
+      return;
+    }
 
     const [cLat, cLng] = clientCoords;
 
     // 1000m Circle (1 km Consultation Area)
-    const kmCircle = L.circle([cLat, cLng], {
-      radius: 1000,
-      color: "#94a3b8",
-      weight: 1,
-      dashArray: "6, 10",
-      fillColor: "#3b82f6",
-      fillOpacity: 0.02,
-    });
-    group.addLayer(kmCircle);
+    if (kmCircleRef.current) {
+      kmCircleRef.current.setLatLng([cLat, cLng]);
+    } else {
+      kmCircleRef.current = L.circle([cLat, cLng], {
+        radius: 1000,
+        color: "#94a3b8",
+        weight: 1,
+        dashArray: "6, 10",
+        fillColor: "#3b82f6",
+        fillOpacity: 0.02,
+      }).addTo(group);
+    }
 
     // 150m Circle (Optimal Drop Radius)
-    const optCircle = L.circle([cLat, cLng], {
-      radius: 150,
-      color: "#10b981",
-      weight: 1.5,
-      dashArray: "4, 6",
-      fillColor: "#10b981",
-      fillOpacity: 0.08,
-    });
-    group.addLayer(optCircle);
+    if (optCircleRef.current) {
+      optCircleRef.current.setLatLng([cLat, cLng]);
+    } else {
+      optCircleRef.current = L.circle([cLat, cLng], {
+        radius: 150,
+        color: "#10b981",
+        weight: 1.5,
+        dashArray: "4, 6",
+        fillColor: "#10b981",
+        fillOpacity: 0.08,
+      }).addTo(group);
+    }
 
     // 250m Circle (Maximum Drop Limit)
-    const maxCircle = L.circle([cLat, cLng], {
-      radius: 250,
-      color: "#f59e0b",
-      weight: 1.25,
-      dashArray: "3, 6",
-      fillColor: "#f59e0b",
-      fillOpacity: 0.03,
-    });
-    group.addLayer(maxCircle);
+    if (maxCircleRef.current) {
+      maxCircleRef.current.setLatLng([cLat, cLng]);
+    } else {
+      maxCircleRef.current = L.circle([cLat, cLng], {
+        radius: 250,
+        color: "#f59e0b",
+        weight: 1.25,
+        dashArray: "3, 6",
+        fillColor: "#f59e0b",
+        fillOpacity: 0.03,
+      }).addTo(group);
+    }
 
-    // Connecting dashed line to Target NAP (nearest available)
+    // Connecting dashed line to Target NAP
     if (targetNap) {
       const dist = calculateDistanceMeters(cLat, cLng, targetNap.lat, targetNap.lng);
       const isOptimal = dist <= 150;
+      const lineColor = isOptimal ? "#10b981" : dist <= 250 ? "#f59e0b" : "#ef4444";
+      const lineCoords = [
+        [cLat, cLng],
+        [targetNap.lat, targetNap.lng],
+      ];
 
-      const polyline = L.polyline(
-        [
-          [cLat, cLng],
-          [targetNap.lat, targetNap.lng],
-        ],
-        {
-          color: isOptimal ? "#10b981" : dist <= 250 ? "#f59e0b" : "#ef4444",
+      if (polylineRef.current) {
+        polylineRef.current.setLatLngs(lineCoords);
+        polylineRef.current.setStyle({ color: lineColor });
+        polylineRef.current.setTooltipContent(`${dist} metros`);
+      } else {
+        polylineRef.current = L.polyline(lineCoords, {
+          color: lineColor,
           weight: 2,
           dashArray: "6, 6",
           opacity: 0.9,
-        }
-      ).bindTooltip(`${dist} metros`, {
-        permanent: true,
-        direction: "center",
-        className: "feasibility-dist-badge",
-      });
-      group.addLayer(polyline);
+        })
+          .bindTooltip(`${dist} metros`, {
+            permanent: true,
+            direction: "center",
+            className: "feasibility-dist-badge",
+          })
+          .addTo(group);
+      }
+    } else if (polylineRef.current) {
+      group.removeLayer(polylineRef.current);
+      polylineRef.current = null;
     }
 
     // Client Location Pin
-    const clientMarker = L.circleMarker([cLat, cLng], {
-      radius: 9,
-      fillColor: "#8b5cf6", // Purple distinct client pin
-      color: "#ffffff",
-      weight: 3,
-      opacity: 1,
-      fillOpacity: 0.95,
-    }).bindTooltip("Ubicación del cliente", {
-      permanent: true,
-      direction: "top",
-      offset: [0, -10],
-      className: "client-pin-tooltip",
-    });
-    group.addLayer(clientMarker);
-
-    // Only adjust view if the queried coordinates are not currently visible on screen
-    // (Prevents jarring camera jumping and zoom in/out bounce when user clicks on map)
-    const map = mapInstanceRef.current;
-    if (map) {
-      const isVisible = map.getBounds().contains([cLat, cLng]);
-      if (!isVisible) {
-        const currentZoom = map.getZoom();
-        const targetZoom = currentZoom < 14 ? 16 : currentZoom;
-        map.setView([cLat, cLng], targetZoom, { animate: true, duration: 0.4 });
-      }
+    if (clientMarkerRef.current) {
+      clientMarkerRef.current.setLatLng([cLat, cLng]);
+    } else {
+      clientMarkerRef.current = L.circleMarker([cLat, cLng], {
+        radius: 9,
+        fillColor: "#8b5cf6",
+        color: "#ffffff",
+        weight: 3,
+        opacity: 1,
+        fillOpacity: 0.95,
+      })
+        .bindTooltip("Ubicación del cliente", {
+          permanent: true,
+          direction: "top",
+          offset: [0, -10],
+          className: "client-pin-tooltip",
+        })
+        .addTo(group);
     }
-  }, [L, clientCoords, targetNap]);
-
-  // Gentle pan to selected box without changing zoom level
-  useEffect(() => {
-    if (!mapInstanceRef.current || !selectedBox) return;
-    mapInstanceRef.current.panTo([selectedBox.lat, selectedBox.lng], {
-      animate: true,
-      duration: 0.3,
-    });
-  }, [selectedBox]);
+  }, [L, clientCoords, targetNap?.id]);
 
   // Advisor GPS Geolocation
   const handleLocateMe = useCallback(() => {
@@ -396,7 +488,7 @@ export default function FactibilidadMap({
         userMarker.addTo(mapInstanceRef.current);
         userMarkerRef.current = userMarker;
 
-        mapInstanceRef.current.setView([latitude, longitude], 16, { animate: true });
+        mapInstanceRef.current.flyTo([latitude, longitude], 16, { duration: 0.8 });
       },
       (err) => {
         setIsLocating(false);
@@ -406,8 +498,11 @@ export default function FactibilidadMap({
     );
   }, [L, onUserCoordsChange]);
 
+  const containerBg =
+    theme === "dark" ? "bg-[#242424]" : theme === "satellite" ? "bg-[#121212]" : "bg-[#e8ecef]";
+
   return (
-    <div className="relative w-full h-full min-h-[450px] overflow-hidden select-none bg-neutral-100 dark:bg-neutral-900">
+    <div className={`relative w-full h-full min-h-[450px] overflow-hidden select-none ${containerBg}`}>
       <div ref={mapContainerRef} className="w-full h-full z-0 bg-transparent cursor-crosshair" />
 
       {/* Floating GPS Button */}
@@ -416,7 +511,7 @@ export default function FactibilidadMap({
           type="button"
           onClick={handleLocateMe}
           title="Centrar en mi ubicación actual"
-          className="text-xs font-mono text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1.5 bg-white/75 dark:bg-neutral-900/75 backdrop-blur-xs px-2 py-1"
+          className="text-xs font-mono text-neutral-600 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1.5 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-xs px-2 py-1"
         >
           <span
             className={`w-2 h-2 rounded-full ${
@@ -426,78 +521,26 @@ export default function FactibilidadMap({
           <span>{isLocating ? "Buscando..." : userCoords ? "GPS activo" : "Mi ubicación"}</span>
         </button>
       </div>
-
-      <style jsx global>{`
-        .leaflet-container {
-          background-color: transparent !important;
-          outline: none;
-        }
-
-        .map-tiles-carto-light {
-          filter: grayscale(88%) contrast(1.08) brightness(1.02) !important;
-        }
-
-        .map-tiles-carto-dark {
-          filter: invert(100%) hue-rotate(180deg) brightness(82%) contrast(115%) grayscale(30%) !important;
-        }
-
-        .map-tiles-satellite {
-          filter: saturate(1.1) contrast(1.05) !important;
-        }
-
-        .carto-tooltip-dark {
-          background: #171717 !important;
-          border: 1px solid #262626 !important;
-          color: #fafafa !important;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
-          padding: 6px 9px !important;
-          border-radius: 4px !important;
-        }
-        .carto-tooltip-dark .leaflet-tooltip-tip {
-          background: #171717 !important;
-        }
-
-        .carto-tooltip-light {
-          background: #ffffff !important;
-          border: 1px solid #e5e5e5 !important;
-          color: #171717 !important;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08) !important;
-          padding: 6px 9px !important;
-          border-radius: 4px !important;
-        }
-        .carto-tooltip-light .leaflet-tooltip-tip {
-          background: #ffffff !important;
-        }
-
-        .client-pin-tooltip {
-          background: #8b5cf6 !important;
-          border: none !important;
-          color: #ffffff !important;
-          font-family: system-ui, sans-serif !important;
-          font-size: 11px !important;
-          font-weight: 600 !important;
-          padding: 3px 8px !important;
-          border-radius: 4px !important;
-          box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4) !important;
-        }
-        .client-pin-tooltip .leaflet-tooltip-tip {
-          background: #8b5cf6 !important;
-        }
-
-        .feasibility-dist-badge {
-          background: #171717 !important;
-          color: #ffffff !important;
-          border: 1px solid #333333 !important;
-          font-family: monospace !important;
-          font-size: 11px !important;
-          font-weight: 600 !important;
-          padding: 2px 6px !important;
-          border-radius: 4px !important;
-        }
-        .feasibility-dist-badge .leaflet-tooltip-tip {
-          background: #171717 !important;
-        }
-      `}</style>
     </div>
   );
 }
+
+// React.memo with prop comparison prevents re-rendering on parent form inputs, timers, or loaders
+const FactibilidadMap = React.memo(FactibilidadMapInner, (prev, next) => {
+  return (
+    prev.boxes === next.boxes &&
+    prev.theme === next.theme &&
+    prev.selectedBox?.id === next.selectedBox?.id &&
+    prev.filterType === next.filterType &&
+    prev.searchTerm === next.searchTerm &&
+    prev.userCoords?.[0] === next.userCoords?.[0] &&
+    prev.userCoords?.[1] === next.userCoords?.[1] &&
+    prev.clientCoords?.[0] === next.clientCoords?.[0] &&
+    prev.clientCoords?.[1] === next.clientCoords?.[1] &&
+    prev.targetNap?.id === next.targetNap?.id &&
+    prev.flyToCoords?.[0] === next.flyToCoords?.[0] &&
+    prev.flyToCoords?.[1] === next.flyToCoords?.[1]
+  );
+});
+
+export default FactibilidadMap;
