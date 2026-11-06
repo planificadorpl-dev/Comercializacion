@@ -254,6 +254,17 @@ export default function FactibilidadMap({
 
     const [cLat, cLng] = clientCoords;
 
+    // 1000m Circle (1 km Consultation Area)
+    const kmCircle = L.circle([cLat, cLng], {
+      radius: 1000,
+      color: "#94a3b8",
+      weight: 1,
+      dashArray: "6, 10",
+      fillColor: "#3b82f6",
+      fillOpacity: 0.02,
+    });
+    group.addLayer(kmCircle);
+
     // 150m Circle (Optimal Drop Radius)
     const optCircle = L.circle([cLat, cLng], {
       radius: 150,
