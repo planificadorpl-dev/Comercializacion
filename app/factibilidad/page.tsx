@@ -169,32 +169,38 @@ export default function FactibilidadPage() {
   }, [clientCoords, boxes]);
 
   // Handle client coordinates submission
-  const handleQueryCoords = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!coordInput.trim()) return;
+  const handleQueryCoords = useCallback(
+    (e?: React.FormEvent) => {
+      if (e) e.preventDefault();
+      if (!coordInput.trim()) return;
 
-    setCoordError(null);
-    const parsed = parseCoordinatesInput(coordInput);
+      setCoordError(null);
+      const parsed = parseCoordinatesInput(coordInput);
 
-    if (parsed) {
-      setClientCoords(parsed);
-      setSelectedBox(null);
-      queryNearbyBoxes(parsed[0], parsed[1]);
-    } else {
-      setCoordError("Formato no reconocido. Ingresa latitud y longitud (ej. 10.4681, -66.9058) o link de Google Maps.");
-    }
-  };
+      if (parsed) {
+        setClientCoords(parsed);
+        setSelectedBox(null);
+        queryNearbyBoxes(parsed[0], parsed[1]);
+      } else {
+        setCoordError("Formato no reconocido. Ingresa latitud y longitud (ej. 10.4681, -66.9058) o link de Google Maps.");
+      }
+    },
+    [coordInput, queryNearbyBoxes]
+  );
 
   // Direct map click to place client pin
-  const handleClientCoordsFromMap = (coords: [number, number] | null) => {
-    setClientCoords(coords);
-    if (coords) {
-      setCoordInput(`${coords[0].toFixed(6)}, ${coords[1].toFixed(6)}`);
-      setCoordError(null);
-      setSelectedBox(null);
-      queryNearbyBoxes(coords[0], coords[1]);
-    }
-  };
+  const handleClientCoordsFromMap = useCallback(
+    (coords: [number, number] | null) => {
+      setClientCoords(coords);
+      if (coords) {
+        setCoordInput(`${coords[0].toFixed(6)}, ${coords[1].toFixed(6)}`);
+        setCoordError(null);
+        setSelectedBox(null);
+        queryNearbyBoxes(coords[0], coords[1]);
+      }
+    },
+    [queryNearbyBoxes]
+  );
 
   // Clear client query and return to clean protected state
   const handleClearQuery = () => {
