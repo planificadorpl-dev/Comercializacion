@@ -125,7 +125,7 @@ export function analyzeFeasibility(
     if (distanceToNearest <= 250) {
       feasibilityLevel = "saturada";
       diagnosisTitle = "Cajas cercanas sin puertos libres";
-      diagnosisMessage = `Existe la caja ${nearestOverall?.name} a ${distanceToNearest}m pero se encuentra 100% ocupada (0 puertos disponibles).`;
+      diagnosisMessage = `Existe la caja ${nearestOverall?.name?.toUpperCase()} a ${distanceToNearest}m pero se encuentra 100% ocupada (0 puertos disponibles).`;
     } else {
       feasibilityLevel = "no_factible";
       diagnosisTitle = "Sin cobertura de red";
@@ -135,23 +135,23 @@ export function analyzeFeasibility(
     feasibilityLevel = "optima";
     isFeasible = true;
     diagnosisTitle = "Factibilidad aprobada (Óptima)";
-    diagnosisMessage = `Caja ${nearestAvailable.name} a solo ${distanceToAvailable}m con ${nearestAvailable.availablePorts} puertos libres. Acometida estándar directa.`;
+    diagnosisMessage = `Caja ${nearestAvailable.name.toUpperCase()} a solo ${distanceToAvailable}m con ${nearestAvailable.availablePorts} puertos libres. Acometida estándar directa.`;
   } else if (distanceToAvailable <= 250) {
     feasibilityLevel = "factible_larga";
     isFeasible = true;
     diagnosisTitle = "Factible con acometida extendida";
-    diagnosisMessage = `Caja ${nearestAvailable.name} a ${distanceToAvailable}m con ${nearestAvailable.availablePorts} puertos libres. Requiere bobina de drop adicional.`;
+    diagnosisMessage = `Caja ${nearestAvailable.name.toUpperCase()} a ${distanceToAvailable}m con ${nearestAvailable.availablePorts} puertos libres. Requiere bobina de drop adicional.`;
   } else if (distanceToAvailable <= 350) {
     feasibilityLevel = "limite";
     isFeasible = false;
     diagnosisTitle = "En límite técnico de acometida";
-    diagnosisMessage = `Caja ${nearestAvailable.name} a ${distanceToAvailable}m. Supera los 250m recomendados; requiere inspección técnica de campo previa.`;
+    diagnosisMessage = `Caja ${nearestAvailable.name.toUpperCase()} a ${distanceToAvailable}m. Supera los 250m recomendados; requiere inspección técnica de campo previa.`;
   } else {
     // If nearest is close but saturated, and available is far
     if (distanceToNearest <= 150 && nearestOverall && nearestOverall.availablePorts === 0) {
       feasibilityLevel = "saturada";
       diagnosisTitle = "Caja inmediata saturada";
-      diagnosisMessage = `La caja más cercana (${nearestOverall.name} a ${distanceToNearest}m) no tiene puertos. La siguiente con puertos está a ${distanceToAvailable}m (fuera de rango).`;
+      diagnosisMessage = `La caja más cercana (${nearestOverall.name.toUpperCase()} a ${distanceToNearest}m) no tiene puertos. La siguiente con puertos está a ${distanceToAvailable}m (fuera de rango).`;
     } else {
       feasibilityLevel = "no_factible";
       diagnosisTitle = "Sin cobertura de acometida";
@@ -183,7 +183,7 @@ export function generateWhatsAppResponse(result: FeasibilityResult): string {
       `¡Hola! Hemos validado tus coordenadas (${coordsStr}):\n\n` +
       `✅ *ESTATUS: FACTIBILIDAD APROBADA*\n` +
       `• *Zona/Sector:* ${nearestAvailableNap.sector || "Área de cobertura activa"}\n` +
-      `• *Caja de fibra asignada:* ${nearestAvailableNap.name}\n` +
+      `• *Caja de fibra asignada:* ${nearestAvailableNap.name.toUpperCase()}\n` +
       `• *Distancia de acometida:* ${distanceToAvailableMeters} metros (${distanceToAvailableMeters <= 150 ? "Óptima" : "Acometida estándar"})\n` +
       `• *Puertos disponibles:* Sí (${nearestAvailableNap.availablePorts} libres)\n\n` +
       `¡Tu dirección es 100% apta para instalar Internet de Fibra Óptica! ¿Con qué plan de velocidad te gustaría comenzar?`
@@ -196,7 +196,7 @@ export function generateWhatsAppResponse(result: FeasibilityResult): string {
       `¡Hola! Hemos validado tus coordenadas (${coordsStr}):\n\n` +
       `⚠️ *ESTATUS: EN LISTA DE ESPERA / ZONA EN EXPANSIÓN*\n` +
       `• *Zona/Sector:* ${nearestNap.sector || "Área con red"}\n` +
-      `• *Caja más cercana:* ${nearestNap.name} (${distanceMeters} metros)\n` +
+      `• *Caja más cercana:* ${nearestNap.name.toUpperCase()} (${distanceMeters} metros)\n` +
       `• *Disponibilidad actual:* Capacidad al 100% (caja ocupada).\n\n` +
       `Nuestra red pasa cerca de tu ubicación pero en este momento no hay puertos libres. Hemos registrado tus datos para contactarte de inmediato en cuanto se habilite una nueva derivación.`
     );

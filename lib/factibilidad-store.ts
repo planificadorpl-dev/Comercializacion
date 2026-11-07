@@ -232,8 +232,12 @@ async function readBoxesFromPostgres(): Promise<{ boxes: FactibilidadBox[]; sync
     `);
 
     if (Array.isArray(rows) && rows.length > 0) {
+      const upperRows = rows.map((r: any) => ({
+        ...r,
+        name: (r.name || "").toUpperCase(),
+      }));
       return {
-        boxes: rows,
+        boxes: upperRows,
         syncedAt: rows[0]?.syncedAt || undefined,
       };
     }
@@ -257,7 +261,7 @@ async function readBoxesFromSupabase(): Promise<{ boxes: FactibilidadBox[]; sync
     if (!error && Array.isArray(data) && data.length > 0) {
       const mapped: FactibilidadBox[] = data.map((b: any) => ({
         id: b.id,
-        name: b.name,
+        name: (b.name || "").toUpperCase(),
         lat: b.lat,
         lng: b.lng,
         boxType: b.box_type,
@@ -422,7 +426,7 @@ export async function fetchAndTransformOzmapBoxes(): Promise<FactibilidadBox[]> 
 
       return {
         id: b.id,
-        name: b.name || "Caja sin nombre",
+        name: (b.name || "CAJA SIN NOMBRE").toUpperCase().trim(),
         lat: b.coords[1],
         lng: b.coords[0],
         boxType: b.boxType,
@@ -612,3 +616,4 @@ export async function getFastFactibilidadBoxesInRadius(
     availableInRadius,
   };
 }
+

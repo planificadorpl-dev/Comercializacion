@@ -35,3 +35,4 @@ CREATE INDEX IF NOT EXISTS idx_factibilidad_cajas_coords ON public.factibilidad_
 CREATE INDEX IF NOT EXISTS idx_factibilidad_cajas_synced_at ON public.factibilidad_cajas(synced_at);
 
 COMMENT ON TABLE public.factibilidad_cajas IS 'Caché persistente de cajas y NAPs de fibra óptica sincronizadas desde OZmap para consultas ultrarrápidas de factibilidad';
+

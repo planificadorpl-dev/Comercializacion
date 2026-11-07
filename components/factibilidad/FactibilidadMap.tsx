@@ -56,21 +56,21 @@ const getTileConfig = (theme: MapTheme) => {
 // Box radius scaled according to zoom so street view maintains visible, touch-friendly markers
 const getBoxRadius = (isNap: boolean, isTarget: boolean, isSelected: boolean, zoom: number) => {
   if (isTarget || isSelected) {
-    if (zoom >= 16) return 8.5;
-    if (zoom >= 14) return 7.5;
-    return 6.5;
+    if (zoom >= 16) return 9.5;
+    if (zoom >= 14) return 8.5;
+    return 7;
   }
   if (isNap) {
     // Street level (zoom 16 to 18): prominent, visible, easy to touch
-    if (zoom >= 16) return 6;
+    if (zoom >= 16) return 6.8;
     // Neighborhood level (zoom 14 to 15.5)
-    if (zoom >= 14) return 5;
+    if (zoom >= 14) return 5.5;
     // Overview level (zoom < 14)
-    return 3.8;
+    return 4;
   }
   // Mangas (distribución / empalme)
-  if (zoom >= 16) return 4.2;
-  if (zoom >= 14) return 3.4;
+  if (zoom >= 16) return 4.5;
+  if (zoom >= 14) return 3.5;
   return 2.5;
 };
 
@@ -95,6 +95,7 @@ function FactibilidadMapInner({
   const markersMapRef = useRef<Map<string, any>>(new Map());
   const userMarkerRef = useRef<any>(null);
   const clientLayerRef = useRef<any>(null);
+  const canvasRendererRef = useRef<any>(null);
 
   // Client visual element refs for in-place updates (no clearLayers flicker)
   const clientMarkerRef = useRef<any>(null);
@@ -173,6 +174,9 @@ function FactibilidadMapInner({
   useEffect(() => {
     if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
 
+    const canvasRenderer = L.canvas({ tolerance: 16, padding: 0.1 });
+    canvasRendererRef.current = canvasRenderer;
+
     const map = L.map(mapContainerRef.current, {
       center: [10.4674, -66.9058],
       zoom: 14,
@@ -180,6 +184,7 @@ function FactibilidadMapInner({
       maxZoom: 18,
       zoomControl: false,
       attributionControl: false,
+      renderer: canvasRenderer,
       preferCanvas: true, // Hardware-accelerated GPU Canvas for 6,000+ points (Instant, 60 FPS)
       fadeAnimation: true,
       zoomAnimation: true,
@@ -336,6 +341,7 @@ function FactibilidadMapInner({
       } else {
         // New marker: create and add
         const circle = L.circleMarker([box.lat, box.lng], {
+          renderer: canvasRendererRef.current || undefined,
           radius,
           fillColor,
           color,
@@ -344,8 +350,8 @@ function FactibilidadMapInner({
           fillOpacity,
         });
 
-        // Click on marker: isolates event so map click never triggers
-        circle.on("click", (ev: any) => {
+        // Click on marker: isolates event completely so map click never triggers
+        const handleMarkerSelect = (ev: any) => {
           isClickingMarkerRef.current = true;
           if (ev.originalEvent) {
             L.DomEvent.stopPropagation(ev.originalEvent);
@@ -353,10 +359,19 @@ function FactibilidadMapInner({
           }
           setTimeout(() => {
             isClickingMarkerRef.current = false;
-          }, 200);
+          }, 350);
 
           if (onSelectBoxRef.current) {
             onSelectBoxRef.current(box);
+          }
+        };
+
+        circle.on("click", handleMarkerSelect);
+        circle.on("mousedown touchstart", (ev: any) => {
+          isClickingMarkerRef.current = true;
+          if (ev.originalEvent) {
+            L.DomEvent.stopPropagation(ev.originalEvent);
+            ev.originalEvent._stopped = true;
           }
         });
 

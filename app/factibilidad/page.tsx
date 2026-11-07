@@ -446,7 +446,7 @@ export default function FactibilidadPage() {
                   />
                   <div className="flex items-center gap-1.5 min-w-0 truncate">
                     <span className="text-xs font-semibold text-neutral-900 group-hover:text-neutral-700 transition-colors truncate">
-                      {feasibilityResult.nearestAvailableNap?.name || feasibilityResult.diagnosisTitle}
+                      {feasibilityResult.nearestAvailableNap?.name?.toUpperCase() || feasibilityResult.diagnosisTitle}
                     </span>
                     {feasibilityResult.distanceToAvailableMeters !== null && (
                       <span
@@ -550,7 +550,7 @@ export default function FactibilidadPage() {
                           {feasibilityResult.isFeasible ? "Caja asignada:" : "Caja más cercana:"}
                         </span>
                         <span className="text-neutral-900 font-medium">
-                          {feasibilityResult.nearestAvailableNap.name}
+                          {feasibilityResult.nearestAvailableNap.name.toUpperCase()}
                         </span>
                       </div>
 
@@ -614,7 +614,7 @@ export default function FactibilidadPage() {
                             className="flex items-center justify-between text-[11px] font-mono text-neutral-600 hover:text-neutral-950 cursor-pointer"
                             onClick={() => setSelectedBox(box)}
                           >
-                            <span className="truncate max-w-[190px]">{box.name}</span>
+                            <span className="truncate max-w-[190px]">{box.name.toUpperCase()}</span>
                             <div className="flex items-center gap-2">
                               <span>{distance}m</span>
                               <span
@@ -676,7 +676,7 @@ export default function FactibilidadPage() {
                   title={isBoxDetailsExpanded ? "Contraer detalles" : "Expandir detalles"}
                 >
                   <span className="text-xs font-semibold text-neutral-900 group-hover:text-neutral-700 transition-colors truncate">
-                    {selectedBox.name}
+                    {selectedBox.name.toUpperCase()}
                   </span>
                   <span className="text-[11px] font-mono text-neutral-300">&bull;</span>
                   <span
