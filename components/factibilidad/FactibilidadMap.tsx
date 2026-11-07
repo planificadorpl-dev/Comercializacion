@@ -27,7 +27,7 @@ const getTileConfig = (theme: MapTheme) => {
     return {
       url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
       className: "map-tiles-satellite",
-      maxZoom: 19,
+      maxZoom: 18,
       subdomains: "abc",
       attribution: "&copy; Esri, Maxar",
     };
@@ -37,7 +37,7 @@ const getTileConfig = (theme: MapTheme) => {
     return {
       url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
       className: "map-tiles-clean-dark",
-      maxZoom: 19,
+      maxZoom: 18,
       subdomains: ["a", "b", "c"],
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     };
@@ -47,31 +47,31 @@ const getTileConfig = (theme: MapTheme) => {
   return {
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     className: "map-tiles-clean-light",
-    maxZoom: 19,
+    maxZoom: 18,
     subdomains: ["a", "b", "c"],
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   };
 };
 
-// Smooth dynamic radius: scales down gracefully as zoom increases for ultra-crisp street precision
+// Box radius scaled according to zoom so street view maintains visible, touch-friendly markers
 const getBoxRadius = (isNap: boolean, isTarget: boolean, isSelected: boolean, zoom: number) => {
   if (isTarget || isSelected) {
-    if (zoom >= 18) return 5.5;
-    if (zoom >= 16) return 6.5;
+    if (zoom >= 16) return 8.5;
     if (zoom >= 14) return 7.5;
-    return 8;
+    return 6.5;
   }
   if (isNap) {
-    if (zoom >= 18) return 2.8;
-    if (zoom >= 16) return 3.4;
-    if (zoom >= 14) return 4.2;
-    return 5;
+    // Street level (zoom 16 to 18): prominent, visible, easy to touch
+    if (zoom >= 16) return 6;
+    // Neighborhood level (zoom 14 to 15.5)
+    if (zoom >= 14) return 5;
+    // Overview level (zoom < 14)
+    return 3.8;
   }
   // Mangas (distribución / empalme)
-  if (zoom >= 18) return 2.2;
-  if (zoom >= 16) return 2.7;
-  if (zoom >= 14) return 3.2;
-  return 3.8;
+  if (zoom >= 16) return 4.2;
+  if (zoom >= 14) return 3.4;
+  return 2.5;
 };
 
 function FactibilidadMapInner({
@@ -176,6 +176,8 @@ function FactibilidadMapInner({
     const map = L.map(mapContainerRef.current, {
       center: [10.4674, -66.9058],
       zoom: 14,
+      minZoom: 11,
+      maxZoom: 18,
       zoomControl: false,
       attributionControl: false,
       preferCanvas: true, // Hardware-accelerated GPU Canvas for 6,000+ points (Instant, 60 FPS)
@@ -456,7 +458,7 @@ function FactibilidadMapInner({
       polylineRef.current = null;
     }
 
-    const clientRadius = currentZoom >= 17 ? 6.5 : currentZoom >= 15 ? 7.5 : 8.5;
+    const clientRadius = currentZoom >= 16 ? 8 : 7.5;
     // Client Location Pin
     if (clientMarkerRef.current) {
       clientMarkerRef.current.setLatLng([cLat, cLng]);
