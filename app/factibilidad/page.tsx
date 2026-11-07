@@ -17,6 +17,8 @@ import {
   ExternalLink,
   MessageCircle,
   Send,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { SidebarOpenButton, useSidebar } from "@/components/providers/sidebar-provider";
 import { Sidebar } from "@/components/dashboard/sidebar";
@@ -64,6 +66,7 @@ export default function FactibilidadPage() {
   >("disponibles");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedBox, setSelectedBox] = useState<OzBox | null>(null);
+  const [isBoxDetailsExpanded, setIsBoxDetailsExpanded] = useState(false);
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
 
   // Client Coordinates Query Workflow
@@ -102,6 +105,11 @@ export default function FactibilidadPage() {
   useEffect(() => {
     loadBoxes();
   }, [loadBoxes]);
+
+  // Reset box details expansion when selecting another box
+  useEffect(() => {
+    setIsBoxDetailsExpanded(false);
+  }, [selectedBox?.id]);
 
   // Statistics calculation for the boxes
   const stats = useMemo(() => {
@@ -582,107 +590,157 @@ export default function FactibilidadPage() {
             </div>
           )}
 
-          {/* Floating Details Drawer for Box explicitly clicked (if not reviewing client query) */}
+          {/* Retractable 2-State Information Bar for Box Clicked */}
           {selectedBox && !feasibilityResult && (
-            <div className="absolute bottom-4 left-4 right-4 sm:left-6 sm:right-auto sm:w-[380px] z-20 bg-white/95 backdrop-blur-md shadow-lg p-4 space-y-3 border-b border-neutral-100 animate-in fade-in slide-in-from-bottom-2 duration-150">
-              <div className="flex items-start justify-between gap-3 border-b border-neutral-100 pb-2.5">
-                <div>
-                  <h2 className="text-xs sm:text-sm font-semibold text-neutral-900 tracking-tight">
-                    {selectedBox.name}
-                  </h2>
-                  <p className="text-[11px] text-neutral-500 font-mono mt-0.5">
-                    {selectedBox.boxTypeName} &bull; {selectedBox.sector || "Sector general"}
-                  </p>
-                </div>
+            <div className="absolute bottom-16 sm:bottom-4 left-3 right-3 sm:left-6 sm:right-auto sm:w-[380px] z-20 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-xs animate-in fade-in slide-in-from-bottom-2 duration-150 select-none">
+              {/* Compact Bar (Always visible in 1 ultra-clean row) */}
+              <div className="flex items-center justify-between px-3 py-2.5 gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedBox(null)}
-                  className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-0.5"
-                  title="Cerrar detalle"
+                  onClick={() => setIsBoxDetailsExpanded((prev) => !prev)}
+                  className="flex items-center gap-2 min-w-0 text-left cursor-pointer group flex-1"
+                  title={isBoxDetailsExpanded ? "Contraer detalles" : "Expandir detalles"}
                 >
-                  <X className="w-4 h-4 stroke-[1.5]" />
-                </button>
-              </div>
-
-              {selectedBox.isNap ? (
-                <div className="grid grid-cols-3 gap-2 text-center py-1">
-                  <div>
-                    <span className="text-[10px] text-neutral-400 font-mono block">Libres</span>
-                    <span
-                      className={cn(
-                        "text-base font-semibold font-mono",
-                        selectedBox.availablePorts > 2
+                  <span className="text-xs font-semibold text-neutral-900 group-hover:text-neutral-700 transition-colors truncate">
+                    {selectedBox.name}
+                  </span>
+                  <span className="text-[11px] font-mono text-neutral-300">&bull;</span>
+                  <span
+                    className={cn(
+                      "text-xs font-mono font-medium shrink-0",
+                      selectedBox.isNap
+                        ? selectedBox.availablePorts > 2
                           ? "text-emerald-600"
                           : selectedBox.availablePorts > 0
                           ? "text-amber-600"
                           : "text-red-500"
-                      )}
-                    >
-                      {selectedBox.availablePorts}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-neutral-400 font-mono block">Ocupados</span>
-                    <span className="text-base font-medium font-mono text-neutral-700">
-                      {selectedBox.usedPorts}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-neutral-400 font-mono block">Total</span>
-                    <span className="text-base font-medium font-mono text-neutral-700">
-                      {selectedBox.totalPorts}
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-xs text-neutral-500 font-mono py-1">
-                  Manga de empalme / Distribución troncal de fibra
-                </div>
-              )}
+                        : "text-neutral-500"
+                    )}
+                  >
+                    {selectedBox.isNap
+                      ? `${selectedBox.availablePorts} libres (${selectedBox.totalPorts})`
+                      : "Manga"}
+                  </span>
+                </button>
 
-              {(selectedBox.potencia || selectedBox.pon) && (
-                <div className="text-[11px] font-mono space-y-1 text-neutral-500 border-t border-neutral-100 pt-2.5">
-                  {selectedBox.potencia && (
-                    <div className="flex justify-between">
-                      <span className="text-neutral-400">Potencia:</span>
-                      <span className="text-neutral-900 font-medium">{selectedBox.potencia}</span>
+                {/* Minimalist icon actions */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyBoxCoords(selectedBox)}
+                    className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
+                    title={copiedCoords ? "Coordenadas copiadas" : "Copiar coordenadas"}
+                    aria-label="Copiar coordenadas"
+                  >
+                    {copiedCoords ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5 stroke-[1.25]" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenGoogleMaps(selectedBox.lat, selectedBox.lng)}
+                    className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
+                    title="Cómo llegar (Google Maps)"
+                    aria-label="Cómo llegar (Google Maps)"
+                  >
+                    <Navigation className="w-3.5 h-3.5 stroke-[1.25]" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsBoxDetailsExpanded((prev) => !prev)}
+                    className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
+                    title={isBoxDetailsExpanded ? "Contraer información" : "Expandir información"}
+                    aria-label={isBoxDetailsExpanded ? "Contraer información" : "Expandir información"}
+                  >
+                    {isBoxDetailsExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5 stroke-[1.25]" />
+                    ) : (
+                      <ChevronUp className="w-3.5 h-3.5 stroke-[1.25]" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedBox(null);
+                      setIsBoxDetailsExpanded(false);
+                    }}
+                    className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
+                    title="Cerrar detalle"
+                    aria-label="Cerrar detalle"
+                  >
+                    <X className="w-3.5 h-3.5 stroke-[1.5]" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Expanded Technical Details (Unfolds on demand) */}
+              {isBoxDetailsExpanded && (
+                <div className="px-3 pb-3 pt-1 border-t border-neutral-100 text-[11px] font-mono space-y-2 animate-in fade-in duration-150">
+                  <div className="flex justify-between items-center text-neutral-500">
+                    <span>Tipo y sector:</span>
+                    <span className="text-neutral-800">
+                      {selectedBox.boxTypeName} &bull; {selectedBox.sector || "Sector general"}
+                    </span>
+                  </div>
+
+                  {selectedBox.isNap ? (
+                    <div className="flex justify-between items-center text-neutral-500">
+                      <span>Distribución de puertos:</span>
+                      <span className="text-neutral-800">
+                        <span className="font-semibold text-emerald-600">
+                          {selectedBox.availablePorts} libres
+                        </span>
+                        {" / "}
+                        <span>{selectedBox.usedPorts} ocupados</span>
+                        {" / "}
+                        <span>{selectedBox.totalPorts} totales</span>
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-neutral-500">
+                      Manga de empalme / Distribución troncal de fibra
                     </div>
                   )}
+
+                  {selectedBox.potencia && (
+                    <div className="flex justify-between items-center text-neutral-500">
+                      <span>Potencia óptica:</span>
+                      <span className="text-neutral-800 font-medium">{selectedBox.potencia}</span>
+                    </div>
+                  )}
+
                   {selectedBox.pon && (
-                    <div className="flex justify-between">
-                      <span className="text-neutral-400">PON:</span>
-                      <span className="text-neutral-900 font-medium text-right max-w-[200px] truncate" title={selectedBox.pon}>
+                    <div className="flex justify-between items-center text-neutral-500">
+                      <span>PON:</span>
+                      <span
+                        className="text-neutral-800 font-medium text-right max-w-[210px] truncate"
+                        title={selectedBox.pon}
+                      >
                         {selectedBox.pon}
                       </span>
                     </div>
                   )}
+
+                  <div className="flex justify-between items-center text-neutral-400 pt-1 text-[10px]">
+                    <span>
+                      GPS: {selectedBox.lat.toFixed(5)}, {selectedBox.lng.toFixed(5)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenGoogleMaps(selectedBox.lat, selectedBox.lng)}
+                      className="text-neutral-600 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <span>Abrir en Maps</span>
+                      <ExternalLink className="w-2.5 h-2.5 text-neutral-400" />
+                    </button>
+                  </div>
                 </div>
               )}
-
-              <div className="flex items-center justify-between gap-4 border-t border-neutral-100 pt-2.5">
-                <button
-                  type="button"
-                  onClick={() => handleCopyBoxCoords(selectedBox)}
-                  className="text-xs font-mono text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1.5"
-                >
-                  {copiedCoords ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5 stroke-[1.25]" />
-                  )}
-                  <span>{copiedCoords ? "Copiadas" : "Copiar GPS"}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleOpenGoogleMaps(selectedBox.lat, selectedBox.lng)}
-                  className="text-xs font-mono text-neutral-700 hover:text-neutral-950 transition-colors cursor-pointer flex items-center gap-1.5"
-                >
-                  <Navigation className="w-3.5 h-3.5 stroke-[1.25]" />
-                  <span>Cómo llegar</span>
-                  <ExternalLink className="w-3 h-3 text-neutral-400" />
-                </button>
-              </div>
             </div>
           )}
         </div>
