@@ -53,6 +53,27 @@ const getTileConfig = (theme: MapTheme) => {
   };
 };
 
+// Smooth dynamic radius: scales down gracefully as zoom increases for ultra-crisp street precision
+const getBoxRadius = (isNap: boolean, isTarget: boolean, isSelected: boolean, zoom: number) => {
+  if (isTarget || isSelected) {
+    if (zoom >= 18) return 5.5;
+    if (zoom >= 16) return 6.5;
+    if (zoom >= 14) return 7.5;
+    return 8;
+  }
+  if (isNap) {
+    if (zoom >= 18) return 2.8;
+    if (zoom >= 16) return 3.4;
+    if (zoom >= 14) return 4.2;
+    return 5;
+  }
+  // Mangas (distribución / empalme)
+  if (zoom >= 18) return 2.2;
+  if (zoom >= 16) return 2.7;
+  if (zoom >= 14) return 3.2;
+  return 3.8;
+};
+
 function FactibilidadMapInner({
   boxes,
   theme,
@@ -87,6 +108,7 @@ function FactibilidadMapInner({
 
   const [L, setL] = useState<any>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [currentZoom, setCurrentZoom] = useState(14);
 
   // Keep callback refs stable
   const onClientCoordsChangeRef = useRef(onClientCoordsChange);
@@ -159,6 +181,27 @@ function FactibilidadMapInner({
       preferCanvas: true, // Hardware-accelerated GPU Canvas for 6,000+ points (Instant, 60 FPS)
       fadeAnimation: true,
       zoomAnimation: true,
+      zoomSnap: 0.5, // Fluid fractional zoom prevents harsh 2x jumps
+      zoomDelta: 0.5,
+      wheelPxPerZoomLevel: 100,
+    });
+
+    // Soften canvas layer during zoom transitions to prevent ballooning/distortion artifacts
+    map.on("zoomstart", () => {
+      const overlayPane = map.getPane("overlayPane");
+      if (overlayPane) {
+        overlayPane.style.transition = "opacity 0.15s ease-out";
+        overlayPane.style.opacity = "0.55";
+      }
+    });
+
+    map.on("zoomend", () => {
+      const overlayPane = map.getPane("overlayPane");
+      if (overlayPane) {
+        overlayPane.style.transition = "opacity 0.2s ease-in";
+        overlayPane.style.opacity = "1";
+      }
+      setCurrentZoom(map.getZoom());
     });
 
     L.control.zoom({ position: "bottomright" }).addTo(map);
@@ -270,8 +313,8 @@ function FactibilidadMapInner({
 
       const isTarget = targetNap?.id === box.id;
       const isSelected = selectedBox?.id === box.id;
-      const radius = isTarget || isSelected ? 8.5 : box.isNap ? 5 : 4;
-      const weight = isTarget ? 3 : isSelected ? 2.5 : 1;
+      const radius = getBoxRadius(box.isNap, isTarget, isSelected, currentZoom);
+      const weight = isTarget ? 2 : isSelected ? 2 : 1;
       const color = isTarget ? "#0284c7" : isSelected ? "#ffffff" : strokeColor;
       const opacity = isTarget || isSelected ? 1 : 0.75;
       const fillOpacity = isTarget || isSelected ? 1 : 0.85;
@@ -352,7 +395,7 @@ function FactibilidadMapInner({
         markersMap.set(box.id, circle);
       }
     });
-  }, [L, filteredBoxes, selectedBox?.id, targetNap?.id, theme]);
+  }, [L, filteredBoxes, selectedBox?.id, targetNap?.id, theme, currentZoom]);
 
   // Render & Update Client Location, Radii and Feasibility Line IN-PLACE
   useEffect(() => {
@@ -446,15 +489,17 @@ function FactibilidadMapInner({
       polylineRef.current = null;
     }
 
+    const clientRadius = currentZoom >= 17 ? 6.5 : currentZoom >= 15 ? 7.5 : 8.5;
     // Client Location Pin
     if (clientMarkerRef.current) {
       clientMarkerRef.current.setLatLng([cLat, cLng]);
+      clientMarkerRef.current.setRadius(clientRadius);
     } else {
       clientMarkerRef.current = L.circleMarker([cLat, cLng], {
-        radius: 9,
+        radius: clientRadius,
         fillColor: "#8b5cf6",
         color: "#ffffff",
-        weight: 3,
+        weight: 2,
         opacity: 1,
         fillOpacity: 0.95,
       })
@@ -466,7 +511,7 @@ function FactibilidadMapInner({
         })
         .addTo(group);
     }
-  }, [L, clientCoords, targetNap?.id]);
+  }, [L, clientCoords, targetNap?.id, currentZoom]);
 
   // Advisor GPS Geolocation
   const handleLocateMe = useCallback(() => {
