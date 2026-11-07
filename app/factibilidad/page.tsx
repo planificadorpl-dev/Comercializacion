@@ -66,8 +66,8 @@ export default function FactibilidadPage() {
   >("disponibles");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedBox, setSelectedBox] = useState<OzBox | null>(null);
-  const [isBoxDetailsExpanded, setIsBoxDetailsExpanded] = useState(false);
-  const [isDiagnosisExpanded, setIsDiagnosisExpanded] = useState(false);
+  const [isBoxDetailsExpanded, setIsBoxDetailsExpanded] = useState(true);
+  const [isDiagnosisExpanded, setIsDiagnosisExpanded] = useState(true);
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
 
   // Client Coordinates Query Workflow
@@ -107,14 +107,14 @@ export default function FactibilidadPage() {
     loadBoxes();
   }, [loadBoxes]);
 
-  // Reset box details expansion when selecting another box
+  // Open box details by default when selecting a box
   useEffect(() => {
-    setIsBoxDetailsExpanded(false);
+    if (selectedBox) setIsBoxDetailsExpanded(true);
   }, [selectedBox?.id]);
 
-  // Reset diagnosis expansion when querying new coordinates
+  // Open diagnosis details by default when querying new coordinates
   useEffect(() => {
-    setIsDiagnosisExpanded(false);
+    if (clientCoords) setIsDiagnosisExpanded(true);
   }, [clientCoords?.[0], clientCoords?.[1]]);
 
   // Statistics calculation for the boxes
@@ -699,6 +699,22 @@ export default function FactibilidadPage() {
 
                 {/* Minimalist icon actions */}
                 <div className="flex items-center gap-2 shrink-0">
+                  {clientCoords && feasibilityResult && (
+                    <button
+                      type="button"
+                      onClick={handleCopyWhatsApp}
+                      className="text-neutral-400 hover:text-emerald-700 transition-colors cursor-pointer p-1"
+                      title={copiedWhatsApp ? "Copiado a portapapeles" : "Copiar respuesta para WhatsApp"}
+                      aria-label="Copiar respuesta para WhatsApp"
+                    >
+                      {copiedWhatsApp ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      ) : (
+                        <MessageCircle className="w-3.5 h-3.5 stroke-[1.25]" />
+                      )}
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => handleCopyBoxCoords(selectedBox)}
@@ -762,6 +778,24 @@ export default function FactibilidadPage() {
                     </span>
                   </div>
 
+                  {clientCoords && (
+                    <div className="flex justify-between items-center text-neutral-500">
+                      <span>Distancia de acometida:</span>
+                      <span
+                        className={cn(
+                          "font-semibold",
+                          calculateDistanceMeters(clientCoords[0], clientCoords[1], selectedBox.lat, selectedBox.lng) <= 150
+                            ? "text-emerald-600"
+                            : calculateDistanceMeters(clientCoords[0], clientCoords[1], selectedBox.lat, selectedBox.lng) <= 250
+                            ? "text-amber-600"
+                            : "text-red-500"
+                        )}
+                      >
+                        {calculateDistanceMeters(clientCoords[0], clientCoords[1], selectedBox.lat, selectedBox.lng)} metros
+                      </span>
+                    </div>
+                  )}
+
                   {selectedBox.isNap ? (
                     <div className="flex justify-between items-center text-neutral-500">
                       <span>Distribución de puertos:</span>
@@ -804,14 +838,30 @@ export default function FactibilidadPage() {
                     <span>
                       GPS: {selectedBox.lat.toFixed(5)}, {selectedBox.lng.toFixed(5)}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenGoogleMaps(selectedBox.lat, selectedBox.lng)}
-                      className="text-neutral-600 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1"
-                    >
-                      <span>Abrir en Maps</span>
-                      <ExternalLink className="w-2.5 h-2.5 text-neutral-400" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                      {clientCoords && feasibilityResult && (
+                        <button
+                          type="button"
+                          onClick={handleCopyWhatsApp}
+                          className="text-emerald-700 hover:text-emerald-900 transition-colors cursor-pointer flex items-center gap-1 text-[11px]"
+                        >
+                          {copiedWhatsApp ? (
+                            <Check className="w-3 h-3 text-emerald-600" />
+                          ) : (
+                            <MessageCircle className="w-3 h-3 stroke-[1.25]" />
+                          )}
+                          <span>{copiedWhatsApp ? "Copiado" : "WhatsApp"}</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleOpenGoogleMaps(selectedBox.lat, selectedBox.lng)}
+                        className="text-neutral-600 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1 text-[11px]"
+                      >
+                        <span>Abrir en Maps</span>
+                        <ExternalLink className="w-2.5 h-2.5 text-neutral-400" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
