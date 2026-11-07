@@ -67,6 +67,7 @@ export default function FactibilidadPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedBox, setSelectedBox] = useState<OzBox | null>(null);
   const [isBoxDetailsExpanded, setIsBoxDetailsExpanded] = useState(false);
+  const [isDiagnosisExpanded, setIsDiagnosisExpanded] = useState(false);
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
 
   // Client Coordinates Query Workflow
@@ -110,6 +111,11 @@ export default function FactibilidadPage() {
   useEffect(() => {
     setIsBoxDetailsExpanded(false);
   }, [selectedBox?.id]);
+
+  // Reset diagnosis expansion when querying new coordinates
+  useEffect(() => {
+    setIsDiagnosisExpanded(false);
+  }, [clientCoords?.[0], clientCoords?.[1]]);
 
   // Statistics calculation for the boxes
   const stats = useMemo(() => {
@@ -415,9 +421,9 @@ export default function FactibilidadPage() {
             flyToCoords={flyToCoords}
           />
 
-          {/* Initial Clean Guide (shown when no coordinate is queried yet) */}
+          {/* Initial Clean Guide (shown when no coordinate is queried yet, hidden on mobile to keep map clean) */}
           {!clientCoords && (
-            <div className="absolute top-4 left-4 right-4 sm:left-6 sm:right-auto sm:w-[360px] z-20 bg-white/95 backdrop-blur-md shadow-sm p-3.5 space-y-1.5 border-b border-neutral-100 animate-in fade-in duration-200">
+            <div className="hidden sm:block absolute top-4 left-4 right-4 sm:left-6 sm:right-auto sm:w-[360px] z-20 bg-white/95 backdrop-blur-md shadow-sm p-3.5 space-y-1.5 border-b border-neutral-100 animate-in fade-in duration-200">
               <span className="text-xs font-medium text-neutral-900 block">
                 Consulta de factibilidad
               </span>
@@ -427,166 +433,246 @@ export default function FactibilidadPage() {
             </div>
           )}
 
-          {/* Feasibility Diagnosis Panel for Client Coordinates */}
+          {/* Feasibility Diagnosis Panel for Client Coordinates (Retractable 2-State Bar in Mobile) */}
           {feasibilityResult && (
-            <div className="absolute top-4 left-4 right-4 sm:left-6 sm:right-auto sm:w-[410px] z-20 bg-white/95 backdrop-blur-md shadow-lg p-4 space-y-3.5 border-b border-neutral-100 animate-in fade-in slide-in-from-top-2 duration-150">
-              {/* Header */}
-              <div className="flex items-start justify-between gap-3 border-b border-neutral-100 pb-2.5">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "w-2.5 h-2.5 rounded-full shrink-0",
-                        feasibilityResult.isFeasible
-                          ? feasibilityResult.feasibilityLevel === "optima"
-                            ? "bg-emerald-500"
-                            : "bg-amber-500"
-                          : feasibilityResult.feasibilityLevel === "saturada"
-                          ? "bg-amber-500"
-                          : "bg-red-500"
-                      )}
-                    />
-                    <h2 className="text-xs sm:text-sm font-semibold text-neutral-900 tracking-tight">
-                      {feasibilityResult.diagnosisTitle}
-                    </h2>
-                  </div>
-                  <p className="text-[11px] text-neutral-500 font-mono mt-1">
-                    Punto del cliente: {clientCoords?.[0].toFixed(5)}, {clientCoords?.[1].toFixed(5)}
-                  </p>
-                </div>
+            <div className="absolute bottom-16 sm:bottom-auto sm:top-4 left-3 right-3 sm:left-6 sm:right-auto sm:w-[410px] z-20 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-xs animate-in fade-in slide-in-from-bottom-2 sm:slide-in-from-top-2 duration-150 select-none">
+              {/* Compact Bar (Always visible in 1 ultra-clean row) */}
+              <div className="flex items-center justify-between px-3 py-2.5 gap-2">
                 <button
                   type="button"
-                  onClick={handleClearQuery}
-                  className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-0.5"
-                  title="Cerrar diagnóstico"
+                  onClick={() => setIsDiagnosisExpanded((prev) => !prev)}
+                  className="flex items-center gap-2 min-w-0 text-left cursor-pointer group flex-1"
+                  title={isDiagnosisExpanded ? "Contraer diagnóstico" : "Expandir diagnóstico"}
                 >
-                  <X className="w-4 h-4 stroke-[1.5]" />
+                  <span
+                    className={cn(
+                      "w-2 h-2 rounded-full shrink-0",
+                      feasibilityResult.isFeasible
+                        ? feasibilityResult.feasibilityLevel === "optima"
+                          ? "bg-emerald-500"
+                          : "bg-amber-500"
+                        : feasibilityResult.feasibilityLevel === "saturada"
+                        ? "bg-amber-500"
+                        : "bg-red-500"
+                    )}
+                  />
+                  <div className="flex items-center gap-1.5 min-w-0 truncate">
+                    <span className="text-xs font-semibold text-neutral-900 group-hover:text-neutral-700 transition-colors truncate">
+                      {feasibilityResult.nearestAvailableNap?.name || feasibilityResult.diagnosisTitle}
+                    </span>
+                    {feasibilityResult.distanceToAvailableMeters !== null && (
+                      <span
+                        className={cn(
+                          "text-xs font-mono font-medium shrink-0",
+                          feasibilityResult.distanceToAvailableMeters <= 150
+                            ? "text-emerald-600"
+                            : feasibilityResult.distanceToAvailableMeters <= 250
+                            ? "text-amber-600"
+                            : "text-red-500"
+                        )}
+                      >
+                        &bull; {feasibilityResult.distanceToAvailableMeters}m
+                      </span>
+                    )}
+                    {feasibilityResult.nearestAvailableNap && (
+                      <span className="text-[11px] font-mono text-neutral-400 shrink-0 hidden xs:inline">
+                        ({feasibilityResult.nearestAvailableNap.availablePorts} libres)
+                      </span>
+                    )}
+                  </div>
                 </button>
+
+                {/* Minimalist icon actions */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleCopyWhatsApp}
+                    className="text-neutral-400 hover:text-emerald-700 transition-colors cursor-pointer p-1"
+                    title={copiedWhatsApp ? "Copiado a portapapeles" : "Copiar respuesta para WhatsApp"}
+                    aria-label="Copiar respuesta para WhatsApp"
+                  >
+                    {copiedWhatsApp ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <MessageCircle className="w-3.5 h-3.5 stroke-[1.25]" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleOpenGoogleMaps(clientCoords![0], clientCoords![1])
+                    }
+                    className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
+                    title="Ver en Google Maps"
+                    aria-label="Ver en Google Maps"
+                  >
+                    <Navigation className="w-3.5 h-3.5 stroke-[1.25]" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsDiagnosisExpanded((prev) => !prev)}
+                    className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
+                    title={isDiagnosisExpanded ? "Contraer diagnóstico" : "Expandir diagnóstico"}
+                    aria-label={isDiagnosisExpanded ? "Contraer diagnóstico" : "Expandir diagnóstico"}
+                  >
+                    {isDiagnosisExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5 stroke-[1.25]" />
+                    ) : (
+                      <ChevronUp className="w-3.5 h-3.5 stroke-[1.25]" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleClearQuery}
+                    className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
+                    title="Limpiar consulta"
+                    aria-label="Limpiar consulta"
+                  >
+                    <X className="w-3.5 h-3.5 stroke-[1.5]" />
+                  </button>
+                </div>
               </div>
 
-              {/* Diagnosis details */}
-              <p className="text-xs text-neutral-700 leading-relaxed font-sans">
-                {feasibilityResult.diagnosisMessage}
-              </p>
-
-              {/* Assigned / Nearest Available NAP specs */}
-              {feasibilityResult.nearestAvailableNap && (
-                <div className="border-t border-neutral-100 pt-2.5 space-y-1.5 text-xs font-mono">
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-400">
-                      {feasibilityResult.isFeasible ? "Caja asignada:" : "Caja más cercana:"}
+              {/* Expanded Technical & Diagnostic Details */}
+              {isDiagnosisExpanded && (
+                <div className="px-3 pb-3 pt-1 border-t border-neutral-100 space-y-2.5 max-h-[50vh] sm:max-h-none overflow-y-auto animate-in fade-in duration-150">
+                  {/* Diagnosis title & client coords */}
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <span className="text-xs font-semibold text-neutral-900">
+                      {feasibilityResult.diagnosisTitle}
                     </span>
-                    <span className="text-neutral-900 font-medium">
-                      {feasibilityResult.nearestAvailableNap.name}
+                    <span className="text-[10px] text-neutral-400 font-mono">
+                      {clientCoords?.[0].toFixed(5)}, {clientCoords?.[1].toFixed(5)}
                     </span>
                   </div>
 
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-400">Distancia de acometida:</span>
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        feasibilityResult.distanceToAvailableMeters! <= 150
-                          ? "text-emerald-600"
-                          : feasibilityResult.distanceToAvailableMeters! <= 250
-                          ? "text-amber-600"
-                          : "text-red-500"
-                      )}
-                    >
-                      {feasibilityResult.distanceToAvailableMeters} metros
-                    </span>
-                  </div>
+                  {/* Diagnosis message */}
+                  <p className="text-xs text-neutral-600 leading-relaxed font-sans">
+                    {feasibilityResult.diagnosisMessage}
+                  </p>
 
-                  <div className="flex justify-between items-center">
-                    <span className="text-neutral-400">Puertos libres:</span>
-                    <span className="text-emerald-600 font-semibold">
-                      {feasibilityResult.nearestAvailableNap.availablePorts} de{" "}
-                      {feasibilityResult.nearestAvailableNap.totalPorts}
-                    </span>
-                  </div>
+                  {/* Assigned / Nearest Available NAP specs */}
+                  {feasibilityResult.nearestAvailableNap && (
+                    <div className="border-t border-neutral-100 pt-2 space-y-1.5 text-[11px] font-mono">
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-400">
+                          {feasibilityResult.isFeasible ? "Caja asignada:" : "Caja más cercana:"}
+                        </span>
+                        <span className="text-neutral-900 font-medium">
+                          {feasibilityResult.nearestAvailableNap.name}
+                        </span>
+                      </div>
 
-                  {feasibilityResult.nearestAvailableNap.potencia && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-neutral-400">Potencia óptica:</span>
-                      <span className="text-neutral-700">
-                        {feasibilityResult.nearestAvailableNap.potencia}
-                      </span>
-                    </div>
-                  )}
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-400">Distancia de acometida:</span>
+                        <span
+                          className={cn(
+                            "font-semibold",
+                            feasibilityResult.distanceToAvailableMeters! <= 150
+                              ? "text-emerald-600"
+                              : feasibilityResult.distanceToAvailableMeters! <= 250
+                              ? "text-amber-600"
+                              : "text-red-500"
+                          )}
+                        >
+                          {feasibilityResult.distanceToAvailableMeters} metros
+                        </span>
+                      </div>
 
-                  {feasibilityResult.nearestAvailableNap.pon && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-neutral-400">PON:</span>
-                      <span
-                        className="text-neutral-700 text-right max-w-[210px] truncate"
-                        title={feasibilityResult.nearestAvailableNap.pon}
-                      >
-                        {feasibilityResult.nearestAvailableNap.pon}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-400">Puertos libres:</span>
+                        <span className="text-emerald-600 font-semibold">
+                          {feasibilityResult.nearestAvailableNap.availablePorts} de{" "}
+                          {feasibilityResult.nearestAvailableNap.totalPorts}
+                        </span>
+                      </div>
 
-              {/* Nearby Alternatives List */}
-              {feasibilityResult.nearbyNaps.length > 1 && (
-                <div className="border-t border-neutral-100 pt-2">
-                  <span className="text-[10px] text-neutral-400 font-mono block mb-1">
-                    Otras cajas cercanas:
-                  </span>
-                  <div className="space-y-1">
-                    {feasibilityResult.nearbyNaps.slice(1, 4).map(({ box, distance }) => (
-                      <div
-                        key={box.id}
-                        className="flex items-center justify-between text-[11px] font-mono text-neutral-600 hover:text-neutral-950 cursor-pointer"
-                        onClick={() => setSelectedBox(box)}
-                      >
-                        <span className="truncate max-w-[190px]">{box.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span>{distance}m</span>
-                          <span
-                            className={cn(
-                              "font-semibold",
-                              box.availablePorts > 0 ? "text-emerald-600" : "text-neutral-400"
-                            )}
-                          >
-                            {box.availablePorts} libres
+                      {feasibilityResult.nearestAvailableNap.potencia && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-neutral-400">Potencia óptica:</span>
+                          <span className="text-neutral-700">
+                            {feasibilityResult.nearestAvailableNap.potencia}
                           </span>
                         </div>
+                      )}
+
+                      {feasibilityResult.nearestAvailableNap.pon && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-neutral-400">PON:</span>
+                          <span
+                            className="text-neutral-700 text-right max-w-[210px] truncate"
+                            title={feasibilityResult.nearestAvailableNap.pon}
+                          >
+                            {feasibilityResult.nearestAvailableNap.pon}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Nearby Alternatives List */}
+                  {feasibilityResult.nearbyNaps.length > 1 && (
+                    <div className="border-t border-neutral-100 pt-2">
+                      <span className="text-[10px] text-neutral-400 font-mono block mb-1">
+                        Otras cajas cercanas:
+                      </span>
+                      <div className="space-y-1">
+                        {feasibilityResult.nearbyNaps.slice(1, 4).map(({ box, distance }) => (
+                          <div
+                            key={box.id}
+                            className="flex items-center justify-between text-[11px] font-mono text-neutral-600 hover:text-neutral-950 cursor-pointer"
+                            onClick={() => setSelectedBox(box)}
+                          >
+                            <span className="truncate max-w-[190px]">{box.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span>{distance}m</span>
+                              <span
+                                className={cn(
+                                  "font-semibold",
+                                  box.availablePorts > 0 ? "text-emerald-600" : "text-neutral-400"
+                                )}
+                              >
+                                {box.availablePorts} libres
+                              </span>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  )}
+
+                  {/* Quick Action Link Buttons */}
+                  <div className="flex items-center justify-between gap-3 border-t border-neutral-100 pt-2 text-xs font-mono">
+                    <button
+                      type="button"
+                      onClick={handleCopyWhatsApp}
+                      className="text-emerald-700 hover:text-emerald-900 transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      {copiedWhatsApp ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      ) : (
+                        <MessageCircle className="w-3.5 h-3.5 stroke-[1.5]" />
+                      )}
+                      <span>{copiedWhatsApp ? "Copiado a portapapeles" : "Copiar WhatsApp"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleOpenGoogleMaps(clientCoords![0], clientCoords![1])
+                      }
+                      className="text-neutral-600 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <Navigation className="w-3 h-3 stroke-[1.5]" />
+                      <span>Ver en Maps</span>
+                      <ExternalLink className="w-2.5 h-2.5 text-neutral-400" />
+                    </button>
                   </div>
                 </div>
               )}
-
-              {/* Quick Action Buttons for Advisors */}
-              <div className="flex items-center justify-between gap-3 border-t border-neutral-100 pt-2.5">
-                <button
-                  type="button"
-                  onClick={handleCopyWhatsApp}
-                  className="text-xs font-mono text-emerald-700 hover:text-emerald-900 transition-colors cursor-pointer flex items-center gap-1.5"
-                  title="Copiar texto formal para enviar al cliente por WhatsApp"
-                >
-                  {copiedWhatsApp ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  ) : (
-                    <MessageCircle className="w-3.5 h-3.5 stroke-[1.5]" />
-                  )}
-                  <span>{copiedWhatsApp ? "Copiado a portapapeles" : "Copiar WhatsApp"}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleOpenGoogleMaps(clientCoords![0], clientCoords![1])
-                  }
-                  className="text-xs font-mono text-neutral-600 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <Navigation className="w-3 h-3 stroke-[1.5]" />
-                  <span>Ver en Maps</span>
-                  <ExternalLink className="w-2.5 h-2.5 text-neutral-400" />
-                </button>
-              </div>
             </div>
           )}
 
