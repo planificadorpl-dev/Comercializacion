@@ -342,39 +342,6 @@ function FactibilidadMapInner({
           fillOpacity,
         });
 
-        // Tooltip is evaluated lazily only on hover (prevents memory spike with 6,000+ points)
-        circle.bindTooltip(
-          () => `
-            <div style="font-family: system-ui, sans-serif; font-size: 11px; line-height: 1.35; color: ${
-              isDark ? "#fafafa" : "#171717"
-            }; min-width: 150px;">
-              <div style="font-weight: 600; font-size: 11px; margin-bottom: 2px;">${box.name}</div>
-              <div style="color: ${isDark ? "#a3a3a3" : "#737373"}; font-size: 10px; margin-bottom: 4px;">
-                ${box.boxTypeName} &bull; ${box.sector || "Sector general"}
-              </div>
-              ${
-                box.isNap
-                  ? `
-                <div style="display: flex; justify-content: space-between; border-top: 1px solid ${
-                  isDark ? "#333" : "#e5e5e5"
-                }; padding-top: 3px; font-size: 10px;">
-                  <span>Puertos libres:</span>
-                  <strong style="color: ${
-                    box.availablePorts > 2 ? "#10b981" : box.availablePorts > 0 ? "#f59e0b" : "#ef4444"
-                  };">${box.availablePorts} de ${box.totalPorts}</strong>
-                </div>
-              `
-                  : ""
-              }
-            </div>
-          `,
-          {
-            direction: "top",
-            offset: [0, -6],
-            className: isDark ? "carto-tooltip-dark" : "carto-tooltip-light",
-          }
-        );
-
         // Click on marker: isolates event so map click never triggers
         circle.on("click", (ev: any) => {
           isClickingMarkerRef.current = true;

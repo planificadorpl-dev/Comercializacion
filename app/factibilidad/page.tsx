@@ -421,21 +421,9 @@ export default function FactibilidadPage() {
             flyToCoords={flyToCoords}
           />
 
-          {/* Initial Clean Guide (shown when no coordinate is queried yet, hidden on mobile to keep map clean) */}
-          {!clientCoords && (
-            <div className="hidden sm:block absolute top-4 left-4 right-4 sm:left-6 sm:right-auto sm:w-[360px] z-20 bg-white/95 backdrop-blur-md shadow-sm p-3.5 space-y-1.5 border-b border-neutral-100 animate-in fade-in duration-200">
-              <span className="text-xs font-medium text-neutral-900 block">
-                Consulta de factibilidad
-              </span>
-              <p className="text-[11px] text-neutral-500 font-sans leading-relaxed">
-                Pega las coordenadas enviadas por el cliente o haz clic directamente sobre su ubicación en el mapa. Se calculará la distancia de acometida y la respuesta para WhatsApp en tiempo real.
-              </p>
-            </div>
-          )}
-
-          {/* Feasibility Diagnosis Panel for Client Coordinates (Retractable 2-State Bar in Mobile) */}
-          {feasibilityResult && (
-            <div className="absolute bottom-16 sm:bottom-auto sm:top-4 left-3 right-3 sm:left-6 sm:right-auto sm:w-[410px] z-20 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-xs animate-in fade-in slide-in-from-bottom-2 sm:slide-in-from-top-2 duration-150 select-none">
+          {/* Feasibility Diagnosis Panel for Client Coordinates (Retractable 2-State Bar at Bottom) */}
+          {feasibilityResult && !selectedBox && (
+            <div className="absolute bottom-16 sm:bottom-4 left-3 right-3 sm:left-6 sm:right-auto sm:w-[410px] z-20 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-xs animate-in fade-in slide-in-from-bottom-2 duration-150 select-none">
               {/* Compact Bar (Always visible in 1 ultra-clean row) */}
               <div className="flex items-center justify-between px-3 py-2.5 gap-2">
                 <button
@@ -677,7 +665,7 @@ export default function FactibilidadPage() {
           )}
 
           {/* Retractable 2-State Information Bar for Box Clicked */}
-          {selectedBox && !feasibilityResult && (
+          {selectedBox && (
             <div className="absolute bottom-16 sm:bottom-4 left-3 right-3 sm:left-6 sm:right-auto sm:w-[380px] z-20 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-xs animate-in fade-in slide-in-from-bottom-2 duration-150 select-none">
               {/* Compact Bar (Always visible in 1 ultra-clean row) */}
               <div className="flex items-center justify-between px-3 py-2.5 gap-2">
