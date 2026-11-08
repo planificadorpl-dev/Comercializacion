@@ -19,6 +19,7 @@ import {
   deleteOferta,
   saveOperador,
 } from "@/app/actions/competencia";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useUser } from "@/components/providers/user-provider";
 import { useModules } from "@/components/providers/modules-provider";
@@ -49,13 +50,13 @@ function CompetenciaContent() {
   const [isNewOpOpen, setIsNewOpOpen] = useState(false);
   const [ofertaToDelete, setOfertaToDelete] = useState<number | null>(null);
 
-  // New Offer Form State
+  // New Offer Form State (strings for effortless numeric typing and instant 1-tap presets)
   const [opId, setOpId] = useState<string>(() => (cachedOperadores.length > 0 ? String(cachedOperadores[0].id) : ""));
   const [nombrePlan, setNombrePlan] = useState("");
   const [tecnologia, setTecnologia] = useState("Fibra Óptica");
-  const [velocidadMb, setVelocidadMb] = useState<number>(100);
-  const [precioMensual, setPrecioMensual] = useState<number>(25);
-  const [costoInstalacion, setCostoInstalacion] = useState<number>(0);
+  const [velocidadMb, setVelocidadMb] = useState<string>("400");
+  const [precioMensual, setPrecioMensual] = useState<string>("25");
+  const [costoInstalacion, setCostoInstalacion] = useState<string>("0");
   const [incluyeTv, setIncluyeTv] = useState(false);
   const [esSimetrico, setEsSimetrico] = useState(true);
   const [formEstado, setFormEstado] = useState("Miranda");
@@ -64,9 +65,8 @@ function CompetenciaContent() {
   const [notas, setNotas] = useState("");
   const [savingOffer, setSavingOffer] = useState(false);
 
-  // New Operator Form State
+  // New Operator Form State (admin only, color indicator eliminated)
   const [newOpNombre, setNewOpNombre] = useState("");
-  const [newOpColor, setNewOpColor] = useState("#3b82f6");
   const [savingOp, setSavingOp] = useState(false);
 
   const [toastMsg, setToastMsg] = useState<{ text: string; type?: "success" | "error" } | null>(null);
@@ -125,10 +125,15 @@ function CompetenciaContent() {
 
   const handleSaveOperador = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) {
+      setToastMsg({ text: "Solo administradores pueden crear operadores", type: "error" });
+      return;
+    }
     if (!newOpNombre.trim()) return;
     setSavingOp(true);
     try {
-      const op = await saveOperador(newOpNombre.trim(), newOpColor);
+      // Color indicator eliminated: default neutral slate hex used for DB consistency
+      const op = await saveOperador(newOpNombre.trim(), "#64748b");
       setOperadores([...operadores, op]);
       setOpId(String(op.id));
       setNewOpNombre("");
@@ -203,8 +208,8 @@ function CompetenciaContent() {
       const q = searchOperator.toLowerCase();
       result = result.filter((o) => {
         const opName = (o.operador?.nombre || "").toLowerCase();
-        const planName = (o.plan_nombre || o.nombre_plan || "").toLowerCase();
-        const promo = (o.promocion || o.notas || "").toLowerCase();
+        const planName = (o.nombre_plan || o.plan_nombre || "").toLowerCase();
+        const promo = (o.notas || o.promocion || "").toLowerCase();
         return opName.includes(q) || planName.includes(q) || promo.includes(q);
       });
     }
@@ -329,13 +334,16 @@ function CompetenciaContent() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-4 ml-auto">
-              <button
-                type="button"
-                onClick={() => setIsNewOpOpen(true)}
-                className="py-1.5 px-2 text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer flex items-center"
-              >
-                Nuevo operador
-              </button>
+              {/* Only administrators can create new operators */}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setIsNewOpOpen(true)}
+                  className="py-1.5 px-2 text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer flex items-center"
+                >
+                  Nuevo operador
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setIsNewOfferOpen(true)}
@@ -461,11 +469,8 @@ function CompetenciaContent() {
                       className="group py-3.5 px-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-neutral-50/50 transition-colors"
                     >
                       <div className="space-y-1 min-w-0">
+                        {/* Operator Name without color indicator */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: of.operador?.color_hex || "#3b82f6" }}
-                          />
                           <span className="text-xs font-semibold text-neutral-900">
                             {of.operador?.nombre || "Operador"}
                           </span>
@@ -588,40 +593,127 @@ function CompetenciaContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              {/* Numeric Inputs with 1-Tap Presets & onFocus Auto-Select */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Velocidad */}
                 <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Velocidad (Mbps)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-neutral-500 block">Velocidad (Mbps)</label>
+                    {velocidadMb && (
+                      <span className="text-[10px] font-mono text-neutral-400">
+                        {Number(velocidadMb) >= 1000
+                          ? `${(Number(velocidadMb) / 1000).toFixed(0)}G`
+                          : `${velocidadMb}M`}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="number"
+                    inputMode="numeric"
                     min="1"
                     value={velocidadMb}
-                    onChange={(e) => setVelocidadMb(parseInt(e.target.value, 10) || 0)}
+                    onChange={(e) => setVelocidadMb(e.target.value)}
+                    onFocus={(e) => e.target.select()}
+                    placeholder="Ej: 400"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
                   />
+                  <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                    {[100, 200, 300, 400, 500, 600, 1000].map((mb) => (
+                      <button
+                        key={mb}
+                        type="button"
+                        onClick={() => setVelocidadMb(String(mb))}
+                        className={cn(
+                          "text-[10px] font-mono transition-colors cursor-pointer py-0.5",
+                          velocidadMb === String(mb)
+                            ? "text-neutral-900 font-bold underline underline-offset-4"
+                            : "text-neutral-400 hover:text-neutral-700"
+                        )}
+                      >
+                        {mb >= 1000 ? "1G" : mb}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
+                {/* Tarifa mensual */}
                 <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Tarifa mensual ($)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-neutral-500 block">Tarifa mensual ($)</label>
+                    {precioMensual && (
+                      <span className="text-[10px] font-mono text-neutral-400">
+                        ${precioMensual}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     min="0"
                     value={precioMensual}
-                    onChange={(e) => setPrecioMensual(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => setPrecioMensual(e.target.value)}
+                    onFocus={(e) => e.target.select()}
+                    placeholder="Ej: 25"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
                   />
+                  <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                    {[15, 20, 25, 30, 35, 40, 50].map((usd) => (
+                      <button
+                        key={usd}
+                        type="button"
+                        onClick={() => setPrecioMensual(String(usd))}
+                        className={cn(
+                          "text-[10px] font-mono transition-colors cursor-pointer py-0.5",
+                          precioMensual === String(usd)
+                            ? "text-neutral-900 font-bold underline underline-offset-4"
+                            : "text-neutral-400 hover:text-neutral-700"
+                        )}
+                      >
+                        ${usd}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
+                {/* Costo instalación */}
                 <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Costo instalación ($)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-neutral-500 block">Costo instalación ($)</label>
+                    {costoInstalacion !== "" && (
+                      <span className="text-[10px] font-mono text-neutral-400">
+                        {Number(costoInstalacion) === 0 ? "Gratis" : `$${costoInstalacion}`}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     min="0"
                     value={costoInstalacion}
-                    onChange={(e) => setCostoInstalacion(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => setCostoInstalacion(e.target.value)}
+                    onFocus={(e) => e.target.select()}
+                    placeholder="Ej: 0"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
                   />
+                  <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                    {[0, 10, 15, 20, 30, 50].map((inst) => (
+                      <button
+                        key={inst}
+                        type="button"
+                        onClick={() => setCostoInstalacion(String(inst))}
+                        className={cn(
+                          "text-[10px] font-mono transition-colors cursor-pointer py-0.5",
+                          costoInstalacion === String(inst)
+                            ? "text-neutral-900 font-bold underline underline-offset-4"
+                            : "text-neutral-400 hover:text-neutral-700"
+                        )}
+                      >
+                        {inst === 0 ? "Gratis" : `$${inst}`}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -721,8 +813,8 @@ function CompetenciaContent() {
         </div>
       )}
 
-      {/* MODAL: NUEVO OPERADOR */}
-      {isNewOpOpen && (
+      {/* MODAL: NUEVO OPERADOR (Admin only, color picker eliminated) */}
+      {isNewOpOpen && isAdmin && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/40 backdrop-blur-xs animate-in fade-in duration-150"
           onClick={() => !savingOp && setIsNewOpOpen(false)}
@@ -756,19 +848,6 @@ function CompetenciaContent() {
                   className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
                   required
                 />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] text-neutral-500 block">Color identificador</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={newOpColor}
-                    onChange={(e) => setNewOpColor(e.target.value)}
-                    className="w-8 h-8 rounded border-none cursor-pointer bg-transparent"
-                  />
-                  <span className="font-mono text-neutral-600">{newOpColor}</span>
-                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-2 text-xs">
