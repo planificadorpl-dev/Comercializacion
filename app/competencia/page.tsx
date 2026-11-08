@@ -50,13 +50,12 @@ function CompetenciaContent() {
   const [isNewOpOpen, setIsNewOpOpen] = useState(false);
   const [ofertaToDelete, setOfertaToDelete] = useState<number | null>(null);
 
-  // New Offer Form State (strings for effortless numeric typing and instant 1-tap presets)
+  // New Offer Form State (typed manually)
   const [opId, setOpId] = useState<string>(() => (cachedOperadores.length > 0 ? String(cachedOperadores[0].id) : ""));
   const [nombrePlan, setNombrePlan] = useState("");
-  const [tecnologia, setTecnologia] = useState("Fibra Óptica");
-  const [velocidadMb, setVelocidadMb] = useState<string>("400");
-  const [precioMensual, setPrecioMensual] = useState<string>("25");
-  const [costoInstalacion, setCostoInstalacion] = useState<string>("0");
+  const [velocidadMb, setVelocidadMb] = useState<string>("");
+  const [precioMensual, setPrecioMensual] = useState<string>("");
+  const [costoInstalacion, setCostoInstalacion] = useState<string>("");
   const [incluyeTv, setIncluyeTv] = useState(false);
   const [esSimetrico, setEsSimetrico] = useState(true);
   const [formEstado, setFormEstado] = useState("Miranda");
@@ -158,7 +157,7 @@ function CompetenciaContent() {
         operador_id: parseInt(opId, 10),
         nombre_plan: nombrePlan.trim(),
         plan_nombre: nombrePlan.trim(),
-        tecnologia: tecnologia.trim() || "Fibra Óptica",
+        tecnologia: "Fibra Óptica",
         velocidad_mb: Number(velocidadMb) || 0,
         velocidad_mbps: Number(velocidadMb) || 0,
         precio_mensual: Number(precioMensual) || 0,
@@ -179,6 +178,9 @@ function CompetenciaContent() {
 
       await saveOferta(payload);
       setNombrePlan("");
+      setVelocidadMb("");
+      setPrecioMensual("");
+      setCostoInstalacion("");
       setNotas("");
       setIsNewOfferOpen(false);
       setToastMsg({ text: "Oferta registrada exitosamente", type: "success" });
@@ -568,45 +570,23 @@ function CompetenciaContent() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Nombre del plan</label>
-                  <input
-                    type="text"
-                    value={nombrePlan}
-                    onChange={(e) => setNombrePlan(e.target.value)}
-                    placeholder="Ej: Plan Fibra 200"
-                    className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Tecnología</label>
-                  <input
-                    type="text"
-                    value={tecnologia}
-                    onChange={(e) => setTecnologia(e.target.value)}
-                    placeholder="Ej: Fibra Óptica, Radioenlace..."
-                    className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-neutral-500 block">Nombre del plan</label>
+                <input
+                  type="text"
+                  value={nombrePlan}
+                  onChange={(e) => setNombrePlan(e.target.value)}
+                  placeholder="Ej: Plan Fibra 200"
+                  className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
+                  required
+                />
               </div>
 
-              {/* Numeric Inputs with 1-Tap Presets & onFocus Auto-Select */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Numeric Inputs: tipeados manualmente */}
+              <div className="grid grid-cols-3 gap-3">
                 {/* Velocidad */}
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] text-neutral-500 block">Velocidad (Mbps)</label>
-                    {velocidadMb && (
-                      <span className="text-[10px] font-mono text-neutral-400">
-                        {Number(velocidadMb) >= 1000
-                          ? `${(Number(velocidadMb) / 1000).toFixed(0)}G`
-                          : `${velocidadMb}M`}
-                      </span>
-                    )}
-                  </div>
+                  <label className="text-[11px] text-neutral-500 block">Velocidad (Mbps)</label>
                   <input
                     type="number"
                     inputMode="numeric"
@@ -616,36 +596,13 @@ function CompetenciaContent() {
                     onFocus={(e) => e.target.select()}
                     placeholder="Ej: 400"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
+                    required
                   />
-                  <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-                    {[100, 200, 300, 400, 500, 600, 1000].map((mb) => (
-                      <button
-                        key={mb}
-                        type="button"
-                        onClick={() => setVelocidadMb(String(mb))}
-                        className={cn(
-                          "text-[10px] font-mono transition-colors cursor-pointer py-0.5",
-                          velocidadMb === String(mb)
-                            ? "text-neutral-900 font-bold underline underline-offset-4"
-                            : "text-neutral-400 hover:text-neutral-700"
-                        )}
-                      >
-                        {mb >= 1000 ? "1G" : mb}
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 {/* Tarifa mensual */}
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] text-neutral-500 block">Tarifa mensual ($)</label>
-                    {precioMensual && (
-                      <span className="text-[10px] font-mono text-neutral-400">
-                        ${precioMensual}
-                      </span>
-                    )}
-                  </div>
+                  <label className="text-[11px] text-neutral-500 block">Tarifa mensual ($)</label>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -656,36 +613,13 @@ function CompetenciaContent() {
                     onFocus={(e) => e.target.select()}
                     placeholder="Ej: 25"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
+                    required
                   />
-                  <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-                    {[15, 20, 25, 30, 35, 40, 50].map((usd) => (
-                      <button
-                        key={usd}
-                        type="button"
-                        onClick={() => setPrecioMensual(String(usd))}
-                        className={cn(
-                          "text-[10px] font-mono transition-colors cursor-pointer py-0.5",
-                          precioMensual === String(usd)
-                            ? "text-neutral-900 font-bold underline underline-offset-4"
-                            : "text-neutral-400 hover:text-neutral-700"
-                        )}
-                      >
-                        ${usd}
-                      </button>
-                    ))}
-                  </div>
                 </div>
 
                 {/* Costo instalación */}
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] text-neutral-500 block">Costo instalación ($)</label>
-                    {costoInstalacion !== "" && (
-                      <span className="text-[10px] font-mono text-neutral-400">
-                        {Number(costoInstalacion) === 0 ? "Gratis" : `$${costoInstalacion}`}
-                      </span>
-                    )}
-                  </div>
+                  <label className="text-[11px] text-neutral-500 block">Costo instalación ($)</label>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -697,23 +631,6 @@ function CompetenciaContent() {
                     placeholder="Ej: 0"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
                   />
-                  <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-                    {[0, 10, 15, 20, 30, 50].map((inst) => (
-                      <button
-                        key={inst}
-                        type="button"
-                        onClick={() => setCostoInstalacion(String(inst))}
-                        className={cn(
-                          "text-[10px] font-mono transition-colors cursor-pointer py-0.5",
-                          costoInstalacion === String(inst)
-                            ? "text-neutral-900 font-bold underline underline-offset-4"
-                            : "text-neutral-400 hover:text-neutral-700"
-                        )}
-                      >
-                        {inst === 0 ? "Gratis" : `$${inst}`}
-                      </button>
-                    ))}
-                  </div>
                 </div>
               </div>
 
