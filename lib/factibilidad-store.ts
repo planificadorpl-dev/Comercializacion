@@ -27,8 +27,6 @@ export interface FactibilidadBox {
 }
 
 const OZMAP_DEFAULT_URL = "https://powerlink.ozmap.com.br:9994";
-const OZMAP_DEFAULT_COOKIE =
-  "REMOVED_SECRET=JTIyJTdCJTVDJTIyd2ViX2V4cF9pZF92MiU1QyUyMiUzQSU1QyUyMmEwYmJiZjgyLTQzOWQtNGY0MS1hMjgyLTI4Nzg0ZmM4YzhkYSU1QyUyMiUyQyU1QyUyMmZpcnN0X3NlZW4lNUMlMjIlM0ExNzg2NzE1MDk3LjcwOSU1QyUyMiU3RCUyMg==; _s_id=s%3AREMOVED_SECRET.zZIoxIoKqG%2F7h7fMa5JxGqWgFRSNYRhF6b%2FjZGioGqw; mongoMachineId=1398319; locale=es; totango.heartbeat.last_module=OZmap; AMP_ffc1c66c15=JTdCJTIyZGV2aZW50SWQlMjIlM0ElMjI2MTVkM2QxMS1jNmRiLTQ2YTgtYmU1OS1kOTE4MTIwNzg3M2ElMjIlMkMlMjJ1c2VySWQlMjIlM0ElMjIwMjQ4NjYxNy02OGI4LTQ3MTYtOWIwOS03ZDhjZWFmMjE4OTUtNjllNjc3YjA0ZjQzY2ExOTgxNDA2YTEzJTIyJTJDJTIyc2Vzc2lvbklkJTIyJTNBMTc5Mzk3MzcxNDI2OCUyQyUyMm9wdE91dCUyMiUzQWZhbHNlJTJDJTIybGFzdEV2ZW50VGltZSUyMiUzQTE3OTM5NzM3MTU1OTYlMkMlMjJsYXN0RXZlbnRJZCUyMiUzQTUzMiUyQyUyMnBhZ2VDb3VudGVyJTIyJTNBMCUyQyUyMmNvb2tpZURvbWFpbiUyMiUzQSUyMi5vem1hcC5jb20uYnIlMjIlN0Q=; totango.heartbeat.last_ts=1793975367992";
 
 const BOX_TYPES_MAP: Record<string, { name: string; isNap: boolean; defaultPorts: number }> = {
   "589ddcf07dfe452f10d7c274": { name: "Manga de Empalme", isNap: false, defaultPorts: 0 },
@@ -76,7 +74,14 @@ function parseObservation(obs: string | undefined | null) {
 
 function fetchOzmapRaw(path: string): Promise<any> {
   const baseUrl = process.env.OZMAP_URL || OZMAP_DEFAULT_URL;
-  const cookie = process.env.OZMAP_COOKIE || OZMAP_DEFAULT_COOKIE;
+  const cookie = process.env.OZMAP_COOKIE;
+
+  if (!cookie) {
+    return Promise.reject(
+      new Error("OZMAP_COOKIE no está configurada en las variables de entorno.")
+    );
+  }
+
   const url = new URL(path, baseUrl);
   const agent = new https.Agent({ rejectUnauthorized: false });
 

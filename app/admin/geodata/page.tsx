@@ -9,7 +9,7 @@ import { CustomDropdown } from "@/components/ui/custom-dropdown";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { ToastPill } from "@/components/ui/toast-pill";
 import { createClient } from "@/lib/supabase/client";
-import { addGeodata, deleteGeodata, syncGeodataFromSheets } from "@/app/actions/ventas";
+import { addGeodata, deleteGeodata, syncGeodataFromSheets, syncGeodataFromRubpi, loadMasterGeodataAction } from "@/app/actions/ventas";
 import { geoHierarchy as defaultGeoHierarchy } from "@/lib/geo_hierarchy";
 import { DEFAULT_GEO_ALIASES, CANONICAL_ZONES_CONFIG } from "@/lib/geo_normalization";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,7 @@ let hasLoadedGeodata = false;
 function GeodataAdminContent() {
   const [geodata, setGeodata] = useState<any[]>(() => cachedGeodata);
   const [loading, setLoading] = useState(!hasLoadedGeodata);
-  const [syncingSheets, setSyncingSheets] = useState(false);
+  const [syncingRubpi, setSyncingRubpi] = useState(false);
   const [activeTab, setActiveTab] = useState<"padron" | "homologacion">("padron");
   const [aliasSearch, setAliasSearch] = useState("");
 
@@ -38,10 +38,10 @@ function GeodataAdminContent() {
 
   const [toastMsg, setToastMsg] = useState<{ text: string; type?: "success" | "error" } | null>(null);
 
-  async function handleSyncSheets() {
-    setSyncingSheets(true);
+  async function handleSyncRubpi() {
+    setSyncingRubpi(true);
     try {
-      const res = await syncGeodataFromSheets();
+      const res = await syncGeodataFromRubpi();
       if (res.success) {
         setToastMsg({ text: res.message, type: "success" });
         await loadGeodata(false);
@@ -49,9 +49,9 @@ function GeodataAdminContent() {
         setToastMsg({ text: res.message, type: "error" });
       }
     } catch (err: any) {
-      setToastMsg({ text: err.message || "Error al sincronizar con Google Sheets", type: "error" });
+      setToastMsg({ text: err.message || "Error al sincronizar con Rubpi", type: "error" });
     } finally {
-      setSyncingSheets(false);
+      setSyncingRubpi(false);
     }
   }
 
@@ -71,33 +71,43 @@ function GeodataAdminContent() {
         .order("parroquia")
         .order("sector");
 
-      if (error || !data || data.length === 0) {
-        // Fallback to flatten defaultGeoHierarchy
-        const flattened: any[] = [];
-        let tempId = 1;
-        Object.keys(defaultGeoHierarchy).forEach((est) => {
-          Object.keys(defaultGeoHierarchy[est]).forEach((mun) => {
-            Object.keys(defaultGeoHierarchy[est][mun]).forEach((parr) => {
-              defaultGeoHierarchy[est][mun][parr].forEach((sec) => {
-                flattened.push({
-                  id: `local_${tempId++}`,
-                  estado: est,
-                  municipio: mun,
-                  parroquia: parr,
-                  sector: sec,
-                });
+      if (!error && data && data.length > 0) {
+        cachedGeodata = data;
+        hasLoadedGeodata = true;
+        setGeodata(data);
+        return;
+      }
+
+      // Try Rubpi Master Geodata Cache
+      const rubpiSectors = await loadMasterGeodataAction();
+      if (rubpiSectors && rubpiSectors.length > 0) {
+        cachedGeodata = rubpiSectors;
+        hasLoadedGeodata = true;
+        setGeodata(rubpiSectors);
+        return;
+      }
+
+      // Fallback to flatten defaultGeoHierarchy
+      const flattened: any[] = [];
+      let tempId = 1;
+      Object.keys(defaultGeoHierarchy).forEach((est) => {
+        Object.keys(defaultGeoHierarchy[est]).forEach((mun) => {
+          Object.keys(defaultGeoHierarchy[est][mun]).forEach((parr) => {
+            defaultGeoHierarchy[est][mun][parr].forEach((sec) => {
+              flattened.push({
+                id: `local_${tempId++}`,
+                estado: est,
+                municipio: mun,
+                parroquia: parr,
+                sector: sec,
               });
             });
           });
         });
-        cachedGeodata = flattened;
-        hasLoadedGeodata = true;
-        setGeodata(flattened);
-      } else {
-        cachedGeodata = data;
-        hasLoadedGeodata = true;
-        setGeodata(data);
-      }
+      });
+      cachedGeodata = flattened;
+      hasLoadedGeodata = true;
+      setGeodata(flattened);
     } catch {
       setToastMsg({ text: "Error cargando localidades", type: "error" });
     } finally {
@@ -341,13 +351,13 @@ function GeodataAdminContent() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={handleSyncSheets}
-                      disabled={syncingSheets || loading}
+                      onClick={handleSyncRubpi}
+                      disabled={syncingRubpi || loading}
                       className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40 select-none"
-                      title="Sincronizar sectores con Google Sheets"
-                      aria-label="Sincronizar sectores con Google Sheets"
+                      title="Sincronizar sectores oficiales con Rubpi API"
+                      aria-label="Sincronizar sectores oficiales con Rubpi API"
                     >
-                      <RotateCw className={cn("w-4 h-4 stroke-[1.75]", syncingSheets && "animate-spin text-neutral-900")} />
+                      <RotateCw className={cn("w-4 h-4 stroke-[1.75]", syncingRubpi && "animate-spin text-neutral-900")} />
                     </button>
 
                     <button

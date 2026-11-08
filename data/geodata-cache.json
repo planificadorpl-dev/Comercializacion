@@ -1,0 +1,1767 @@
+{
+  "syncedAt": "2026-11-08T03:31:45.343Z",
+  "totalRawUsers": 54405,
+  "totalResidential": 32708,
+  "totalSectors": 245,
+  "totalOriginallyMissing": 1794,
+  "totalEnriched": 1619,
+  "sectors": [
+    {
+      "estado": "Aragua",
+      "municipio": "José Rafael Revenga",
+      "parroquia": "El Consejo",
+      "sector": "Corosito"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "José Rafael Revenga",
+      "parroquia": "El Consejo",
+      "sector": "El Ingenio"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "José Rafael Revenga",
+      "parroquia": "El Consejo",
+      "sector": "La Casona"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "José Rafael Revenga",
+      "parroquia": "El Consejo",
+      "sector": "La Gruta"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "José Rafael Revenga",
+      "parroquia": "El Consejo",
+      "sector": "La Hoya"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "José Rafael Revenga",
+      "parroquia": "El Consejo",
+      "sector": "Santo Domingo"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "José Rafael Revenga",
+      "parroquia": "El Consejo",
+      "sector": "Trapiche del Medio"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Araiza"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Bella Vista"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Boca de Cagua"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Brisas de Aragua"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Brisas de Bucaral"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Cañaote"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Caobal"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Casco Central"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Ciudad Guayas"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Colinas de Bucaral"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Curiepe"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "El Beisbol"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "El Loro"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Jabillal"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Jerusalen"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "La Concepcion"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "La Esperanza"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "La Gruta"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "La Pedrera"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Las Lomitas"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Las Veras"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Llano Grande"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Los Cachos"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Los Jabillos"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Los Limites"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Los Panamericanos"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Santo Domingo"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Tabacal"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Tinapuey"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Trapiche del Medio"
+    },
+    {
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Variantes de Guaya"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "Coche",
+      "sector": "Coche"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "Coche",
+      "sector": "Fundapol"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "Coche",
+      "sector": "Las Mayas"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "El Valle",
+      "sector": "El Valle"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "El Valle",
+      "sector": "Res. San Andrés"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "El Valle",
+      "sector": "Res. San Antonio"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "La Vega",
+      "sector": "La Vega"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "La Vega",
+      "sector": "La Veguita"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "La Vega",
+      "sector": "Las Torres"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "La Vega",
+      "sector": "Los Cangilones"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "La Vega",
+      "sector": "Los Jardines"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "La Vega",
+      "sector": "Los Mangos"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "La Vega",
+      "sector": "San José"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "La Vega",
+      "sector": "Simón Bolívar"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "Sucre (Catia)",
+      "sector": "El Topo"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "Sucre (Catia)",
+      "sector": "Gramoven"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "Sucre (Catia)",
+      "sector": "Isaías Medina Angarita"
+    },
+    {
+      "estado": "Distrito Capital",
+      "municipio": "Libertador",
+      "parroquia": "Sucre (Catia)",
+      "sector": "Propatria"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Barola"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Barrio Bolívar"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Brisas de Oriente"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "C.c Coliseo"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "C.c Don Pedro"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "C.c la Cascada"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "C.c Tibisay"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Casco Central"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Corralito"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "José Manuel Alvarez"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Km 18"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "La Guadalupe"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "La Ladera"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Llano Alto"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Lomas de Urquia"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Los Vecinos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Montaña Alta"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Potrerito I"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Potrerito Ii"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Potrero del Medio"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Res. Alta Vista"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Res. los Eucaliptos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Santa Eduviges"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Urb. Loma Mágica"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Carrizal",
+      "parroquia": "Carrizal",
+      "sector": "Yerba Buena"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "Agua Fría"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "Cachapal"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "Cantarrana"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "Casco Central"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "Cocorote"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "Cortada del Guayabo"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "El Aguacatal"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "El Calvario"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "El Guamal"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "El Ingenio"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "El Limon"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "El Naranjal"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "El Peñon"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "El Prado"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "Guaicoco"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "Guareguare"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "La Crucesita"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "La Culebrilla"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "La Oci"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "Los Amistosos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "Los Colorados"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "San José"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "San Rafael"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Cecilio Acosta (San Diego y San José)",
+      "sector": "Vista Hermosa"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "23 de Enero"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Alberto Ravell"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Alto Verde"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Aquiles Nazoa"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Barrio la Cruz"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Barrio Miranda I"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Barrio Miranda Ii"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Barrio Venezuela"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Brisas de Palo Alto"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Buenos Aires"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "C.c Ali Primera"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "C.c. Vasconia"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Carretera Vieja Caracas los Teques"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Centro los Teques"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Club Hipico"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Colinas del Ángel"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Colinas del Paso"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Cooperativa Guaicaipuro"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Cumbre Rojas"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Ayacucho"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Barbecho"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Beisbol"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Bosque"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Cabotaje"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Encanto"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Nacional"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Panadero"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Paso"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Pueblo"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Puinky"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Reten"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Ricon"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Rincon"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Tambor"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Trabuco"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Trigo"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Turpial"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "El Vigía"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Guaremal"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Hospital Victorino Santaella"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "José Gregorio"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "La Estrella"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "La Fontanera"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "La Matica"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "La Quinta"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Lagunetica"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Las Cadenas"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Las Lomitas"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Las Palmas"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Los Alpes"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Los Amarillos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Los Barriales"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Los Cerritos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Los Lagos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Los Mangos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Los Nuevos Teques"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Los Panamericanos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Los Teques"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Macarena Sur"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Mal Paso"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Manuela Saenz"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Palo Alto"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Punta Brava"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Quebrada la Virgen"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Ramo Verde"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Aldebaran"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Caracas"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Cima"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. el Barbecho"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. el Chorrito"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Guaicaipuro"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Imola"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Knoop"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. la Cima"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Lagunetica"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Miracielos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Miraflores"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Parque las Americas"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Rio Arriba"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Santa María"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Savil"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Tamari"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Tinantonia"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Tiuna"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Trigo Dorado"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Res. Yati"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Retamal"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Romulo Gallegos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Sant Omero"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Santa Eduviges"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Santa Eulalia"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Santa Rosa"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Solar de la Quinta"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Urb. Simon Bolívar"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Valle Alto"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "Zona Industrial el Tambor"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "San Pedro de los Altos",
+      "sector": "Bosque de Pinos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "San Pedro de los Altos",
+      "sector": "El Pueblo"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "San Pedro de los Altos",
+      "sector": "Pozo de Rosas"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Agua Linda"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Arboleda"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Bosque Alegre"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "C.c Galeria las Americas"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "C.c la Colina"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "C.c. Cepan"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "C.c. Club de Campo"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "C.c. Don Blas"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "C.c. la Casona 2"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Casco Central"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Club de Campo"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "El Amarillo"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "El Limón"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "El Limon"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "El Paramo"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "El Picacho"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "El Pueblo"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "El Retiro"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "El Sitio"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Km 8"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "La Ermita"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "La Gonzalera"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "La Guadalupe"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "La Morita"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "La Oveja Negra"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "La Rosaleda"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Las Cumbres"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Las Minas"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Las Polonias"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Los Castores"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Los Helechos"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Los Llaneros"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Res. el Rocio"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Res. las Churuatas"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Res. las Cumbres"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Res. Ops"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Res. San Antonio"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Rosaleda Norte"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Sierra Brava"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Urb. Pomarrosa"
+    },
+    {
+      "estado": "Miranda",
+      "municipio": "Los Salias",
+      "parroquia": "San Antonio de Los Altos",
+      "sector": "Zona Industrial las Minas"
+    }
+  ],
+  "hierarchy": {
+    "Miranda": {
+      "Los Salias": {
+        "San Antonio de Los Altos": [
+          "Agua Linda",
+          "Arboleda",
+          "Bosque Alegre",
+          "C.c Galeria las Americas",
+          "C.c la Colina",
+          "C.c. Cepan",
+          "C.c. Club de Campo",
+          "C.c. Don Blas",
+          "C.c. la Casona 2",
+          "Casco Central",
+          "Club de Campo",
+          "El Amarillo",
+          "El Limón",
+          "El Limon",
+          "El Paramo",
+          "El Picacho",
+          "El Pueblo",
+          "El Retiro",
+          "El Sitio",
+          "Km 8",
+          "La Ermita",
+          "La Gonzalera",
+          "La Guadalupe",
+          "La Morita",
+          "La Oveja Negra",
+          "La Rosaleda",
+          "Las Cumbres",
+          "Las Minas",
+          "Las Polonias",
+          "Los Castores",
+          "Los Helechos",
+          "Los Llaneros",
+          "Res. el Rocio",
+          "Res. las Churuatas",
+          "Res. las Cumbres",
+          "Res. Ops",
+          "Res. San Antonio",
+          "Rosaleda Norte",
+          "Sierra Brava",
+          "Urb. Pomarrosa",
+          "Zona Industrial las Minas"
+        ]
+      },
+      "Carrizal": {
+        "Carrizal": [
+          "Barola",
+          "Barrio Bolívar",
+          "Brisas de Oriente",
+          "C.c Coliseo",
+          "C.c Don Pedro",
+          "C.c la Cascada",
+          "C.c Tibisay",
+          "Casco Central",
+          "Corralito",
+          "José Manuel Alvarez",
+          "Km 18",
+          "La Guadalupe",
+          "La Ladera",
+          "Llano Alto",
+          "Lomas de Urquia",
+          "Los Vecinos",
+          "Montaña Alta",
+          "Potrerito I",
+          "Potrerito Ii",
+          "Potrero del Medio",
+          "Res. Alta Vista",
+          "Res. los Eucaliptos",
+          "Santa Eduviges",
+          "Urb. Loma Mágica",
+          "Yerba Buena"
+        ]
+      },
+      "Guaicaipuro": {
+        "Los Teques": [
+          "23 de Enero",
+          "Alberto Ravell",
+          "Alto Verde",
+          "Aquiles Nazoa",
+          "Barrio la Cruz",
+          "Barrio Miranda I",
+          "Barrio Miranda Ii",
+          "Barrio Venezuela",
+          "Brisas de Palo Alto",
+          "Buenos Aires",
+          "C.c Ali Primera",
+          "C.c. Vasconia",
+          "Carretera Vieja Caracas los Teques",
+          "Centro los Teques",
+          "Club Hipico",
+          "Colinas del Ángel",
+          "Colinas del Paso",
+          "Cooperativa Guaicaipuro",
+          "Cumbre Rojas",
+          "El Ayacucho",
+          "El Barbecho",
+          "El Beisbol",
+          "El Bosque",
+          "El Cabotaje",
+          "El Encanto",
+          "El Nacional",
+          "El Panadero",
+          "El Paso",
+          "El Pueblo",
+          "El Puinky",
+          "El Reten",
+          "El Ricon",
+          "El Rincon",
+          "El Tambor",
+          "El Trabuco",
+          "El Trigo",
+          "El Turpial",
+          "El Vigía",
+          "Guaremal",
+          "Hospital Victorino Santaella",
+          "José Gregorio",
+          "La Estrella",
+          "La Fontanera",
+          "La Matica",
+          "La Quinta",
+          "Lagunetica",
+          "Las Cadenas",
+          "Las Lomitas",
+          "Las Palmas",
+          "Los Alpes",
+          "Los Amarillos",
+          "Los Barriales",
+          "Los Cerritos",
+          "Los Lagos",
+          "Los Mangos",
+          "Los Nuevos Teques",
+          "Los Panamericanos",
+          "Los Teques",
+          "Macarena Sur",
+          "Mal Paso",
+          "Manuela Saenz",
+          "Palo Alto",
+          "Punta Brava",
+          "Quebrada la Virgen",
+          "Ramo Verde",
+          "Res. Aldebaran",
+          "Res. Caracas",
+          "Res. Cima",
+          "Res. el Barbecho",
+          "Res. el Chorrito",
+          "Res. Guaicaipuro",
+          "Res. Imola",
+          "Res. Knoop",
+          "Res. la Cima",
+          "Res. Lagunetica",
+          "Res. Miracielos",
+          "Res. Miraflores",
+          "Res. Parque las Americas",
+          "Res. Rio Arriba",
+          "Res. Santa María",
+          "Res. Savil",
+          "Res. Tamari",
+          "Res. Tinantonia",
+          "Res. Tiuna",
+          "Res. Trigo Dorado",
+          "Res. Yati",
+          "Retamal",
+          "Romulo Gallegos",
+          "Sant Omero",
+          "Santa Eduviges",
+          "Santa Eulalia",
+          "Santa Rosa",
+          "Solar de la Quinta",
+          "Urb. Simon Bolívar",
+          "Valle Alto",
+          "Zona Industrial el Tambor"
+        ],
+        "San Pedro de los Altos": [
+          "Bosque de Pinos",
+          "El Pueblo",
+          "Pozo de Rosas"
+        ],
+        "Cecilio Acosta (San Diego y San José)": [
+          "Agua Fría",
+          "Cachapal",
+          "Cantarrana",
+          "Casco Central",
+          "Cocorote",
+          "Cortada del Guayabo",
+          "El Aguacatal",
+          "El Calvario",
+          "El Guamal",
+          "El Ingenio",
+          "El Limon",
+          "El Naranjal",
+          "El Peñon",
+          "El Prado",
+          "Guaicoco",
+          "Guareguare",
+          "La Crucesita",
+          "La Culebrilla",
+          "La Oci",
+          "Los Amistosos",
+          "Los Colorados",
+          "San José",
+          "San Rafael",
+          "Vista Hermosa"
+        ]
+      }
+    },
+    "Aragua": {
+      "Santos Michelena": {
+        "Las Tejerías": [
+          "Araiza",
+          "Bella Vista",
+          "Boca de Cagua",
+          "Brisas de Aragua",
+          "Brisas de Bucaral",
+          "Cañaote",
+          "Caobal",
+          "Casco Central",
+          "Ciudad Guayas",
+          "Colinas de Bucaral",
+          "Curiepe",
+          "El Beisbol",
+          "El Loro",
+          "Jabillal",
+          "Jerusalen",
+          "La Concepcion",
+          "La Esperanza",
+          "La Gruta",
+          "La Pedrera",
+          "Las Lomitas",
+          "Las Veras",
+          "Llano Grande",
+          "Los Cachos",
+          "Los Jabillos",
+          "Los Limites",
+          "Los Panamericanos",
+          "Santo Domingo",
+          "Tabacal",
+          "Tinapuey",
+          "Trapiche del Medio",
+          "Variantes de Guaya"
+        ]
+      },
+      "José Rafael Revenga": {
+        "El Consejo": [
+          "Corosito",
+          "El Ingenio",
+          "La Casona",
+          "La Gruta",
+          "La Hoya",
+          "Santo Domingo",
+          "Trapiche del Medio"
+        ]
+      }
+    },
+    "Distrito Capital": {
+      "Libertador": {
+        "El Valle": [
+          "El Valle",
+          "Res. San Andrés",
+          "Res. San Antonio"
+        ],
+        "Coche": [
+          "Coche",
+          "Fundapol",
+          "Las Mayas"
+        ],
+        "Sucre (Catia)": [
+          "El Topo",
+          "Gramoven",
+          "Isaías Medina Angarita",
+          "Propatria"
+        ],
+        "La Vega": [
+          "La Vega",
+          "La Veguita",
+          "Las Torres",
+          "Los Cangilones",
+          "Los Jardines",
+          "Los Mangos",
+          "San José",
+          "Simón Bolívar"
+        ]
+      }
+    }
+  }
+}

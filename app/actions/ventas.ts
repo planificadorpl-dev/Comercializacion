@@ -8,6 +8,7 @@ import { geoHierarchy as fallbackGeoHierarchy } from "@/lib/geo_hierarchy";
 import { formatProperCase } from "@/lib/utils";
 import { getCurrentSpanishMonth } from "@/lib/dashboard-data";
 import { normalizeLocation, isValidGeoName } from "@/lib/geo_normalization";
+import { syncMasterGeodataFromRubpi, readGeodataFromDisk, getMasterGeodata, type CleanGeoRecord } from "@/lib/rubpi-service";
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -93,12 +94,39 @@ export async function getVentasConfig() {
       });
     }
 
+    if (Object.keys(geoHierarchy).length > 0) {
+      return {
+        geoHierarchy,
+        planes: (planesRes.data && planesRes.data.length > 0) ? planesRes.data : DEFAULT_REAL_PLANES,
+      };
+    }
+
+    // 3. Fallback to Rubpi Master Geodata Disk Cache
+    const diskGeo = await readGeodataFromDisk();
+    if (diskGeo && diskGeo.hierarchy && Object.keys(diskGeo.hierarchy).length > 0) {
+      return {
+        geoHierarchy: diskGeo.hierarchy,
+        planes: (planesRes.data && planesRes.data.length > 0) ? planesRes.data : DEFAULT_REAL_PLANES,
+      };
+    }
+
     return {
-      geoHierarchy: Object.keys(geoHierarchy).length > 0 ? geoHierarchy : fallbackGeoHierarchy,
+      geoHierarchy: fallbackGeoHierarchy,
       planes: (planesRes.data && planesRes.data.length > 0) ? planesRes.data : DEFAULT_REAL_PLANES,
     };
   } catch (err: any) {
     console.warn("Error fetching ventas config, using fallbacks:", err.message);
+
+    try {
+      const diskGeo = await readGeodataFromDisk();
+      if (diskGeo && diskGeo.hierarchy && Object.keys(diskGeo.hierarchy).length > 0) {
+        return {
+          geoHierarchy: diskGeo.hierarchy,
+          planes: DEFAULT_REAL_PLANES,
+        };
+      }
+    } catch {}
+
     return {
       geoHierarchy: fallbackGeoHierarchy,
       planes: DEFAULT_REAL_PLANES,
@@ -145,6 +173,134 @@ export async function deleteGeodata(id: number | string) {
   } catch {}
 
   revalidatePath("/admin");
+}
+
+export async function loadMasterGeodataAction(): Promise<
+  Array<{ id: string; estado: string; municipio: string; parroquia: string; sector: string }>
+> {
+  try {
+    const master = await getMasterGeodata();
+    return master.sectors.map((s, idx) => ({
+      id: `rubpi_${idx + 1}`,
+      estado: s.estado,
+      municipio: s.municipio,
+      parroquia: s.parroquia,
+      sector: s.sector,
+    }));
+  } catch (err) {
+    console.warn("loadMasterGeodataAction fallback:", err);
+    return [];
+  }
+}
+
+export async function syncGeodataFromRubpi(): Promise<{
+  success: boolean;
+  totalFound: number;
+  totalResidential: number;
+  totalSectors: number;
+  importedCount: number;
+  message: string;
+}> {
+  try {
+    const rubpiRes = await syncMasterGeodataFromRubpi();
+    const cleanSectors = rubpiRes.sectors;
+
+    if (!cleanSectors || cleanSectors.length === 0) {
+      return {
+        success: false,
+        totalFound: rubpiRes.totalRawUsers,
+        totalResidential: rubpiRes.totalResidential,
+        totalSectors: 0,
+        importedCount: 0,
+        message: "No se obtuvieron sectores limpios de Rubpi.",
+      };
+    }
+
+    // 1. Obtener registros actuales en PostgreSQL / Supabase
+    let existingSet = new Set<string>();
+    try {
+      const rows = await query<any>("SELECT estado, municipio, parroquia, sector FROM public.geodata_config");
+      rows.forEach((r) => {
+        existingSet.add(
+          `${(r.estado || "").trim().toLowerCase()}|${(r.municipio || "").trim().toLowerCase()}|${(r.parroquia || "").trim().toLowerCase()}|${(r.sector || "").trim().toLowerCase()}`
+        );
+      });
+    } catch {
+      // Supabase fallback
+      try {
+        const supabase = await createClient();
+        const { data: existingRows } = await supabase
+          .from("geodata_config")
+          .select("estado, municipio, parroquia, sector");
+        (existingRows || []).forEach((r) => {
+          existingSet.add(
+            `${(r.estado || "").trim().toLowerCase()}|${(r.municipio || "").trim().toLowerCase()}|${(r.parroquia || "").trim().toLowerCase()}|${(r.sector || "").trim().toLowerCase()}`
+          );
+        });
+      } catch {}
+    }
+
+    let insertedCount = 0;
+    const newItemsToInsert: CleanGeoRecord[] = [];
+
+    for (const item of cleanSectors) {
+      const key = `${item.estado.trim().toLowerCase()}|${item.municipio.trim().toLowerCase()}|${item.parroquia.trim().toLowerCase()}|${item.sector.trim().toLowerCase()}`;
+      if (!existingSet.has(key)) {
+        newItemsToInsert.push(item);
+      }
+    }
+
+    // Insert into DB if PostgreSQL available
+    for (const item of newItemsToInsert) {
+      try {
+        await query(
+          `INSERT INTO public.geodata_config (estado, municipio, parroquia, sector)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (estado, municipio, parroquia, sector) DO NOTHING`,
+          [item.estado, item.municipio, item.parroquia, item.sector]
+        );
+        insertedCount++;
+      } catch (err) {
+        // Fallback or ignore
+      }
+    }
+
+    if (newItemsToInsert.length > 0 && insertedCount === 0) {
+      try {
+        const supabase = await createClient();
+        const { error } = await supabase.from("geodata_config").upsert(newItemsToInsert, {
+          onConflict: "estado,municipio,parroquia,sector",
+        });
+        if (!error) {
+          insertedCount = newItemsToInsert.length;
+        }
+      } catch {}
+    }
+
+    revalidatePath("/admin/geodata");
+    revalidatePath("/admin");
+    return {
+      success: true,
+      totalFound: rubpiRes.totalRawUsers,
+      totalResidential: rubpiRes.totalResidential,
+      totalSectors: rubpiRes.totalSectors,
+      importedCount: insertedCount,
+      message:
+        insertedCount > 0
+          ? `Se sincronizaron ${insertedCount} nuevos sectores oficiales desde Rubpi (${rubpiRes.totalSectors} sectores consolidados).`
+          : `Los ${rubpiRes.totalSectors} sectores oficiales de Rubpi están completamente actualizados.`,
+    };
+  } catch (error: any) {
+    console.error("Error en syncGeodataFromRubpi:", error);
+    return {
+      success: false,
+      totalFound: 0,
+      totalResidential: 0,
+      totalSectors: 0,
+      importedCount: 0,
+      message: error.message || "Error al sincronizar padrón con Rubpi.",
+    };
+  }
 }
 
 export async function syncGeodataFromSheets(): Promise<{
