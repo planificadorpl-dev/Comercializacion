@@ -28,8 +28,12 @@ import {
   deleteCompanyPlan,
   saveCompanyService,
   deleteCompanyService,
+  saveCompanyPromotion,
+  deleteCompanyPromotion,
+  toggleCompanyPromotion,
   CompanyPlan,
   CompanyService,
+  CompanyPromotion,
   CompanyPricingData,
 } from "@/app/actions/company-pricing";
 import { cn } from "@/lib/utils";
@@ -48,20 +52,21 @@ function CompetenciaContent() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Active top view
-  const [activeView, setActiveView] = useState<"ofertas" | "comparativa" | "tarifario">("ofertas");
+  const [activeView, setActiveView] = useState<"ofertas" | "comparativa" | "promociones" | "tarifario">("ofertas");
 
   // Operadores & Ofertas
   const [operadores, setOperadores] = useState<any[]>(() => cachedOperadores);
   const [ofertas, setOfertas] = useState<any[]>(() => cachedOfertas);
   const [loadingOfertas, setLoadingOfertas] = useState(!hasInitialLoadedOfertas);
 
-  // Company Pricing State (Power Link plans and services)
+  // Company Pricing State (Power Link plans, services, and zone promotions)
   const [companyPricing, setCompanyPricing] = useState<CompanyPricingData | null>(null);
   const [loadingPricing, setLoadingPricing] = useState(false);
 
   // Comparator Controls
   const [compSegmento, setCompSegmento] = useState<"Domiciliario" | "Empresarial">("Domiciliario");
   const [compTipoPrecio, setCompTipoPrecio] = useState<"promo" | "regular">("promo");
+  const [compSelectedPromoId, setCompSelectedPromoId] = useState<string>("auto");
 
   // Filters
   const [filterEstado, setFilterEstado] = useState("");
@@ -118,6 +123,25 @@ function CompetenciaContent() {
   const [savingService, setSavingService] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState<CompanyService | null>(null);
 
+  // Company Promotion Form State (Promociones por Zona)
+  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
+  const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
+  const [promoFormNombre, setPromoFormNombre] = useState("");
+  const [promoFormEstado, setPromoFormEstado] = useState("Aragua");
+  const [promoFormMunicipio, setPromoFormMunicipio] = useState("");
+  const [promoFormParroquia, setPromoFormParroquia] = useState("");
+  const [promoFormSector, setPromoFormSector] = useState("");
+  const [promoFormSegmento, setPromoFormSegmento] = useState<"Domiciliario" | "Empresarial" | "Todos">("Domiciliario");
+  const [promoFormTipoDesc, setPromoFormTipoDesc] = useState<"mitad_precio" | "porcentaje" | "monto_fijo">("mitad_precio");
+  const [promoFormDescValor, setPromoFormDescValor] = useState("50");
+  const [promoFormDuracion, setPromoFormDuracion] = useState("3");
+  const [promoFormInstGratis, setPromoFormInstGratis] = useState(true);
+  const [promoFormCostoInst, setPromoFormCostoInst] = useState("0");
+  const [promoFormNotas, setPromoFormNotas] = useState("");
+  const [promoFormActivo, setPromoFormActivo] = useState(true);
+  const [savingPromo, setSavingPromo] = useState(false);
+  const [promoToDelete, setPromoToDelete] = useState<CompanyPromotion | null>(null);
+
   const [toastMsg, setToastMsg] = useState<{ text: string; type?: "success" | "error" } | null>(null);
 
   // Geographic calculations for filters
@@ -131,7 +155,7 @@ function CompetenciaContent() {
     return Object.keys(geoHierarchy[filterEstado][filterMunicipio]).sort();
   }, [filterEstado, filterMunicipio]);
 
-  // Form geography
+  // Form geography (offers)
   const formMunicipiosList = useMemo(() => {
     if (!formEstado || !geoHierarchy[formEstado]) return [];
     return Object.keys(geoHierarchy[formEstado]).sort();
@@ -140,6 +164,16 @@ function CompetenciaContent() {
     if (!formEstado || !formMunicipio || !geoHierarchy[formEstado]?.[formMunicipio]) return [];
     return Object.keys(geoHierarchy[formEstado][formMunicipio]).sort();
   }, [formEstado, formMunicipio]);
+
+  // Promo form geography
+  const promoMunicipiosList = useMemo(() => {
+    if (!promoFormEstado || !geoHierarchy[promoFormEstado]) return [];
+    return Object.keys(geoHierarchy[promoFormEstado]).sort();
+  }, [promoFormEstado]);
+  const promoParroquiasList = useMemo(() => {
+    if (!promoFormEstado || !promoFormMunicipio || !geoHierarchy[promoFormEstado]?.[promoFormMunicipio]) return [];
+    return Object.keys(geoHierarchy[promoFormEstado][promoFormMunicipio]).sort();
+  }, [promoFormEstado, promoFormMunicipio]);
 
   // Load operators & company pricing
   useEffect(() => {
@@ -158,35 +192,37 @@ function CompetenciaContent() {
       const data = await getCompanyPricing();
       setCompanyPricing(data);
     } catch {
-      console.warn("Error cargando tarifario de la empresa");
+      // Handled silently
     } finally {
       setLoadingPricing(false);
     }
   };
 
-  const loadOfertas = useCallback(async (silent = hasInitialLoadedOfertas) => {
+  // Load market offers
+  const loadOfertas = useCallback(async (silent = false) => {
     if (!silent) setLoadingOfertas(true);
     try {
-      const data = await getOfertasRecientes(
-        filterEstado || undefined,
-        filterMunicipio || undefined,
-        filterParroquia || undefined
-      );
+      const filtros: any = {};
+      if (filterEstado) filtros.estado = filterEstado;
+      if (filterMunicipio) filtros.municipio = filterMunicipio;
+      if (filterParroquia) filtros.parroquia = filterParroquia;
+
+      const data = await getOfertasRecientes(filtros);
       cachedOfertas = data;
       hasInitialLoadedOfertas = true;
       setOfertas(data);
     } catch {
-      setToastMsg({ text: "Error al cargar ofertas de la competencia", type: "error" });
+      setToastMsg({ text: "Error al cargar ofertas de mercado", type: "error" });
     } finally {
       setLoadingOfertas(false);
     }
   }, [filterEstado, filterMunicipio, filterParroquia]);
 
   useEffect(() => {
-    loadOfertas();
+    loadOfertas(hasInitialLoadedOfertas);
   }, [loadOfertas]);
 
-  // Save new operator (admin only)
+  // Save new operator
   const handleSaveOperador = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) {
@@ -407,6 +443,104 @@ function CompetenciaContent() {
     }
   };
 
+  // Company Promotion CRUD handlers
+  const handleOpenCreatePromo = () => {
+    setEditingPromoId(null);
+    setPromoFormNombre("");
+    setPromoFormEstado(filterEstado || "Aragua");
+    setPromoFormMunicipio(filterMunicipio || "");
+    setPromoFormParroquia(filterParroquia || "");
+    setPromoFormSector("");
+    setPromoFormSegmento("Domiciliario");
+    setPromoFormTipoDesc("mitad_precio");
+    setPromoFormDescValor("50");
+    setPromoFormDuracion("3");
+    setPromoFormInstGratis(true);
+    setPromoFormCostoInst("0");
+    setPromoFormNotas("");
+    setPromoFormActivo(true);
+    setIsPromoModalOpen(true);
+  };
+
+  const handleOpenEditPromo = (p: CompanyPromotion) => {
+    setEditingPromoId(p.id);
+    setPromoFormNombre(p.nombre);
+    setPromoFormEstado(p.estado || "Todos");
+    setPromoFormMunicipio(p.municipio || "");
+    setPromoFormParroquia(p.parroquia || "");
+    setPromoFormSector(p.sector || "");
+    setPromoFormSegmento(p.aplica_segmento);
+    setPromoFormTipoDesc(p.tipo_descuento_mensual);
+    setPromoFormDescValor(String(p.descuento_valor));
+    setPromoFormDuracion(String(p.duracion_meses));
+    setPromoFormInstGratis(p.instalacion_gratis);
+    setPromoFormCostoInst(String(p.costo_instalacion));
+    setPromoFormNotas(p.notas || "");
+    setPromoFormActivo(p.activo);
+    setIsPromoModalOpen(true);
+  };
+
+  const handleSaveCompanyPromotion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!promoFormNombre.trim()) {
+      setToastMsg({ text: "Indica el nombre de la promoción", type: "error" });
+      return;
+    }
+    setSavingPromo(true);
+    try {
+      const payload: Partial<CompanyPromotion> & { id?: string } = {
+        id: editingPromoId || undefined,
+        nombre: promoFormNombre.trim(),
+        estado: promoFormEstado,
+        municipio: promoFormMunicipio || null,
+        parroquia: promoFormParroquia || null,
+        sector: promoFormSector.trim() || null,
+        aplica_segmento: promoFormSegmento,
+        tipo_descuento_mensual: promoFormTipoDesc,
+        descuento_valor: Number(promoFormDescValor) || 50,
+        duracion_meses: Number(promoFormDuracion) || 3,
+        instalacion_gratis: promoFormInstGratis,
+        costo_instalacion: promoFormInstGratis ? 0 : Number(promoFormCostoInst) || 0,
+        activo: promoFormActivo,
+        notas: promoFormNotas.trim() || null,
+      };
+
+      await saveCompanyPromotion(payload);
+      await loadPricingData();
+      setIsPromoModalOpen(false);
+      setToastMsg({ text: "Promoción de zona guardada", type: "success" });
+    } catch (err: any) {
+      setToastMsg({ text: err.message || "Error al guardar promoción", type: "error" });
+    } finally {
+      setSavingPromo(false);
+    }
+  };
+
+  const handleTogglePromoStatus = async (promo: CompanyPromotion) => {
+    try {
+      await toggleCompanyPromotion(promo.id, !promo.activo);
+      await loadPricingData();
+      setToastMsg({
+        text: !promo.activo ? "Promoción activada" : "Promoción pausada",
+        type: "success",
+      });
+    } catch {
+      setToastMsg({ text: "Error al actualizar estado de promoción", type: "error" });
+    }
+  };
+
+  const executeDeleteCompanyPromotion = async () => {
+    if (!promoToDelete) return;
+    try {
+      await deleteCompanyPromotion(promoToDelete.id);
+      await loadPricingData();
+      setPromoToDelete(null);
+      setToastMsg({ text: "Promoción eliminada", type: "success" });
+    } catch (err: any) {
+      setToastMsg({ text: err.message || "Error al eliminar promoción", type: "error" });
+    }
+  };
+
   // Filtered market offers
   const filteredOfertas = useMemo(() => {
     let result = ofertas;
@@ -474,6 +608,43 @@ function CompetenciaContent() {
     };
   }, [filteredOfertas]);
 
+  // Resolve matching active promotion for comparator (by filter or manual override)
+  const resolvedPromo = useMemo(() => {
+    if (!companyPricing?.promociones) return null;
+    const activePromos = companyPricing.promociones.filter((p) => p.activo);
+    if (activePromos.length === 0) return null;
+
+    // If manually overridden in comparator
+    if (compSelectedPromoId !== "auto") {
+      if (compSelectedPromoId === "none") return null;
+      return activePromos.find((p) => p.id === compSelectedPromoId) || null;
+    }
+
+    // Auto-detect matching promotion by geographic filter (Parroquia > Municipio > Estado)
+    if (filterParroquia) {
+      const matchParr = activePromos.find(
+        (p) => p.parroquia && p.parroquia.toLowerCase() === filterParroquia.toLowerCase()
+      );
+      if (matchParr) return matchParr;
+    }
+
+    if (filterMunicipio) {
+      const matchMun = activePromos.find(
+        (p) => p.municipio && p.municipio.toLowerCase() === filterMunicipio.toLowerCase()
+      );
+      if (matchMun) return matchMun;
+    }
+
+    if (filterEstado) {
+      const matchEst = activePromos.find(
+        (p) => p.estado && p.estado.toLowerCase() === filterEstado.toLowerCase()
+      );
+      if (matchEst) return matchEst;
+    }
+
+    return null;
+  }, [companyPricing?.promociones, compSelectedPromoId, filterEstado, filterMunicipio, filterParroquia]);
+
   // Dynamic Comparator calculations: Group Power Link plans and match equivalent market offers
   const comparisonData = useMemo(() => {
     if (!companyPricing) return [];
@@ -482,8 +653,30 @@ function CompetenciaContent() {
     );
 
     return activePlans.map((myPlan) => {
-      const myPrice = compTipoPrecio === "promo" ? myPlan.precio_promo : myPlan.precio_regular;
-      const myInstall = compTipoPrecio === "promo" ? myPlan.costo_instalacion_promo : myPlan.costo_instalacion_regular;
+      let myPrice = myPlan.precio_regular;
+      let myInstall = myPlan.costo_instalacion_regular;
+
+      if (compTipoPrecio === "promo") {
+        const promoApplies = resolvedPromo && (resolvedPromo.aplica_segmento === "Todos" || resolvedPromo.aplica_segmento === compSegmento);
+
+        if (promoApplies) {
+          // Calculate price based on active promotion rules
+          if (resolvedPromo.tipo_descuento_mensual === "mitad_precio") {
+            myPrice = parseFloat((myPlan.precio_regular * 0.5).toFixed(2));
+          } else if (resolvedPromo.tipo_descuento_mensual === "porcentaje") {
+            myPrice = parseFloat((myPlan.precio_regular * (1 - resolvedPromo.descuento_valor / 100)).toFixed(2));
+          } else if (resolvedPromo.tipo_descuento_mensual === "monto_fijo") {
+            myPrice = Math.max(0, parseFloat((myPlan.precio_regular - resolvedPromo.descuento_valor).toFixed(2)));
+          }
+
+          myInstall = resolvedPromo.instalacion_gratis ? 0 : resolvedPromo.costo_instalacion;
+        } else {
+          // Fallback to base plan promotional pricing
+          myPrice = myPlan.precio_promo;
+          myInstall = myPlan.costo_instalacion_promo;
+        }
+      }
+
       const mySpeed = myPlan.velocidad_mb;
       const myCostPerMb = mySpeed > 0 ? (myPrice / mySpeed).toFixed(2) : "0.00";
 
@@ -504,7 +697,7 @@ function CompetenciaContent() {
         matchingCompetitors,
       };
     });
-  }, [companyPricing, compSegmento, compTipoPrecio, filteredOfertas]);
+  }, [companyPricing, compSegmento, compTipoPrecio, resolvedPromo, filteredOfertas]);
 
   if (user && !isAdmin && !isModuleEnabledForUser("competencia", false)) {
     return (
@@ -566,12 +759,12 @@ function CompetenciaContent() {
         {/* Content Body */}
         <div className="p-3 sm:p-6 pb-20 xl:pb-6 max-w-5xl w-full mx-auto space-y-5 sm:space-y-6">
           {/* Top View Selector Tabs (strictly typography and clean line indicator) */}
-          <div className="flex items-center gap-6 border-b border-neutral-100 text-xs select-none">
+          <div className="flex items-center gap-6 border-b border-neutral-100 text-xs select-none overflow-x-auto no-scrollbar">
             <button
               type="button"
               onClick={() => setActiveView("ofertas")}
               className={cn(
-                "py-2.5 transition-colors cursor-pointer font-sans",
+                "py-2.5 transition-colors cursor-pointer font-sans whitespace-nowrap",
                 activeView === "ofertas"
                   ? "text-neutral-900 font-semibold border-b-2 border-neutral-900 -mb-px"
                   : "text-neutral-400 hover:text-neutral-700 font-normal"
@@ -584,7 +777,7 @@ function CompetenciaContent() {
               type="button"
               onClick={() => setActiveView("comparativa")}
               className={cn(
-                "py-2.5 transition-colors cursor-pointer font-sans",
+                "py-2.5 transition-colors cursor-pointer font-sans whitespace-nowrap",
                 activeView === "comparativa"
                   ? "text-neutral-900 font-semibold border-b-2 border-neutral-900 -mb-px"
                   : "text-neutral-400 hover:text-neutral-700 font-normal"
@@ -593,12 +786,25 @@ function CompetenciaContent() {
               Comparativa vs Power Link
             </button>
 
+            <button
+              type="button"
+              onClick={() => setActiveView("promociones")}
+              className={cn(
+                "py-2.5 transition-colors cursor-pointer font-sans whitespace-nowrap",
+                activeView === "promociones"
+                  ? "text-neutral-900 font-semibold border-b-2 border-neutral-900 -mb-px"
+                  : "text-neutral-400 hover:text-neutral-700 font-normal"
+              )}
+            >
+              Promociones por zona
+            </button>
+
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setActiveView("tarifario")}
                 className={cn(
-                  "py-2.5 transition-colors cursor-pointer font-sans",
+                  "py-2.5 transition-colors cursor-pointer font-sans whitespace-nowrap",
                   activeView === "tarifario"
                     ? "text-neutral-900 font-semibold border-b-2 border-neutral-900 -mb-px"
                     : "text-neutral-400 hover:text-neutral-700 font-normal"
@@ -870,7 +1076,7 @@ function CompetenciaContent() {
                           : "text-neutral-400 hover:text-neutral-700"
                       )}
                     >
-                      Precio Promoción (3 meses)
+                      Precio Promoción
                     </button>
                     <button
                       type="button"
@@ -888,18 +1094,68 @@ function CompetenciaContent() {
                 </div>
               </div>
 
-              {/* Geographic filter reminder */}
-              <div className="flex items-center justify-between text-xs text-neutral-500 py-1">
-                <span>
-                  Mostrando comparativa en:{" "}
+              {/* Geographic filter & Promotion selector bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-neutral-500 py-1 border-b border-neutral-100">
+                <div className="flex items-center gap-2">
+                  <span>Zona evaluada:</span>
                   <strong className="text-neutral-900 font-medium">
-                    {[filterEstado, filterMunicipio, filterParroquia].filter(Boolean).join(" · ") || "Nacional (todos los sectores)"}
+                    {[filterEstado, filterMunicipio, filterParroquia].filter(Boolean).join(" · ") || "Nacional (todas las zonas)"}
                   </strong>
-                </span>
-                <span className="text-[11px] text-neutral-400">
-                  {filteredOfertas.length} ofertas de competencia activas
-                </span>
+                </div>
+
+                {compTipoPrecio === "promo" && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-neutral-400">Promoción aplicada:</span>
+                    <CustomDropdown
+                      value={compSelectedPromoId}
+                      options={[
+                        { value: "auto", label: "Automática (según zona)" },
+                        { value: "none", label: "Promoción general estándar" },
+                        ...((companyPricing?.promociones || []).map((p) => ({
+                          value: p.id,
+                          label: `${p.nombre} (${p.instalacion_gratis ? "Inst. $0" : `$${p.costo_instalacion}`})`,
+                        }))),
+                      ]}
+                      onChange={setCompSelectedPromoId}
+                      compact
+                    />
+                  </div>
+                )}
               </div>
+
+              {/* Active Zone Promotion Banner */}
+              {compTipoPrecio === "promo" && resolvedPromo && (
+                <div className="py-2.5 px-3 border-b border-neutral-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-neutral-900 font-sans">
+                        Promoción activa: {resolvedPromo.nombre}
+                      </span>
+                      <span className="text-[11px] text-neutral-400">
+                        · {resolvedPromo.duracion_meses} meses
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-neutral-500">
+                      {resolvedPromo.tipo_descuento_mensual === "mitad_precio"
+                        ? "Mensualidad a mitad de precio (50% descuento)"
+                        : resolvedPromo.tipo_descuento_mensual === "porcentaje"
+                        ? `${resolvedPromo.descuento_valor}% de descuento en mensualidad`
+                        : `$${resolvedPromo.descuento_valor} de descuento mensual`}
+                      {" · "}
+                      Instalación:{" "}
+                      <strong className="text-neutral-900 font-medium">
+                        {resolvedPromo.instalacion_gratis ? "Completamente Gratis ($0)" : `$${resolvedPromo.costo_instalacion}`}
+                      </strong>
+                      {resolvedPromo.notas && <span> — {resolvedPromo.notas}</span>}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-[11px] font-mono text-neutral-500">
+                      {[resolvedPromo.parroquia, resolvedPromo.municipio, resolvedPromo.estado].filter(Boolean).join(", ")}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Head-to-head comparison cards by speed tier */}
               <div className="space-y-8">
@@ -933,7 +1189,11 @@ function CompetenciaContent() {
                             <span className="text-[10px] text-neutral-400 font-sans font-normal"> /mes</span>
                           </div>
                           <div className="text-[10px] text-neutral-400">
-                            {compTipoPrecio === "promo" ? "Precio Promo" : "Precio Regular"}
+                            {compTipoPrecio === "promo"
+                              ? resolvedPromo
+                                ? `Promo ${resolvedPromo.nombre}`
+                                : "Precio Promo (3 meses)"
+                              : "Precio Regular"}
                           </div>
                         </div>
                       </div>
@@ -1059,7 +1319,148 @@ function CompetenciaContent() {
           )}
 
           {/* ═══════════════════════════════════════════════════════════════════ */}
-          {/* VISTA 3: TARIFARIO DE MI COMPAÑÍA (Gestión y Edición en Vivo)     */}
+          {/* VISTA 3: PROMOCIONES POR ZONA                                      */}
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {activeView === "promociones" && (
+            <div className="space-y-6 animate-in fade-in duration-150">
+              {/* Action Row */}
+              <div className="flex flex-wrap items-center justify-between gap-3 py-2 border-b border-neutral-100 text-xs">
+                <div className="space-y-0.5">
+                  <h3 className="text-xs font-semibold text-neutral-900 font-sans">
+                    Promociones regionales de Power Link
+                  </h3>
+                  <p className="text-[11px] text-neutral-500 font-sans">
+                    Configuración de planes a mitad de precio, instalaciones gratis o condiciones especiales por estado, municipio o sector.
+                  </p>
+                </div>
+
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleOpenCreatePromo}
+                    className="py-1.5 px-2.5 inline-flex items-center gap-1.5 text-neutral-900 hover:text-neutral-700 font-semibold transition-colors cursor-pointer text-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[2]" />
+                    <span>Añadir promoción</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Promotions List */}
+              <div className="space-y-4">
+                {(companyPricing?.promociones || []).length === 0 ? (
+                  <div className="py-16 text-center text-xs text-neutral-400 font-sans">
+                    No hay promociones por zona registradas.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-neutral-100 border-b border-neutral-100">
+                    {(companyPricing?.promociones || []).map((promo) => {
+                      const locationParts = [
+                        promo.estado !== "Todos" ? promo.estado : null,
+                        promo.municipio,
+                        promo.parroquia,
+                        promo.sector,
+                      ].filter(Boolean);
+
+                      return (
+                        <div
+                          key={promo.id}
+                          className="group py-4 px-2 flex flex-col sm:flex-row sm:items-start justify-between gap-4 hover:bg-neutral-50/50 transition-colors"
+                        >
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-semibold text-neutral-900">
+                                {promo.nombre}
+                              </span>
+                              <span className={cn(
+                                "text-[11px] font-sans font-medium",
+                                promo.activo ? "text-neutral-900" : "text-neutral-400"
+                              )}>
+                                · {promo.activo ? "Vigente" : "Pausada"}
+                              </span>
+                              <span className="text-[11px] text-neutral-500">
+                                · {promo.aplica_segmento}
+                              </span>
+                            </div>
+
+                            <div className="text-[11px] text-neutral-500">
+                              {locationParts.length > 0 ? locationParts.join(" ❯ ") : "Aplica a nivel nacional"}
+                            </div>
+
+                            <div className="flex items-center gap-3 sm:gap-4 text-[11px] text-neutral-700 flex-wrap pt-0.5">
+                              <span>
+                                ⚡ Mensualidad:{" "}
+                                <strong>
+                                  {promo.tipo_descuento_mensual === "mitad_precio"
+                                    ? "Mitad de precio (50% desc.)"
+                                    : promo.tipo_descuento_mensual === "porcentaje"
+                                    ? `${promo.descuento_valor}% de descuento`
+                                    : `$${promo.descuento_valor} de descuento`}
+                                </strong>{" "}
+                                por {promo.duracion_meses} meses
+                              </span>
+
+                              <span>
+                                🛠️ Instalación:{" "}
+                                <strong>
+                                  {promo.instalacion_gratis ? "Gratis ($0)" : `$${promo.costo_instalacion}`}
+                                </strong>
+                              </span>
+                            </div>
+
+                            {promo.notas && (
+                              <p className="text-[11px] text-neutral-500 italic">
+                                &ldquo;{promo.notas}&rdquo;
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Admin Actions */}
+                          <div className="flex items-center gap-3 shrink-0 self-end sm:self-start text-xs pt-0.5">
+                            {isAdmin && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleTogglePromoStatus(promo)}
+                                  className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                                >
+                                  {promo.activo ? "Pausar" : "Activar"}
+                                </button>
+
+                                <div className="flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-150">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditPromo(promo)}
+                                    className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                                    title="Editar promoción"
+                                    aria-label="Editar promoción"
+                                  >
+                                    <PenLine className="w-3.5 h-3.5 stroke-[1.25]" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPromoToDelete(promo)}
+                                    className="p-1 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                                    title="Eliminar promoción"
+                                    aria-label="Eliminar promoción"
+                                  >
+                                    <X className="w-3.5 h-3.5 stroke-[1.5]" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {/* VISTA 4: TARIFARIO DE MI COMPAÑÍA (Gestión y Edición en Vivo)     */}
           {/* ═══════════════════════════════════════════════════════════════════ */}
           {activeView === "tarifario" && isAdmin && (
             <div className="space-y-8 animate-in fade-in duration-150">
@@ -1248,21 +1649,24 @@ function CompetenciaContent() {
               <button
                 type="button"
                 onClick={() => setIsNewOfferOpen(false)}
-                className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
                 aria-label="Cerrar modal"
               >
                 <X className="w-4 h-4 stroke-[1.5]" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveOferta} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveOferta} className="space-y-4 text-xs font-sans">
               <div className="space-y-1">
                 <label className="text-[11px] text-neutral-500 block">Operador</label>
                 <CustomDropdown
                   value={opId}
-                  options={operadores.map((op) => ({ value: String(op.id), label: op.nombre }))}
+                  options={operadores.map((op) => ({
+                    value: String(op.id),
+                    label: op.nombre,
+                  }))}
                   onChange={setOpId}
-                  placeholder="Seleccionar operador..."
+                  compact
                 />
               </div>
 
@@ -1272,24 +1676,21 @@ function CompetenciaContent() {
                   type="text"
                   value={nombrePlan}
                   onChange={(e) => setNombrePlan(e.target.value)}
-                  placeholder="Ej: Plan Fibra 200"
+                  placeholder="Ej: Plan Fibra Hogar 400"
                   className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
                   required
                 />
               </div>
 
-              {/* Numeric Inputs: tipeados manualmente */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <label className="text-[11px] text-neutral-500 block">Velocidad (Mbps)</label>
                   <input
                     type="number"
-                    inputMode="numeric"
                     min="1"
                     value={velocidadMb}
                     onChange={(e) => setVelocidadMb(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    placeholder="Ej: 400"
+                    placeholder="400"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
                     required
                   />
@@ -1299,13 +1700,11 @@ function CompetenciaContent() {
                   <label className="text-[11px] text-neutral-500 block">Tarifa mensual ($)</label>
                   <input
                     type="number"
-                    inputMode="decimal"
                     step="0.01"
                     min="0"
                     value={precioMensual}
                     onChange={(e) => setPrecioMensual(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    placeholder="Ej: 25"
+                    placeholder="25"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
                     required
                   />
@@ -1315,44 +1714,41 @@ function CompetenciaContent() {
                   <label className="text-[11px] text-neutral-500 block">Costo instalación ($)</label>
                   <input
                     type="number"
-                    inputMode="decimal"
                     step="0.01"
                     min="0"
                     value={costoInstalacion}
                     onChange={(e) => setCostoInstalacion(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    placeholder="Ej: 0"
+                    placeholder="0"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer text-neutral-700">
+              <div className="flex items-center gap-6 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-neutral-700">
                   <input
                     type="checkbox"
                     checked={incluyeTv}
                     onChange={(e) => setIncluyeTv(e.target.checked)}
-                    className="rounded border-neutral-300 text-neutral-900 focus:ring-0"
+                    className="rounded text-neutral-900 focus:ring-0"
                   />
                   <span>Incluye TV / Streaming</span>
                 </label>
 
-                <label className="flex items-center gap-2 cursor-pointer text-neutral-700">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-neutral-700">
                   <input
                     type="checkbox"
                     checked={esSimetrico}
                     onChange={(e) => setEsSimetrico(e.target.checked)}
-                    className="rounded border-neutral-300 text-neutral-900 focus:ring-0"
+                    className="rounded text-neutral-900 focus:ring-0"
                   />
                   <span>Velocidad simétrica</span>
                 </label>
               </div>
 
-              {/* Geographic hierarchy selectors */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Estado</label>
+              <div className="space-y-2 pt-1 border-t border-neutral-100">
+                <div className="text-[11px] text-neutral-400">Ubicación de la oferta (opcional)</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <CustomDropdown
                     value={formEstado}
                     options={estadosList}
@@ -1363,13 +1759,10 @@ function CompetenciaContent() {
                     }}
                     compact
                   />
-                </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Municipio</label>
                   <CustomDropdown
                     value={formMunicipio}
-                    options={[{ value: "", label: "General" }, ...formMunicipiosList.map((m) => ({ value: m, label: m }))]}
+                    options={[{ value: "", label: "Municipio" }, ...formMunicipiosList.map((m) => ({ value: m, label: m }))]}
                     onChange={(val) => {
                       setFormMunicipio(val);
                       setFormParroquia("");
@@ -1377,13 +1770,10 @@ function CompetenciaContent() {
                     compact
                     disabled={!formEstado || formMunicipiosList.length === 0}
                   />
-                </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Parroquia</label>
                   <CustomDropdown
                     value={formParroquia}
-                    options={[{ value: "", label: "General" }, ...formParroquiasList.map((p) => ({ value: p, label: p }))]}
+                    options={[{ value: "", label: "Parroquia" }, ...formParroquiasList.map((p) => ({ value: p, label: p }))]}
                     onChange={setFormParroquia}
                     compact
                     disabled={!formMunicipio || formParroquiasList.length === 0}
@@ -1424,41 +1814,42 @@ function CompetenciaContent() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* MODAL: NUEVO OPERADOR (Admin only, color picker eliminated)        */}
+      {/* MODAL: NUEVO OPERADOR (SOLO ADMIN)                                 */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {isNewOpOpen && isAdmin && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/40 backdrop-blur-xs animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-neutral-900/40 backdrop-blur-xs animate-in fade-in duration-150"
           onClick={() => !savingOp && setIsNewOpOpen(false)}
         >
           <div
-            className="w-full max-w-sm bg-white rounded-xl shadow-2xl border border-neutral-200/90 p-5 space-y-4 animate-in zoom-in-95 duration-150"
+            className="w-full max-w-sm bg-white rounded-xl shadow-2xl border border-neutral-200/90 p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-neutral-900 tracking-tight font-sans">
-                Nuevo operador de competencia
+                Registrar nuevo operador
               </h3>
               <button
                 type="button"
                 onClick={() => setIsNewOpOpen(false)}
-                className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
                 aria-label="Cerrar modal"
               >
                 <X className="w-4 h-4 stroke-[1.5]" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveOperador} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveOperador} className="space-y-4 text-xs font-sans">
               <div className="space-y-1">
-                <label className="text-[11px] text-neutral-500 block">Nombre de la empresa</label>
+                <label className="text-[11px] text-neutral-500 block">Nombre de la empresa u operador</label>
                 <input
                   type="text"
                   value={newOpNombre}
                   onChange={(e) => setNewOpNombre(e.target.value)}
-                  placeholder="Ej: Fibex, Inter, NetUno..."
+                  placeholder="Ej: NetUno, Cantv, Thundernet..."
                   className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
                   required
+                  autoFocus
                 />
               </div>
 
@@ -1484,7 +1875,7 @@ function CompetenciaContent() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* MODAL: CREAR / EDITAR PLAN DE POWER LINK                          */}
+      {/* MODAL: GESTIÓN DE PLAN DE POWER LINK                                */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {isPlanModalOpen && isAdmin && (
         <div
@@ -1492,24 +1883,24 @@ function CompetenciaContent() {
           onClick={() => !savingPlan && setIsPlanModalOpen(false)}
         >
           <div
-            className="w-full max-w-md max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl border border-neutral-200/90 p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-150"
+            className="w-full max-w-lg max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl border border-neutral-200/90 p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-neutral-900 tracking-tight font-sans">
-                {editingPlanId ? "Editar plan de Power Link" : "Añadir nuevo plan a Power Link"}
+                {editingPlanId ? "Editar plan de Power Link" : "Nuevo plan de Power Link"}
               </h3>
               <button
                 type="button"
                 onClick={() => setIsPlanModalOpen(false)}
-                className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
                 aria-label="Cerrar modal"
               >
                 <X className="w-4 h-4 stroke-[1.5]" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveCompanyPlan} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveCompanyPlan} className="space-y-4 text-xs font-sans">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[11px] text-neutral-500 block">Nombre del plan</label>
@@ -1517,7 +1908,7 @@ function CompetenciaContent() {
                     type="text"
                     value={planFormNombre}
                     onChange={(e) => setPlanFormNombre(e.target.value)}
-                    placeholder="Ej: 400 Megas"
+                    placeholder="Ej: 600 Megas + TV"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
                     required
                   />
@@ -1528,8 +1919,8 @@ function CompetenciaContent() {
                   <CustomDropdown
                     value={planFormTipo}
                     options={[
-                      { value: "Domiciliario", label: "Residencial (Hogar)" },
-                      { value: "Empresarial", label: "Corporativo (Empresas)" },
+                      { value: "Domiciliario", label: "Domiciliario (Hogar)" },
+                      { value: "Empresarial", label: "Empresarial (Corporativo)" },
                     ]}
                     onChange={(val) => setPlanFormTipo(val as any)}
                     compact
@@ -1537,44 +1928,43 @@ function CompetenciaContent() {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] text-neutral-500 block">Velocidad (Mbps)</label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  value={planFormVelocidad}
-                  onChange={(e) => setPlanFormVelocidad(e.target.value)}
-                  placeholder="Ej: 400"
-                  className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Tarifa Promo (3 meses) $</label>
+                  <label className="text-[11px] text-neutral-500 block">Velocidad (Mbps)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={planFormVelocidad}
+                    onChange={(e) => setPlanFormVelocidad(e.target.value)}
+                    placeholder="600"
+                    className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] text-neutral-500 block">Precio Promo ($ USD)</label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     value={planFormPrecioPromo}
                     onChange={(e) => setPlanFormPrecioPromo(e.target.value)}
-                    placeholder="Ej: 15"
+                    placeholder="22"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
                     required
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Tarifa Regular $</label>
+                  <label className="text-[11px] text-neutral-500 block">Precio Regular ($ USD)</label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
                     value={planFormPrecioRegular}
                     onChange={(e) => setPlanFormPrecioRegular(e.target.value)}
-                    placeholder="Ej: 29"
+                    placeholder="36"
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
                     required
                   />
@@ -1583,7 +1973,7 @@ function CompetenciaContent() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Instalación Promo $</label>
+                  <label className="text-[11px] text-neutral-500 block">Instalación Promo ($)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1596,7 +1986,7 @@ function CompetenciaContent() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Instalación Regular $</label>
+                  <label className="text-[11px] text-neutral-500 block">Instalación Regular ($)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1609,35 +1999,38 @@ function CompetenciaContent() {
                 </div>
               </div>
 
-              <div className="space-y-2 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer text-neutral-700">
+              <div className="space-y-2 pt-1 border-t border-neutral-100">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-neutral-700">
                   <input
                     type="checkbox"
                     checked={planFormHasTv}
                     onChange={(e) => setPlanFormHasTv(e.target.checked)}
-                    className="rounded border-neutral-300 text-neutral-900 focus:ring-0"
+                    className="rounded text-neutral-900 focus:ring-0"
                   />
-                  <span>Incluye TV / Streaming Digital</span>
+                  <span>Incluye televisión digital (Streaming)</span>
                 </label>
 
                 {planFormHasTv && (
-                  <input
-                    type="text"
-                    value={planFormNombreTv}
-                    onChange={(e) => setPlanFormNombreTv(e.target.value)}
-                    placeholder="Nombre del servicio de TV (ej: Power Link GO TV)"
-                    className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900 text-[11px]"
-                  />
+                  <div className="pl-6 space-y-1">
+                    <label className="text-[11px] text-neutral-500 block">Nombre del servicio de TV</label>
+                    <input
+                      type="text"
+                      value={planFormNombreTv}
+                      onChange={(e) => setPlanFormNombreTv(e.target.value)}
+                      placeholder="Power Link GO TV"
+                      className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
+                    />
+                  </div>
                 )}
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] text-neutral-500 block">Notas o condiciones</label>
+                <label className="text-[11px] text-neutral-500 block">Notas o condiciones del plan</label>
                 <input
                   type="text"
                   value={planFormNotas}
                   onChange={(e) => setPlanFormNotas(e.target.value)}
-                  placeholder="Detalles de la promoción, tiempo de gracia, etc."
+                  placeholder="Ej: Precio especial primeros 3 meses..."
                   className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
                 />
               </div>
@@ -1664,7 +2057,7 @@ function CompetenciaContent() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* MODAL: CREAR / EDITAR SERVICIO DE POWER LINK                      */}
+      {/* MODAL: GESTIÓN DE SERVICIO ADICIONAL DE POWER LINK                 */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {isServiceModalOpen && isAdmin && (
         <div
@@ -1672,24 +2065,24 @@ function CompetenciaContent() {
           onClick={() => !savingService && setIsServiceModalOpen(false)}
         >
           <div
-            className="w-full max-w-sm bg-white rounded-xl shadow-2xl border border-neutral-200/90 p-5 space-y-4 animate-in zoom-in-95 duration-150"
+            className="w-full max-w-sm bg-white rounded-xl shadow-2xl border border-neutral-200/90 p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-neutral-900 tracking-tight font-sans">
-                {editingServiceId ? "Editar servicio adicional" : "Añadir servicio adicional"}
+                {editingServiceId ? "Editar servicio adicional" : "Nuevo servicio adicional"}
               </h3>
               <button
                 type="button"
                 onClick={() => setIsServiceModalOpen(false)}
-                className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
                 aria-label="Cerrar modal"
               >
                 <X className="w-4 h-4 stroke-[1.5]" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveCompanyService} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveCompanyService} className="space-y-4 text-xs font-sans">
               <div className="space-y-1">
                 <label className="text-[11px] text-neutral-500 block">Nombre del servicio</label>
                 <input
@@ -1765,12 +2158,253 @@ function CompetenciaContent() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: GESTIÓN DE PROMOCIONES POR ZONA                             */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {isPromoModalOpen && isAdmin && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-neutral-900/40 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => !savingPromo && setIsPromoModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl border border-neutral-200/90 p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-neutral-900 tracking-tight font-sans">
+                {editingPromoId ? "Editar promoción por zona" : "Nueva promoción por zona"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsPromoModalOpen(false)}
+                className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer p-1"
+                aria-label="Cerrar modal"
+              >
+                <X className="w-4 h-4 stroke-[1.5]" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCompanyPromotion} className="space-y-4 text-xs font-sans">
+              <div className="space-y-1">
+                <label className="text-[11px] text-neutral-500 block">Nombre de la promoción</label>
+                <input
+                  type="text"
+                  value={promoFormNombre}
+                  onChange={(e) => setPromoFormNombre(e.target.value)}
+                  placeholder="Ej: Promoción Las Tejerías (Mitad de precio + Instalación Gratis)"
+                  className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
+                  required
+                />
+              </div>
+
+              {/* Geographic targeting */}
+              <div className="space-y-2 pt-1 border-t border-neutral-100">
+                <div className="text-[11px] text-neutral-500 font-medium">Ubicación geográfica de la promoción</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-neutral-400 block">Estado</label>
+                    <CustomDropdown
+                      value={promoFormEstado}
+                      options={[{ value: "Todos", label: "Todos los estados" }, ...estadosList.map((e) => ({ value: e, label: e }))]}
+                      onChange={(val) => {
+                        setPromoFormEstado(val);
+                        setPromoFormMunicipio("");
+                        setPromoFormParroquia("");
+                      }}
+                      compact
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-neutral-400 block">Municipio</label>
+                    <CustomDropdown
+                      value={promoFormMunicipio}
+                      options={[{ value: "", label: "Todos los municipios" }, ...promoMunicipiosList.map((m) => ({ value: m, label: m }))]}
+                      onChange={(val) => {
+                        setPromoFormMunicipio(val);
+                        setPromoFormParroquia("");
+                      }}
+                      compact
+                      disabled={promoFormEstado === "Todos" || promoMunicipiosList.length === 0}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-neutral-400 block">Parroquia</label>
+                    <CustomDropdown
+                      value={promoFormParroquia}
+                      options={[{ value: "", label: "Todas las parroquias" }, ...promoParroquiasList.map((p) => ({ value: p, label: p }))]}
+                      onChange={setPromoFormParroquia}
+                      compact
+                      disabled={!promoFormMunicipio || promoParroquiasList.length === 0}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1 pt-1">
+                  <label className="text-[11px] text-neutral-500 block">Sector o alcance específico (opcional)</label>
+                  <input
+                    type="text"
+                    value={promoFormSector}
+                    onChange={(e) => setPromoFormSector(e.target.value)}
+                    placeholder="Ej: General / Toda la zona, Casco Central, Sectores seleccionados..."
+                    className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
+                  />
+                </div>
+              </div>
+
+              {/* Discount and terms */}
+              <div className="space-y-2 pt-1 border-t border-neutral-100">
+                <div className="text-[11px] text-neutral-500 font-medium">Condiciones del beneficio</div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-neutral-500 block">Descuento en mensualidad</label>
+                    <CustomDropdown
+                      value={promoFormTipoDesc}
+                      options={[
+                        { value: "mitad_precio", label: "Mitad de precio (50% desc.)" },
+                        { value: "porcentaje", label: "Porcentaje personalizado" },
+                        { value: "monto_fijo", label: "Descuento en dólares ($)" },
+                      ]}
+                      onChange={(val) => {
+                        setPromoFormTipoDesc(val as any);
+                        if (val === "mitad_precio") setPromoFormDescValor("50");
+                      }}
+                      compact
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-neutral-500 block">
+                      {promoFormTipoDesc === "monto_fijo" ? "Monto descontado ($)" : "Porcentaje (%)"}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="1"
+                      value={promoFormDescValor}
+                      onChange={(e) => setPromoFormDescValor(e.target.value)}
+                      placeholder="50"
+                      disabled={promoFormTipoDesc === "mitad_precio"}
+                      className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900 disabled:opacity-50"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-neutral-500 block">Duración de la tarifa (meses)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={promoFormDuracion}
+                      onChange={(e) => setPromoFormDuracion(e.target.value)}
+                      placeholder="3"
+                      className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-neutral-500 block">Segmento aplicable</label>
+                    <CustomDropdown
+                      value={promoFormSegmento}
+                      options={[
+                        { value: "Domiciliario", label: "Solo Domiciliario (Hogar)" },
+                        { value: "Empresarial", label: "Solo Empresarial" },
+                        { value: "Todos", label: "Todos los segmentos" },
+                      ]}
+                      onChange={(val) => setPromoFormSegmento(val as any)}
+                      compact
+                    />
+                  </div>
+                </div>
+
+                {/* Installation cost */}
+                <div className="pt-2 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-neutral-700">
+                    <input
+                      type="checkbox"
+                      checked={promoFormInstGratis}
+                      onChange={(e) => {
+                        setPromoFormInstGratis(e.target.checked);
+                        if (e.target.checked) setPromoFormCostoInst("0");
+                      }}
+                      className="rounded text-neutral-900 focus:ring-0"
+                    />
+                    <span className="font-medium text-neutral-900">Instalación Gratis ($0)</span>
+                  </label>
+
+                  {!promoFormInstGratis && (
+                    <div className="pl-6 space-y-1">
+                      <label className="text-[11px] text-neutral-500 block">Costo de instalación en esta zona ($ USD)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={promoFormCostoInst}
+                        onChange={(e) => setPromoFormCostoInst(e.target.value)}
+                        placeholder="25"
+                        className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1 pt-1 border-t border-neutral-100">
+                <label className="text-[11px] text-neutral-500 block">Notas o condiciones de la promoción</label>
+                <input
+                  type="text"
+                  value={promoFormNotas}
+                  onChange={(e) => setPromoFormNotas(e.target.value)}
+                  placeholder="Ej: Plan a mitad de precio por 3 meses con costo de instalación $0..."
+                  className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
+                />
+              </div>
+
+              <div className="pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={promoFormActivo}
+                    onChange={(e) => setPromoFormActivo(e.target.checked)}
+                    className="rounded text-neutral-900 focus:ring-0"
+                  />
+                  <span>Promoción vigente y activa</span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setIsPromoModalOpen(false)}
+                  className="text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPromo}
+                  className="text-neutral-900 hover:text-neutral-700 font-semibold transition-colors cursor-pointer"
+                >
+                  {savingPromo ? "Guardando..." : "Guardar promoción"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* MODALES DE ELIMINACIÓN                                             */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <DeleteConfirmDialog
         isOpen={ofertaToDelete !== null}
         title="Eliminar oferta de competencia"
-        description="¿Estás seguro de que deseas eliminar este registro de tarifa del mercado?"
+        description="¿Estás seguro de que deseas eliminar este registro de la competencia? Esta acción no se puede deshacer."
         onConfirm={executeDeleteOferta}
         onCancel={() => setOfertaToDelete(null)}
       />
@@ -1791,6 +2425,14 @@ function CompetenciaContent() {
         onCancel={() => setServiceToDelete(null)}
       />
 
+      <DeleteConfirmDialog
+        isOpen={promoToDelete !== null}
+        title="Eliminar promoción por zona"
+        description={`¿Estás seguro de que deseas eliminar la promoción "${promoToDelete?.nombre}"?`}
+        onConfirm={executeDeleteCompanyPromotion}
+        onCancel={() => setPromoToDelete(null)}
+      />
+
       {/* TOAST PILL */}
       <ToastPill
         message={toastMsg?.text || null}
@@ -1803,13 +2445,7 @@ function CompetenciaContent() {
 
 export default function CompetenciaPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#FDFDFD] text-xs font-mono text-neutral-400">
-          Cargando estudio de mercado...
-        </div>
-      }
-    >
+    <Suspense fallback={<div className="min-h-screen bg-[#FDFDFD]" />}>
       <CompetenciaContent />
     </Suspense>
   );

@@ -29,9 +29,27 @@ export interface CompanyService {
   activo: boolean;
 }
 
+export interface CompanyPromotion {
+  id: string;
+  nombre: string;
+  estado: string;                 // ej: "Aragua", "Miranda", "Todos"
+  municipio?: string | null;      // ej: "Santos Michelena", "Guaicaipuro"
+  parroquia?: string | null;      // ej: "Las Tejerías", "Los Teques"
+  sector?: string | null;         // ej: "General / Toda la zona", "Sectores seleccionados"
+  tipo_descuento_mensual: "mitad_precio" | "porcentaje" | "monto_fijo";
+  descuento_valor: number;        // 50 para mitad de precio (50%), o monto en $
+  duracion_meses: number;         // ej: 3 meses
+  costo_instalacion: number;      // 0 si gratis, 25 estándar
+  instalacion_gratis: boolean;
+  aplica_segmento: "Domiciliario" | "Empresarial" | "Todos";
+  activo: boolean;
+  notas?: string | null;
+}
+
 export interface CompanyPricingData {
   planes: CompanyPlan[];
   servicios: CompanyService[];
+  promociones: CompanyPromotion[];
   updated_at: string;
 }
 
@@ -205,6 +223,40 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
       activo: true,
     },
   ],
+  promociones: [
+    {
+      id: "promo-tejerias",
+      nombre: "Promoción Las Tejerías",
+      estado: "Aragua",
+      municipio: "Santos Michelena",
+      parroquia: "Las Tejerías",
+      sector: "General / Toda la zona",
+      tipo_descuento_mensual: "mitad_precio",
+      descuento_valor: 50,
+      duracion_meses: 3,
+      costo_instalacion: 0,
+      instalacion_gratis: true,
+      aplica_segmento: "Domiciliario",
+      activo: true,
+      notas: "Plan a mitad de precio por 3 meses con costo de instalación $0 (completamente gratis).",
+    },
+    {
+      id: "promo-los-teques",
+      nombre: "Promoción Los Teques (Sectores)",
+      estado: "Miranda",
+      municipio: "Guaicaipuro",
+      parroquia: "Los Teques",
+      sector: "Sectores seleccionados",
+      tipo_descuento_mensual: "mitad_precio",
+      descuento_valor: 50,
+      duracion_meses: 3,
+      costo_instalacion: 25,
+      instalacion_gratis: false,
+      aplica_segmento: "Domiciliario",
+      activo: true,
+      notas: "Mensualidad a mitad de precio por 3 meses. Se cobra instalación estándar ($25).",
+    },
+  ],
   updated_at: new Date().toISOString(),
 };
 
@@ -218,11 +270,13 @@ export async function getCompanyPricing(): Promise<CompanyPricingData> {
     const raw = await fs.readFile(PRICING_DATA_PATH, "utf-8");
     const parsed = JSON.parse(raw);
     if (parsed && Array.isArray(parsed.planes)) {
+      if (!Array.isArray(parsed.promociones)) {
+        parsed.promociones = DEFAULT_COMPANY_PRICING.promociones;
+      }
       cachedPricing = { data: parsed, timestamp: now };
       return parsed;
     }
   } catch (err) {
-    // Si no existe, inicializar con los datos por defecto
     try {
       await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(DEFAULT_COMPANY_PRICING, null, 2), "utf-8");
       cachedPricing = { data: DEFAULT_COMPANY_PRICING, timestamp: now };
@@ -347,5 +401,89 @@ export async function deleteCompanyService(serviceId: string): Promise<boolean> 
 
   revalidatePath("/competencia");
   revalidatePath("/admin/planes");
+  return true;
+}
+
+export async function saveCompanyPromotion(promo: Partial<CompanyPromotion> & { id?: string }): Promise<CompanyPromotion> {
+  cachedPricing = null;
+  const current = await getCompanyPricing();
+  const promociones = [...(current.promociones || [])];
+
+  const promoId = promo.id || `prm_${Date.now()}`;
+  const instalacionGratis = promo.instalacion_gratis ?? (Number(promo.costo_instalacion ?? 0) === 0);
+  const costoInstalacion = instalacionGratis ? 0 : parseFloat(Number(promo.costo_instalacion ?? 0).toFixed(2));
+
+  const sanitizedPromo: CompanyPromotion = {
+    id: promoId,
+    nombre: (promo.nombre || "Nueva Promoción").trim(),
+    estado: (promo.estado || "Todos").trim(),
+    municipio: promo.municipio?.trim() || null,
+    parroquia: promo.parroquia?.trim() || null,
+    sector: promo.sector?.trim() || null,
+    tipo_descuento_mensual: promo.tipo_descuento_mensual || "mitad_precio",
+    descuento_valor: parseFloat(Number(promo.descuento_valor ?? 50).toFixed(2)),
+    duracion_meses: Math.max(1, Number(promo.duracion_meses) || 3),
+    costo_instalacion: costoInstalacion,
+    instalacion_gratis: instalacionGratis,
+    aplica_segmento: promo.aplica_segmento || "Domiciliario",
+    activo: promo.activo !== false,
+    notas: promo.notas?.trim() || null,
+  };
+
+  const existingIdx = promociones.findIndex((p) => p.id === promoId);
+  if (existingIdx !== -1) {
+    promociones[existingIdx] = sanitizedPromo;
+  } else {
+    promociones.push(sanitizedPromo);
+  }
+
+  const updatedData: CompanyPricingData = {
+    ...current,
+    promociones,
+    updated_at: new Date().toISOString(),
+  };
+
+  await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(updatedData, null, 2), "utf-8");
+  cachedPricing = { data: updatedData, timestamp: Date.now() };
+
+  revalidatePath("/competencia");
+  return sanitizedPromo;
+}
+
+export async function deleteCompanyPromotion(promoId: string): Promise<boolean> {
+  cachedPricing = null;
+  const current = await getCompanyPricing();
+  const promociones = (current.promociones || []).filter((p) => p.id !== promoId);
+
+  const updatedData: CompanyPricingData = {
+    ...current,
+    promociones,
+    updated_at: new Date().toISOString(),
+  };
+
+  await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(updatedData, null, 2), "utf-8");
+  cachedPricing = { data: updatedData, timestamp: Date.now() };
+
+  revalidatePath("/competencia");
+  return true;
+}
+
+export async function toggleCompanyPromotion(promoId: string, activo: boolean): Promise<boolean> {
+  cachedPricing = null;
+  const current = await getCompanyPricing();
+  const promociones = (current.promociones || []).map((p) =>
+    p.id === promoId ? { ...p, activo } : p
+  );
+
+  const updatedData: CompanyPricingData = {
+    ...current,
+    promociones,
+    updated_at: new Date().toISOString(),
+  };
+
+  await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(updatedData, null, 2), "utf-8");
+  cachedPricing = { data: updatedData, timestamp: Date.now() };
+
+  revalidatePath("/competencia");
   return true;
 }
