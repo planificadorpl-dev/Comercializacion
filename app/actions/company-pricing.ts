@@ -3,6 +3,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { revalidatePath } from "next/cache";
+import { query } from "@/lib/db";
 
 export interface CompanyPlan {
   id: string;
@@ -183,6 +184,14 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
   ],
   servicios: [
     {
+      id: "srv-router-vsol-promo",
+      nombre: "Router AX 3000 V-SOL (PROMOCIÓN)",
+      tipo_cobro: "unico",
+      precio_usd: 35.0,
+      descripcion: "Router Wi-Fi 6 AX 3000 V-SOL Gigabit en precio promocional.",
+      activo: true,
+    },
+    {
       id: "srv-mudanza",
       nombre: "Servicio de Mudanza / Traslado",
       tipo_cobro: "unico",
@@ -260,12 +269,62 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
   updated_at: new Date().toISOString(),
 };
 
+async function persistPricingData(data: CompanyPricingData): Promise<void> {
+  // 1. Persist to PostgreSQL (Supabase)
+  try {
+    await query(
+      `CREATE TABLE IF NOT EXISTS public.company_pricing_config (
+         id VARCHAR(50) PRIMARY KEY,
+         data JSONB NOT NULL,
+         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+       );`
+    );
+
+    await query(
+      `INSERT INTO public.company_pricing_config (id, data, updated_at)
+       VALUES ('current', $1, NOW())
+       ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();`,
+      [JSON.stringify(data)]
+    );
+  } catch (pgErr: any) {
+    console.warn("Postgres persistPricingData error:", pgErr.message);
+  }
+
+  // 2. Try updating local file if writable (e.g. local dev, gracefully catches EROFS on Vercel)
+  try {
+    await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(data, null, 2), "utf-8");
+  } catch (fsErr) {
+    // Read-only filesystem in Vercel serverless functions is expected
+  }
+}
+
 export async function getCompanyPricing(): Promise<CompanyPricingData> {
   const now = Date.now();
   if (cachedPricing && now - cachedPricing.timestamp < CACHE_TTL_MS) {
     return cachedPricing.data;
   }
 
+  // 1. Try PostgreSQL (Supabase)
+  try {
+    const rows = await query("SELECT data FROM public.company_pricing_config WHERE id = 'current'");
+    if (rows && rows.length > 0 && rows[0].data) {
+      let parsed = rows[0].data;
+      if (typeof parsed === "string") {
+        parsed = JSON.parse(parsed);
+      }
+      if (parsed && Array.isArray(parsed.planes)) {
+        if (!Array.isArray(parsed.promociones)) {
+          parsed.promociones = DEFAULT_COMPANY_PRICING.promociones;
+        }
+        cachedPricing = { data: parsed, timestamp: now };
+        return parsed;
+      }
+    }
+  } catch (pgErr: any) {
+    console.warn("Postgres getCompanyPricing error, fallback to file:", pgErr.message);
+  }
+
+  // 2. Fallback to packaged file (read-only safe)
   try {
     const raw = await fs.readFile(PRICING_DATA_PATH, "utf-8");
     const parsed = JSON.parse(raw);
@@ -276,13 +335,7 @@ export async function getCompanyPricing(): Promise<CompanyPricingData> {
       cachedPricing = { data: parsed, timestamp: now };
       return parsed;
     }
-  } catch (err) {
-    try {
-      await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(DEFAULT_COMPANY_PRICING, null, 2), "utf-8");
-      cachedPricing = { data: DEFAULT_COMPANY_PRICING, timestamp: now };
-      return DEFAULT_COMPANY_PRICING;
-    } catch {}
-  }
+  } catch (err) {}
 
   return DEFAULT_COMPANY_PRICING;
 }
@@ -322,7 +375,7 @@ export async function saveCompanyPlan(plan: Partial<CompanyPlan> & { id?: string
     updated_at: new Date().toISOString(),
   };
 
-  await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(updatedData, null, 2), "utf-8");
+  await persistPricingData(updatedData);
   cachedPricing = { data: updatedData, timestamp: Date.now() };
 
   revalidatePath("/competencia");
@@ -341,7 +394,7 @@ export async function deleteCompanyPlan(planId: string): Promise<boolean> {
     updated_at: new Date().toISOString(),
   };
 
-  await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(updatedData, null, 2), "utf-8");
+  await persistPricingData(updatedData);
   cachedPricing = { data: updatedData, timestamp: Date.now() };
 
   revalidatePath("/competencia");
@@ -377,7 +430,7 @@ export async function saveCompanyService(service: Partial<CompanyService> & { id
     updated_at: new Date().toISOString(),
   };
 
-  await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(updatedData, null, 2), "utf-8");
+  await persistPricingData(updatedData);
   cachedPricing = { data: updatedData, timestamp: Date.now() };
 
   revalidatePath("/competencia");
@@ -396,7 +449,7 @@ export async function deleteCompanyService(serviceId: string): Promise<boolean> 
     updated_at: new Date().toISOString(),
   };
 
-  await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(updatedData, null, 2), "utf-8");
+  await persistPricingData(updatedData);
   cachedPricing = { data: updatedData, timestamp: Date.now() };
 
   revalidatePath("/competencia");
@@ -443,7 +496,7 @@ export async function saveCompanyPromotion(promo: Partial<CompanyPromotion> & { 
     updated_at: new Date().toISOString(),
   };
 
-  await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(updatedData, null, 2), "utf-8");
+  await persistPricingData(updatedData);
   cachedPricing = { data: updatedData, timestamp: Date.now() };
 
   revalidatePath("/competencia");
@@ -461,7 +514,7 @@ export async function deleteCompanyPromotion(promoId: string): Promise<boolean> 
     updated_at: new Date().toISOString(),
   };
 
-  await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(updatedData, null, 2), "utf-8");
+  await persistPricingData(updatedData);
   cachedPricing = { data: updatedData, timestamp: Date.now() };
 
   revalidatePath("/competencia");
@@ -481,7 +534,7 @@ export async function toggleCompanyPromotion(promoId: string, activo: boolean): 
     updated_at: new Date().toISOString(),
   };
 
-  await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(updatedData, null, 2), "utf-8");
+  await persistPricingData(updatedData);
   cachedPricing = { data: updatedData, timestamp: Date.now() };
 
   revalidatePath("/competencia");
