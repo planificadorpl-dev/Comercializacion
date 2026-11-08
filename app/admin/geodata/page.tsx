@@ -240,6 +240,20 @@ function GeodataAdminContent() {
     });
   }, [aliasSearch]);
 
+  const [aliasPage, setAliasPage] = useState(1);
+  const ALIAS_PAGE_SIZE = 25;
+
+  useEffect(() => {
+    setAliasPage(1);
+  }, [aliasSearch]);
+
+  const totalAliasPages = Math.max(1, Math.ceil(aliasList.length / ALIAS_PAGE_SIZE));
+  const safeAliasPage = Math.min(aliasPage, totalAliasPages);
+  const paginatedAliasList = useMemo(() => {
+    const start = (safeAliasPage - 1) * ALIAS_PAGE_SIZE;
+    return aliasList.slice(start, start + ALIAS_PAGE_SIZE);
+  }, [aliasList, safeAliasPage]);
+
   return (
     <div className="flex min-h-screen bg-[#FDFDFD] text-neutral-900 font-sans antialiased selection:bg-neutral-900 selection:text-white">
       <Sidebar activeSection="admin" />
@@ -251,12 +265,12 @@ function GeodataAdminContent() {
             <SidebarMobileButton />
             <SidebarOpenButton />
             <Link
-              href="/admin"
+              href="/admin?tab=departamentos"
               className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-900 transition-colors font-medium select-none"
               title="Volver a administración"
             >
               <ChevronLeft className="w-3.5 h-3.5 stroke-[2]" />
-              <span>Volver a administración</span>
+              <span>Volver a catálogos</span>
             </Link>
           </div>
 
@@ -444,14 +458,14 @@ function GeodataAdminContent() {
 
               {/* Lista de Alias y Mapeos Canónicos */}
               <div className="divide-y divide-neutral-100 border-b border-neutral-100">
-                {aliasList.map((a) => (
+                {paginatedAliasList.map((a) => (
                   <div
                     key={a.key}
                     className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-neutral-50/60 transition-colors"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="font-mono text-neutral-500 text-[11px]">
-                        "{a.key}"
+                        &quot;{a.key}&quot;
                       </span>
                       <span className="text-neutral-300">→</span>
                       <span className="font-semibold text-neutral-900 truncate">
@@ -472,6 +486,38 @@ function GeodataAdminContent() {
                   </div>
                 ))}
               </div>
+
+              {/* Paginación tipográfica discreta para alias */}
+              {aliasList.length > ALIAS_PAGE_SIZE && (
+                <div className="flex items-center justify-between pt-3 text-xs text-neutral-500 font-sans select-none">
+                  <span>
+                    Mostrando {(safeAliasPage - 1) * ALIAS_PAGE_SIZE + 1}–
+                    {Math.min(safeAliasPage * ALIAS_PAGE_SIZE, aliasList.length)} de {aliasList.length}
+                  </span>
+
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setAliasPage((p) => Math.max(1, p - 1))}
+                      disabled={safeAliasPage <= 1}
+                      className="cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:text-neutral-950 font-medium"
+                    >
+                      Anterior
+                    </button>
+                    <span className="font-mono text-[11px] text-neutral-400">
+                      {safeAliasPage} / {totalAliasPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAliasPage((p) => Math.min(totalAliasPages, p + 1))}
+                      disabled={safeAliasPage >= totalAliasPages}
+                      className="cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:text-neutral-950 font-medium"
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -611,6 +611,7 @@ export function UsuariosTabContent({
                   onChange={handleSelectColaborador}
                   options={colaboradorOptions}
                   placeholder="Selecciona un colaborador del equipo..."
+                  searchPlaceholder="Buscar colaborador por nombre..."
                 />
                 <span className="text-[10px] text-neutral-400 block pt-0.5">
                   Selecciona el colaborador para vincular sus reportes y fijar su sesión.

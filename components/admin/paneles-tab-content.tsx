@@ -76,41 +76,41 @@ export function PanelesTabContent({ showToast }: PanelesTabContentProps) {
 
   return (
     <div className="space-y-6">
-      {/* Metrics Section: Strict Rule 5 - Zero uppercase, no decorative icons in headers */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {/* Metric 1 */}
-        <div className="p-4 rounded-lg bg-neutral-50/70 border border-neutral-200/70 space-y-1">
-          <p className="text-xs text-neutral-500 font-sans">Paneles registrados</p>
-          <p className="text-2xl font-bold tracking-tight text-neutral-900 font-sans">
+      {/* Resumen tipográfico limpio - Cero cuadros perimetrales (Strict Rule 6) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6 py-1 sm:py-2">
+        <div className="flex flex-col py-0.5">
+          <span className="text-[11px] sm:text-xs font-normal text-neutral-500 font-sans">Paneles registrados</span>
+          <span className="text-lg sm:text-xl font-bold tracking-tight text-neutral-950 mt-0.5 font-mono">
             {totalCount}
-          </p>
-          <p className="text-[11px] text-neutral-400 font-sans">
+          </span>
+          <span className="text-[11px] text-neutral-400 font-sans mt-0.5">
             Módulos del ecosistema comercial
-          </p>
+          </span>
         </div>
 
-        {/* Metric 2 */}
-        <div className="p-4 rounded-lg bg-neutral-50/70 border border-neutral-200/70 space-y-1">
-          <p className="text-xs text-neutral-500 font-sans">Habilitados para usuarios</p>
-          <p className="text-2xl font-bold tracking-tight text-emerald-600 font-sans">
+        <div className="flex flex-col py-0.5">
+          <span className="text-[11px] sm:text-xs font-normal text-neutral-500 font-sans">Habilitados para usuarios</span>
+          <span className="text-lg sm:text-xl font-bold tracking-tight text-emerald-600 mt-0.5 font-mono">
             {enabledCount}
-          </p>
-          <p className="text-[11px] text-neutral-400 font-sans">
+          </span>
+          <span className="text-[11px] text-neutral-400 font-sans mt-0.5">
             Visibles para asesores y supervisores
-          </p>
+          </span>
         </div>
 
-        {/* Metric 3 */}
-        <div className="p-4 rounded-lg bg-neutral-50/70 border border-neutral-200/70 space-y-1">
-          <p className="text-xs text-neutral-500 font-sans">Restringidos a administrador</p>
-          <p className="text-2xl font-bold tracking-tight text-amber-600 font-sans">
+        <div className="flex flex-col py-0.5">
+          <span className="text-[11px] sm:text-xs font-normal text-neutral-500 font-sans">Restringidos a administrador</span>
+          <span className="text-lg sm:text-xl font-bold tracking-tight text-amber-600 mt-0.5 font-mono">
             {disabledCount}
-          </p>
-          <p className="text-[11px] text-neutral-400 font-sans">
+          </span>
+          <span className="text-[11px] text-neutral-400 font-sans mt-0.5">
             En desarrollo o mantenimiento
-          </p>
+          </span>
         </div>
       </div>
+
+      {/* Blurred gradient line separator */}
+      <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-neutral-200 to-transparent pointer-events-none" />
 
       {/* Description & Search / Filter Bar */}
       <div className="space-y-3">

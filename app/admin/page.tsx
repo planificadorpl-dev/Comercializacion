@@ -65,6 +65,13 @@ interface AdminData {
 }
 
 export type AdminTab = "personal" | "usuarios" | "paneles" | "departamentos" | "sedes" | "canales";
+export type AdminCategory = "equipo" | "catalogos" | "sistema";
+
+export const getCategoryForTab = (tab: AdminTab): AdminCategory => {
+  if (tab === "personal" || tab === "usuarios") return "equipo";
+  if (tab === "paneles") return "sistema";
+  return "catalogos";
+};
 
 function AdminPageContent() {
   const searchParams = useSearchParams();
@@ -77,11 +84,19 @@ function AdminPageContent() {
       ? paramTab
       : "personal"
   );
+  const [activeCategory, setActiveCategory] = useState<AdminCategory>(() =>
+    getCategoryForTab(
+      paramTab && ["personal", "usuarios", "paneles", "departamentos", "sedes", "canales"].includes(paramTab)
+        ? paramTab
+        : "personal"
+    )
+  );
 
-  // Sync tab if URL changes
+  // Sync tab and category if URL changes
   useEffect(() => {
     if (paramTab && ["personal", "usuarios", "paneles", "departamentos", "sedes", "canales"].includes(paramTab)) {
       setActiveTab(paramTab);
+      setActiveCategory(getCategoryForTab(paramTab));
     }
   }, [paramTab]);
 
@@ -494,11 +509,29 @@ function AdminPageContent() {
 
   const handleTabChange = (tab: AdminTab) => {
     setActiveTab(tab);
+    setActiveCategory(getCategoryForTab(tab));
     setSearchQuery("");
     // Update URL query smoothly
     const url = new URL(window.location.href);
     url.searchParams.set("tab", tab);
     router.replace(url.pathname + url.search, { scroll: false });
+  };
+
+  const handleCategoryChange = (cat: AdminCategory) => {
+    setActiveCategory(cat);
+    if (cat === "equipo") {
+      if (activeTab !== "personal" && activeTab !== "usuarios") {
+        handleTabChange("personal");
+      }
+    } else if (cat === "catalogos") {
+      if (activeTab !== "departamentos" && activeTab !== "sedes" && activeTab !== "canales") {
+        handleTabChange("departamentos");
+      }
+    } else if (cat === "sistema") {
+      if (activeTab !== "paneles") {
+        handleTabChange("paneles");
+      }
+    }
   };
 
   if (userLoading) {
@@ -644,123 +677,172 @@ function AdminPageContent() {
             </div>
           )}
 
-          {/* Navigation Tabs (Mobile touch-scroll without wrap, desktop clean typography) */}
-          <nav className="flex items-center gap-x-5 border-b border-neutral-200/80 text-xs overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth -mx-4 px-4 sm:mx-0 sm:px-0">
-            {/* TAB: Personal */}
-            <button
-              type="button"
-              onClick={() => handleTabChange("personal")}
-              className={cn(
-                "shrink-0 min-h-[44px] py-2.5 px-1 inline-flex items-center gap-1.5 transition-colors cursor-pointer select-none",
-                activeTab === "personal"
-                  ? "font-semibold text-neutral-950 border-b-2 border-neutral-950 -mb-[1px]"
-                  : "text-neutral-400 hover:text-neutral-900 font-medium"
+          {/* Grouped Administrative Navigation (Strict Rule 1 & 5: Clean typography, no boxed cards, sentence case) */}
+          <div className="space-y-2 border-b border-neutral-200/80 pb-1">
+            {/* 1. Categorías Principales */}
+            <nav className="flex items-center gap-6 text-xs overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth -mx-4 px-4 sm:mx-0 sm:px-0 select-none">
+              <button
+                type="button"
+                onClick={() => handleCategoryChange("equipo")}
+                className={cn(
+                  "min-h-[40px] py-2 transition-colors cursor-pointer inline-flex items-center gap-2",
+                  activeCategory === "equipo"
+                    ? "text-neutral-950 font-semibold border-b-2 border-neutral-950 -mb-[1px]"
+                    : "text-neutral-400 hover:text-neutral-900 font-medium"
+                )}
+              >
+                <span>Equipo y accesos</span>
+                <span className="font-mono text-[10px] text-neutral-400">
+                  ({(personnelCount || 0) + (usuariosCount || 0)})
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCategoryChange("catalogos")}
+                className={cn(
+                  "min-h-[40px] py-2 transition-colors cursor-pointer inline-flex items-center gap-2",
+                  activeCategory === "catalogos"
+                    ? "text-neutral-950 font-semibold border-b-2 border-neutral-950 -mb-[1px]"
+                    : "text-neutral-400 hover:text-neutral-900 font-medium"
+                )}
+              >
+                <span>Catálogos comerciales</span>
+                <span className="font-mono text-[10px] text-neutral-400">
+                  ({data.departamentos.length + data.sedesTaquilla.length + data.canalesComerciales.length})
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCategoryChange("sistema")}
+                className={cn(
+                  "min-h-[40px] py-2 transition-colors cursor-pointer inline-flex items-center gap-2",
+                  activeCategory === "sistema"
+                    ? "text-neutral-950 font-semibold border-b-2 border-neutral-950 -mb-[1px]"
+                    : "text-neutral-400 hover:text-neutral-900 font-medium"
+                )}
+              >
+                <span>Sistema y módulos</span>
+              </button>
+            </nav>
+
+            {/* 2. Sub-pestañas Contextuales */}
+            <div className="flex items-center gap-3 sm:gap-4 text-xs overflow-x-auto no-scrollbar whitespace-nowrap pt-1 pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
+              {activeCategory === "equipo" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("personal")}
+                    className={cn(
+                      "transition-colors cursor-pointer py-1 select-none inline-flex items-center gap-1.5",
+                      activeTab === "personal"
+                        ? "text-neutral-950 font-semibold"
+                        : "text-neutral-400 hover:text-neutral-800 font-normal"
+                    )}
+                  >
+                    <span>Personal y cuadrillas</span>
+                    <span className="font-mono text-[10px] text-neutral-400">({personnelCount || "—"})</span>
+                    {activeTab === "personal" && <span className="w-1.5 h-1.5 rounded-full bg-neutral-950 shrink-0" />}
+                  </button>
+
+                  <span className="text-neutral-200">·</span>
+
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("usuarios")}
+                    className={cn(
+                      "transition-colors cursor-pointer py-1 select-none inline-flex items-center gap-1.5",
+                      activeTab === "usuarios"
+                        ? "text-neutral-950 font-semibold"
+                        : "text-neutral-400 hover:text-neutral-800 font-normal"
+                    )}
+                  >
+                    <span>Usuarios y accesos</span>
+                    <span className="font-mono text-[10px] text-neutral-400">({usuariosCount || "—"})</span>
+                    {activeTab === "usuarios" && <span className="w-1.5 h-1.5 rounded-full bg-neutral-950 shrink-0" />}
+                  </button>
+                </>
               )}
-            >
-              <span>Personal</span>
-              <span className="font-mono text-[10px] text-neutral-400">
-                ({personnelCount || "—"})
-              </span>
-            </button>
 
-            {/* TAB: Usuarios y Accesos */}
-            <button
-              type="button"
-              onClick={() => handleTabChange("usuarios")}
-              className={cn(
-                "shrink-0 min-h-[44px] py-2.5 px-1 inline-flex items-center gap-1.5 transition-colors cursor-pointer select-none",
-                activeTab === "usuarios"
-                  ? "font-semibold text-neutral-950 border-b-2 border-neutral-950 -mb-[1px]"
-                  : "text-neutral-400 hover:text-neutral-900 font-medium"
+              {activeCategory === "catalogos" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("departamentos")}
+                    className={cn(
+                      "transition-colors cursor-pointer py-1 select-none inline-flex items-center gap-1.5",
+                      activeTab === "departamentos"
+                        ? "text-neutral-950 font-semibold"
+                        : "text-neutral-400 hover:text-neutral-800 font-normal"
+                    )}
+                  >
+                    <span>Departamentos</span>
+                    <span className="font-mono text-[10px] text-neutral-400">({data.departamentos.length})</span>
+                    {activeTab === "departamentos" && <span className="w-1.5 h-1.5 rounded-full bg-neutral-950 shrink-0" />}
+                  </button>
+
+                  <span className="text-neutral-200">·</span>
+
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("sedes")}
+                    className={cn(
+                      "transition-colors cursor-pointer py-1 select-none inline-flex items-center gap-1.5",
+                      activeTab === "sedes"
+                        ? "text-neutral-950 font-semibold"
+                        : "text-neutral-400 hover:text-neutral-800 font-normal"
+                    )}
+                  >
+                    <span>Sedes de taquilla</span>
+                    <span className="font-mono text-[10px] text-neutral-400">({data.sedesTaquilla.length})</span>
+                    {activeTab === "sedes" && <span className="w-1.5 h-1.5 rounded-full bg-neutral-950 shrink-0" />}
+                  </button>
+
+                  <span className="text-neutral-200">·</span>
+
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange("canales")}
+                    className={cn(
+                      "transition-colors cursor-pointer py-1 select-none inline-flex items-center gap-1.5",
+                      activeTab === "canales"
+                        ? "text-neutral-950 font-semibold"
+                        : "text-neutral-400 hover:text-neutral-800 font-normal"
+                    )}
+                  >
+                    <span>Canales comerciales</span>
+                    <span className="font-mono text-[10px] text-neutral-400">({data.canalesComerciales.length})</span>
+                    {activeTab === "canales" && <span className="w-1.5 h-1.5 rounded-full bg-neutral-950 shrink-0" />}
+                  </button>
+
+                  <span className="text-neutral-200">·</span>
+
+                  <Link
+                    href="/admin/planes"
+                    className="text-neutral-400 hover:text-neutral-900 transition-colors py-1 select-none inline-flex items-center gap-1"
+                  >
+                    <span>Planes de servicio</span>
+                  </Link>
+
+                  <span className="text-neutral-200">·</span>
+
+                  <Link
+                    href="/admin/geodata"
+                    className="text-neutral-400 hover:text-neutral-900 transition-colors py-1 select-none inline-flex items-center gap-1"
+                  >
+                    <span>Localidades y geodata</span>
+                  </Link>
+                </>
               )}
-            >
-              <span>Usuarios y Accesos</span>
-              <span className="font-mono text-[10px] text-neutral-400">
-                ({usuariosCount || "—"})
-              </span>
-            </button>
 
-            {/* TAB: Paneles del Sistema */}
-            <button
-              type="button"
-              onClick={() => handleTabChange("paneles")}
-              className={cn(
-                "shrink-0 min-h-[44px] py-2.5 px-1 inline-flex items-center gap-1.5 transition-colors cursor-pointer select-none",
-                activeTab === "paneles"
-                  ? "font-semibold text-neutral-950 border-b-2 border-neutral-950 -mb-[1px]"
-                  : "text-neutral-400 hover:text-neutral-900 font-medium"
+              {activeCategory === "sistema" && (
+                <div className="text-xs text-neutral-500 py-1 font-sans">
+                  <span>Control de visibilidad y disponibilidad de módulos para usuarios</span>
+                </div>
               )}
-            >
-              <span>Paneles del Sistema</span>
-            </button>
-
-            {/* TAB: Departamentos */}
-            <button
-              type="button"
-              onClick={() => handleTabChange("departamentos")}
-              className={cn(
-                "shrink-0 min-h-[44px] py-2.5 px-1 inline-flex items-center gap-1.5 transition-colors cursor-pointer select-none",
-                activeTab === "departamentos"
-                  ? "font-semibold text-neutral-950 border-b-2 border-neutral-950 -mb-[1px]"
-                  : "text-neutral-400 hover:text-neutral-900 font-medium"
-              )}
-            >
-              <span>Departamentos</span>
-              <span className="font-mono text-[10px] text-neutral-400">
-                ({data.departamentos.length})
-              </span>
-            </button>
-
-            {/* TAB: Sedes de Taquillas */}
-            <button
-              type="button"
-              onClick={() => handleTabChange("sedes")}
-              className={cn(
-                "shrink-0 min-h-[44px] py-2.5 px-1 inline-flex items-center gap-1.5 transition-colors cursor-pointer select-none",
-                activeTab === "sedes"
-                  ? "font-semibold text-neutral-950 border-b-2 border-neutral-950 -mb-[1px]"
-                  : "text-neutral-400 hover:text-neutral-900 font-medium"
-              )}
-            >
-              <span>Sedes de Taquillas</span>
-              <span className="font-mono text-[10px] text-neutral-400">
-                ({data.sedesTaquilla.length})
-              </span>
-            </button>
-
-            {/* TAB: Canales Comerciales */}
-            <button
-              type="button"
-              onClick={() => handleTabChange("canales")}
-              className={cn(
-                "shrink-0 min-h-[44px] py-2.5 px-1 inline-flex items-center gap-1.5 transition-colors cursor-pointer select-none",
-                activeTab === "canales"
-                  ? "font-semibold text-neutral-950 border-b-2 border-neutral-950 -mb-[1px]"
-                  : "text-neutral-400 hover:text-neutral-900 font-medium"
-              )}
-            >
-              <span>Canales Comerciales</span>
-              <span className="font-mono text-[10px] text-neutral-400">
-                ({data.canalesComerciales.length})
-              </span>
-            </button>
-
-            {/* TAB: Planes de Servicio */}
-            <Link
-              href="/admin/planes"
-              className="shrink-0 min-h-[44px] py-2.5 px-1 inline-flex items-center gap-1.5 transition-colors cursor-pointer select-none text-neutral-400 hover:text-neutral-900 font-medium"
-            >
-              <span>Planes</span>
-            </Link>
-
-            {/* TAB: Localidades (Geodata) */}
-            <Link
-              href="/admin/geodata"
-              className="shrink-0 min-h-[44px] py-2.5 px-1 inline-flex items-center gap-1.5 transition-colors cursor-pointer select-none text-neutral-400 hover:text-neutral-900 font-medium whitespace-nowrap"
-            >
-              <span>Localidades</span>
-            </Link>
-          </nav>
+            </div>
+          </div>
 
           {/* ========================================================= */}
           {/* TAB 1: PERSONAL WORKSPACE                                 */}

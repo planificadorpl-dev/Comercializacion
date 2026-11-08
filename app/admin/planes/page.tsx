@@ -126,12 +126,12 @@ function PlanesAdminContent() {
             <SidebarMobileButton />
             <SidebarOpenButton />
             <Link
-              href="/admin"
+              href="/admin?tab=departamentos"
               className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-900 transition-colors font-medium select-none"
               title="Volver a administración"
             >
               <ChevronLeft className="w-3.5 h-3.5 stroke-[2]" />
-              <span>Volver a administración</span>
+              <span>Volver a catálogos</span>
             </Link>
           </div>
 

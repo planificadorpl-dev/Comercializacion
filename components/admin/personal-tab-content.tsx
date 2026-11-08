@@ -118,6 +118,10 @@ export function PersonalTabContent({
   const [mergingItem, setMergingItem] = useState<{ type: "advisor" | "tech"; name: string } | null>(null);
   const [selectedMergeTarget, setSelectedMergeTarget] = useState<string>("");
 
+  // Pagination states
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
   // Load config and sheet data
   const loadPersonalData = useCallback(async () => {
     setLoading(true);
@@ -337,6 +341,20 @@ export function PersonalTabContent({
       return true;
     });
   }, [allPersonnelItems, searchQuery, subFilterTab]);
+
+  // Reset page when filter/search/pageSize changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, subFilterTab, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPersonnelItems.length / (pageSize || 1)));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedPersonnelItems = useMemo(() => {
+    if (pageSize === 0) return filteredPersonnelItems;
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredPersonnelItems.slice(start, start + pageSize);
+  }, [filteredPersonnelItems, safeCurrentPage, pageSize]);
 
   // Inline mutations
   const handleUpdateAdvisor = (name: string, patch: Partial<AdvisorCustomConfig>) => {
@@ -660,6 +678,7 @@ export function PersonalTabContent({
                 .filter((i) => i.name !== mergingItem.name)
                 .map((i) => ({ value: i.name, label: formatProperCase(i.name) }))}
               onChange={(val) => setSelectedMergeTarget(val)}
+              searchPlaceholder="Buscar por nombre..."
             />
             <button
               type="button"
@@ -708,7 +727,7 @@ export function PersonalTabContent({
                   </td>
                 </tr>
               ) : (
-                filteredPersonnelItems.map((item) => (
+                paginatedPersonnelItems.map((item) => (
                   <tr
                     key={`${item.role}-${item.name}`}
                     className="hover:bg-neutral-50/50 transition-colors group"
@@ -891,7 +910,7 @@ export function PersonalTabContent({
                 No se encontraron colaboradores coincidentes
               </div>
             ) : (
-              filteredPersonnelItems.map((item) => (
+              paginatedPersonnelItems.map((item) => (
                 <div key={`${item.role}-${item.name}`} className="py-3.5 space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -1021,6 +1040,67 @@ export function PersonalTabContent({
               ))
             )}
           </div>
+
+          {/* Subtle Typographic Pagination (Strict Rule 1: No boxed buttons) */}
+          {filteredPersonnelItems.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-100 text-xs font-sans text-neutral-500">
+              <div className="flex items-center gap-3">
+                <span>
+                  Mostrando {pageSize === 0 ? 1 : (safeCurrentPage - 1) * pageSize + 1}–
+                  {pageSize === 0
+                    ? filteredPersonnelItems.length
+                    : Math.min(safeCurrentPage * pageSize, filteredPersonnelItems.length)}{" "}
+                  de {filteredPersonnelItems.length}
+                </span>
+
+                <div className="flex items-center gap-1.5 text-neutral-400">
+                  <span>·</span>
+                  <span>Ver:</span>
+                  {[25, 50, 0].map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setPageSize(size)}
+                      className={cn(
+                        "cursor-pointer transition-colors p-0.5 select-none",
+                        pageSize === size
+                          ? "text-neutral-950 font-semibold underline"
+                          : "text-neutral-400 hover:text-neutral-800"
+                      )}
+                    >
+                      {size === 0 ? "Todos" : size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {pageSize > 0 && totalPages > 1 && (
+                <div className="flex items-center gap-4 select-none">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={safeCurrentPage <= 1}
+                    className="cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:text-neutral-950 font-medium"
+                  >
+                    Anterior
+                  </button>
+
+                  <span className="font-mono text-[11px] text-neutral-400">
+                    {safeCurrentPage} / {totalPages}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safeCurrentPage >= totalPages}
+                    className="cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:text-neutral-950 font-medium"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
