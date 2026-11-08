@@ -75,7 +75,7 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
       nombre_tv: null,
       es_simetrico: true,
       activo: true,
-      notas: "Precio especial por los primeros 3 meses ($15) ➡️ Precio Regular ($29)",
+      notas: "Precio especial por los primeros 3 meses ($15) / Precio regular ($29)",
     },
     {
       id: "res-600",
@@ -90,7 +90,7 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
       nombre_tv: "Power Link GO TV",
       es_simetrico: true,
       activo: true,
-      notas: "Incluye televisión digital Power Link GO TV 📺",
+      notas: "Incluye televisión digital Power Link GO TV",
     },
     {
       id: "res-800",
@@ -105,7 +105,7 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
       nombre_tv: "Power Link GO TV",
       es_simetrico: true,
       activo: true,
-      notas: "Incluye televisión digital Power Link GO TV 📺",
+      notas: "Incluye televisión digital Power Link GO TV",
     },
     {
       id: "res-1000",
@@ -120,7 +120,7 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
       nombre_tv: "Power Link GO TV",
       es_simetrico: true,
       activo: true,
-      notas: "Conexión simétrica ultra rápida 1 Gbps + TV 📺",
+      notas: "Conexión simétrica ultra rápida 1 Gbps + TV",
     },
     {
       id: "corp-400",
@@ -135,7 +135,7 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
       nombre_tv: null,
       es_simetrico: true,
       activo: true,
-      notas: "Enlace empresarial de alta velocidad 💼",
+      notas: "Enlace empresarial de alta velocidad",
     },
     {
       id: "corp-600",
@@ -150,7 +150,7 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
       nombre_tv: null,
       es_simetrico: true,
       activo: true,
-      notas: "Enlace simétrico empresarial 💼",
+      notas: "Enlace simétrico empresarial",
     },
     {
       id: "corp-800",
@@ -165,7 +165,7 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
       nombre_tv: null,
       es_simetrico: true,
       activo: true,
-      notas: "Alta capacidad corporativa 💼",
+      notas: "Alta capacidad corporativa",
     },
     {
       id: "corp-1000",
@@ -180,7 +180,7 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
       nombre_tv: null,
       es_simetrico: true,
       activo: true,
-      notas: "Conexión troncal corporativa 1 Gbps 💼",
+      notas: "Conexión troncal corporativa 1 Gbps",
     },
   ],
   servicios: [
@@ -270,7 +270,43 @@ const DEFAULT_COMPANY_PRICING: CompanyPricingData = {
   updated_at: new Date().toISOString(),
 };
 
+function sanitizePricingData(data: CompanyPricingData): CompanyPricingData {
+  if (!data) return data;
+  const strip = (s?: string | null) => {
+    if (!s) return s;
+    return s
+      .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2B50}\u{200D}\u{FE0F}]/gu, "")
+      .replace(/➡️|➡|📺|💼|⚡|🛠️|🛠/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  if (Array.isArray(data.planes)) {
+    data.planes = data.planes.map((p) => ({
+      ...p,
+      nombre: strip(p.nombre) || p.nombre,
+      notas: p.notas ? strip(p.notas) : p.notas,
+    }));
+  }
+  if (Array.isArray(data.servicios)) {
+    data.servicios = data.servicios.map((s) => ({
+      ...s,
+      nombre: strip(s.nombre) || s.nombre,
+      descripcion: s.descripcion ? strip(s.descripcion) : s.descripcion,
+    }));
+  }
+  if (Array.isArray(data.promociones)) {
+    data.promociones = data.promociones.map((pr) => ({
+      ...pr,
+      nombre: strip(pr.nombre) || pr.nombre,
+      notas: pr.notas ? strip(pr.notas) : pr.notas,
+    }));
+  }
+  return data;
+}
+
 async function persistPricingData(data: CompanyPricingData): Promise<void> {
+  const sanitized = sanitizePricingData(data);
   // 1. Persist to PostgreSQL (Supabase)
   try {
     await query(
@@ -285,7 +321,7 @@ async function persistPricingData(data: CompanyPricingData): Promise<void> {
       `INSERT INTO public.company_pricing_config (id, data, updated_at)
        VALUES ('current', $1, NOW())
        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();`,
-      [JSON.stringify(data)]
+      [JSON.stringify(sanitized)]
     );
   } catch (pgErr: any) {
     console.warn("Postgres persistPricingData error:", pgErr.message);
@@ -293,7 +329,7 @@ async function persistPricingData(data: CompanyPricingData): Promise<void> {
 
   // 2. Try updating local file if writable (e.g. local dev, gracefully catches EROFS on Vercel)
   try {
-    await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(data, null, 2), "utf-8");
+    await fs.writeFile(PRICING_DATA_PATH, JSON.stringify(sanitized, null, 2), "utf-8");
   } catch (fsErr) {
     // Read-only filesystem in Vercel serverless functions is expected
   }
@@ -317,6 +353,7 @@ export async function getCompanyPricing(): Promise<CompanyPricingData> {
         if (!Array.isArray(parsed.promociones)) {
           parsed.promociones = DEFAULT_COMPANY_PRICING.promociones;
         }
+        parsed = sanitizePricingData(parsed);
         cachedPricing = { data: parsed, timestamp: now };
         return parsed;
       }
@@ -328,17 +365,18 @@ export async function getCompanyPricing(): Promise<CompanyPricingData> {
   // 2. Fallback to packaged file (read-only safe)
   try {
     const raw = await fs.readFile(PRICING_DATA_PATH, "utf-8");
-    const parsed = JSON.parse(raw);
+    let parsed = JSON.parse(raw);
     if (parsed && Array.isArray(parsed.planes)) {
       if (!Array.isArray(parsed.promociones)) {
         parsed.promociones = DEFAULT_COMPANY_PRICING.promociones;
       }
+      parsed = sanitizePricingData(parsed);
       cachedPricing = { data: parsed, timestamp: now };
       return parsed;
     }
   } catch (err) {}
 
-  return DEFAULT_COMPANY_PRICING;
+  return sanitizePricingData(DEFAULT_COMPANY_PRICING);
 }
 
 export async function saveCompanyPlan(plan: Partial<CompanyPlan> & { id?: string }): Promise<CompanyPlan> {

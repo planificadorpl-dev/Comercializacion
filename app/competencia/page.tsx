@@ -46,6 +46,15 @@ let cachedOperadores: any[] = [];
 let cachedOfertas: any[] = [];
 let hasInitialLoadedOfertas = false;
 
+function stripEmojis(text?: string | null): string {
+  if (!text) return "";
+  return text
+    .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2B50}\u{200D}\u{FE0F}]/gu, "")
+    .replace(/➡️|➡|📺|💼|⚡|🛠️|🛠/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function CompetenciaContent() {
   const { user, isAdmin } = useUser();
   const { isModuleEnabledForUser } = useModules();
@@ -810,7 +819,7 @@ function CompetenciaContent() {
                   : "text-neutral-400 hover:text-neutral-700 font-normal"
               )}
             >
-              Comparativa vs Power Link
+              Comparativa
             </button>
 
             <button
@@ -1188,7 +1197,7 @@ function CompetenciaContent() {
                       <strong className="text-neutral-900 font-medium">
                         {resolvedPromo.instalacion_gratis ? "Completamente Gratis ($0)" : `$${resolvedPromo.costo_instalacion}`}
                       </strong>
-                      {resolvedPromo.notas && <span> — {resolvedPromo.notas}</span>}
+                      {resolvedPromo.notas && <span> — {stripEmojis(resolvedPromo.notas)}</span>}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -1437,7 +1446,7 @@ function CompetenciaContent() {
 
                             <div className="flex items-center gap-3 sm:gap-4 text-[11px] text-neutral-700 flex-wrap pt-0.5">
                               <span>
-                                ⚡ Mensualidad:{" "}
+                                Mensualidad:{" "}
                                 <strong>
                                   {promo.tipo_descuento_mensual === "mitad_precio"
                                     ? "Mitad de precio (50% desc.)"
@@ -1449,7 +1458,7 @@ function CompetenciaContent() {
                               </span>
 
                               <span>
-                                🛠️ Instalación:{" "}
+                                Instalación:{" "}
                                 <strong>
                                   {promo.instalacion_gratis ? "Gratis ($0)" : `$${promo.costo_instalacion}`}
                                 </strong>
@@ -1458,7 +1467,7 @@ function CompetenciaContent() {
 
                             {promo.notas && (
                               <p className="text-[11px] text-neutral-500 italic">
-                                &ldquo;{promo.notas}&rdquo;
+                                &ldquo;{stripEmojis(promo.notas)}&rdquo;
                               </p>
                             )}
                           </div>
@@ -1558,7 +1567,7 @@ function CompetenciaContent() {
                         </div>
 
                         {p.notas && (
-                          <p className="text-[11px] text-neutral-400 italic">{p.notas}</p>
+                          <p className="text-[11px] text-neutral-400 italic">{stripEmojis(p.notas)}</p>
                         )}
                       </div>
 

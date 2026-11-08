@@ -13,7 +13,7 @@
       "nombre_tv": null,
       "es_simetrico": true,
       "activo": true,
-      "notas": "Precio especial por los primeros 3 meses ($15) ➡️ Precio Regular ($29)"
+      "notas": "Precio especial por los primeros 3 meses ($15) / Precio Regular ($29)"
     },
     {
       "id": "res-600",
@@ -28,7 +28,7 @@
       "nombre_tv": "Power Link GO TV",
       "es_simetrico": true,
       "activo": true,
-      "notas": "Incluye televisión digital Power Link GO TV 📺"
+      "notas": "Incluye televisión digital Power Link GO TV"
     },
     {
       "id": "res-800",
@@ -43,7 +43,7 @@
       "nombre_tv": "Power Link GO TV",
       "es_simetrico": true,
       "activo": true,
-      "notas": "Incluye televisión digital Power Link GO TV 📺"
+      "notas": "Incluye televisión digital Power Link GO TV"
     },
     {
       "id": "res-1000",
@@ -58,7 +58,7 @@
       "nombre_tv": "Power Link GO TV",
       "es_simetrico": true,
       "activo": true,
-      "notas": "Conexión simétrica ultra rápida 1 Gbps + TV 📺"
+      "notas": "Conexión simétrica ultra rápida 1 Gbps + TV"
     },
     {
       "id": "corp-400",
@@ -73,7 +73,7 @@
       "nombre_tv": null,
       "es_simetrico": true,
       "activo": true,
-      "notas": "Enlace empresarial de alta velocidad 💼"
+      "notas": "Enlace empresarial de alta velocidad"
     },
     {
       "id": "corp-600",
@@ -88,7 +88,7 @@
       "nombre_tv": null,
       "es_simetrico": true,
       "activo": true,
-      "notas": "Enlace simétrico empresarial 💼"
+      "notas": "Enlace simétrico empresarial"
     },
     {
       "id": "corp-800",
@@ -103,7 +103,7 @@
       "nombre_tv": null,
       "es_simetrico": true,
       "activo": true,
-      "notas": "Alta capacidad corporativa 💼"
+      "notas": "Alta capacidad corporativa"
     },
     {
       "id": "corp-1000",
@@ -118,7 +118,7 @@
       "nombre_tv": null,
       "es_simetrico": true,
       "activo": true,
-      "notas": "Conexión troncal corporativa 1 Gbps 💼"
+      "notas": "Conexión troncal corporativa 1 Gbps"
     }
   ],
   "servicios": [
