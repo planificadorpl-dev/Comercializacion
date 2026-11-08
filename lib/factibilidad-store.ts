@@ -604,7 +604,6 @@ export async function getFastFactibilidadBoxesInRadius(
   const allBoxes = await getFastFactibilidadBoxes(forceRefresh);
 
   const nearby = allBoxes
-    .filter((b) => b.isNap)
     .map((b) => ({
       box: b,
       dist: calcDistanceMeters(lat, lng, b.lat, b.lng),
@@ -613,7 +612,7 @@ export async function getFastFactibilidadBoxesInRadius(
     .sort((a, b) => a.dist - b.dist)
     .map((item) => item.box);
 
-  const availableInRadius = nearby.filter((b) => b.availablePorts > 0).length;
+  const availableInRadius = nearby.filter((b) => b.isNap && b.availablePorts > 0).length;
 
   return {
     boxes: nearby,

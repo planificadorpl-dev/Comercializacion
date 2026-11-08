@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFactibilidadBoxes, getFactibilidadBoxesInRadius } from "@/lib/ozmap-service";
+import { getCurrentSessionUser } from "@/app/actions/auth";
 
 export async function GET(req: NextRequest) {
   try {
+    const sessionUser = await getCurrentSessionUser();
+    const isCommercialAdvisor = sessionUser?.rol === "asesor";
+
     const { searchParams } = new URL(req.url);
     const forceRefresh = searchParams.get("refresh") === "true";
     const latStr = searchParams.get("lat");
@@ -22,7 +26,9 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      const clampedRadius = Math.min(Math.max(radius, 100), 1500);
+      // For commercial advisors, strictly enforce 1 km max radius
+      const maxAllowed = isCommercialAdvisor ? 1000 : 1500;
+      const clampedRadius = Math.min(Math.max(radius, 100), maxAllowed);
       const result = await getFactibilidadBoxesInRadius(lat, lng, clampedRadius, forceRefresh);
 
       return NextResponse.json(
@@ -45,7 +51,27 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Default / Full: Return all network boxes (high speed database/cache)
+    // Commercial advisors cannot download the full network infrastructure without coordinates
+    if (isCommercialAdvisor) {
+      return NextResponse.json(
+        {
+          success: true,
+          mode: "asesor_restricted",
+          total: 0,
+          naps: 0,
+          mangas: 0,
+          data: [],
+          message: "Consulta restringida a 1 km por punto para asesores comerciales.",
+        },
+        {
+          headers: {
+            "Cache-Control": "private, no-store",
+          },
+        }
+      );
+    }
+
+    // Default / Full: Return all network boxes (high speed database/cache for Admins / Supervisors)
     const boxes = await getFactibilidadBoxes(forceRefresh);
     return NextResponse.json(
       {

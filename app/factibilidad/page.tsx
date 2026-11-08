@@ -50,7 +50,8 @@ const FactibilidadMap = dynamic(
 
 export default function FactibilidadPage() {
   const { openMobileSidebar } = useSidebar();
-  const { user } = useUser();
+  const { user, isAsesor } = useUser();
+  const isCommercialAdvisor = Boolean(isAsesor || user?.rol === "asesor");
 
   const [boxes, setBoxes] = useState<OzBox[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,56 +104,112 @@ export default function FactibilidadPage() {
     }[];
   } | null>(null);
 
-  // Load all boxes from API
-  const loadBoxes = useCallback(async (forceRefresh = false) => {
-    try {
-      if (forceRefresh) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
+  // Filtered boxes strictly constrained to 1 km radius for commercial advisors
+  const effectiveBoxes = useMemo(() => {
+    if (!isCommercialAdvisor) return boxes;
+    if (!clientCoords) return [];
+    const [cLat, cLng] = clientCoords;
+    return boxes.filter(
+      (b) => calculateDistanceMeters(cLat, cLng, b.lat, b.lng) <= 1000
+    );
+  }, [boxes, isCommercialAdvisor, clientCoords]);
 
-      const res = await fetch(`/api/factibilidad${forceRefresh ? "?refresh=true" : ""}`);
-      const json = await res.json();
+  // Load radius boxes from API for 1 km consultation
+  const loadRadiusBoxes = useCallback(
+    async (lat: number, lng: number, forceRefresh = false) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      if (json.success && Array.isArray(json.data)) {
-        setBoxes(json.data);
-      } else {
-        setError(json.error || "No se pudieron obtener las cajas de factibilidad");
+        const res = await fetch(
+          `/api/factibilidad?lat=${lat}&lng=${lng}&radius=1000${forceRefresh ? "&refresh=true" : ""}`
+        );
+        const json = await res.json();
+
+        if (json.success && Array.isArray(json.data)) {
+          setBoxes(json.data);
+        } else {
+          setError(json.error || "No se encontraron cajas en el radio de 1 km");
+        }
+      } catch (err: any) {
+        console.error("Error al cargar cajas en radio de 1 km:", err);
+        setError("Error de conexión al consultar el servidor");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    } catch (err: any) {
-      console.error("Error al cargar cajas de factibilidad:", err);
-      setError("Error de conexión al consultar el servidor");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+    },
+    []
+  );
 
-  // Initial load on mount
+  // Load all boxes from API (Admins / Supervisors only)
+  const loadBoxes = useCallback(
+    async (forceRefresh = false) => {
+      if (isCommercialAdvisor) return;
+      try {
+        if (forceRefresh) setRefreshing(true);
+        else setLoading(true);
+        setError(null);
+
+        const res = await fetch(`/api/factibilidad${forceRefresh ? "?refresh=true" : ""}`);
+        const json = await res.json();
+
+        if (json.success && Array.isArray(json.data)) {
+          setBoxes(json.data);
+        } else {
+          setError(json.error || "No se pudieron obtener las cajas de factibilidad");
+        }
+      } catch (err: any) {
+        console.error("Error al cargar cajas de factibilidad:", err);
+        setError("Error de conexión al consultar el servidor");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [isCommercialAdvisor]
+  );
+
+  // Initial load on mount for admins
   useEffect(() => {
-    loadBoxes();
-  }, [loadBoxes]);
+    if (!isCommercialAdvisor) {
+      loadBoxes();
+    } else {
+      setLoading(false);
+    }
+  }, [isCommercialAdvisor, loadBoxes]);
+
+  // When clientCoords changes for commercial advisors, query 1 km radius boxes
+  useEffect(() => {
+    if (!isCommercialAdvisor) return;
+    if (!clientCoords) {
+      setBoxes([]);
+      return;
+    }
+    loadRadiusBoxes(clientCoords[0], clientCoords[1]);
+  }, [isCommercialAdvisor, clientCoords, loadRadiusBoxes]);
 
   // Statistics calculation for the boxes
   const stats = useMemo(() => {
-    const total = boxes.length;
-    const naps = boxes.filter((b) => b.isNap);
+    const total = effectiveBoxes.length;
+    const naps = effectiveBoxes.filter((b) => b.isNap);
     const disponibles = naps.filter((b) => b.availablePorts > 2).length;
     const criticas = naps.filter((b) => b.availablePorts > 0 && b.availablePorts <= 2).length;
     const saturadas = naps.filter((b) => b.availablePorts === 0).length;
-    const mangas = boxes.filter((b) => !b.isNap).length;
+    const mangas = effectiveBoxes.filter((b) => !b.isNap).length;
 
     return { total, naps: naps.length, disponibles, criticas, saturadas, mangas };
-  }, [boxes]);
+  }, [effectiveBoxes]);
 
   // Baseline instant feasibility (Euclidean distance)
   const baselineResult: FeasibilityResult | null = useMemo(() => {
-    if (!clientCoords || boxes.length === 0) return null;
-    return analyzeFeasibility(clientCoords, boxes);
-  }, [clientCoords, boxes]);
+    if (!clientCoords || effectiveBoxes.length === 0) return null;
+    return analyzeFeasibility(clientCoords, effectiveBoxes);
+  }, [clientCoords, effectiveBoxes]);
 
   // Query smart street route in background (following actual roads to bypass buildings/obstacles)
   useEffect(() => {
-    if (!clientCoords || boxes.length === 0) {
+    if (!clientCoords || effectiveBoxes.length === 0) {
       setSmartRoute(null);
       return;
     }
@@ -160,7 +217,7 @@ export default function FactibilidadPage() {
     const abortController = new AbortController();
     const [cLat, cLng] = clientCoords;
 
-    const napBoxes = boxes.filter((b) => b.isNap);
+    const napBoxes = effectiveBoxes.filter((b) => b.isNap);
     const sorted = napBoxes
       .map((b) => ({ box: b, d: calculateDistanceMeters(cLat, cLng, b.lat, b.lng) }))
       .sort((a, b) => a.d - b.d);
@@ -243,7 +300,7 @@ export default function FactibilidadPage() {
     return () => {
       abortController.abort();
     };
-  }, [clientCoords, boxes]);
+  }, [clientCoords, effectiveBoxes]);
 
   // Combined Active Feasibility Diagnosis (Prioritizes smart street route over Euclidean line)
   const feasibilityResult: FeasibilityResult | null = useMemo(() => {
@@ -326,6 +383,9 @@ export default function FactibilidadPage() {
     setCoordInput("");
     setCoordError(null);
     setSelectedBox(null);
+    if (isCommercialAdvisor) {
+      setBoxes([]);
+    }
   };
 
   // Copy WhatsApp response
@@ -375,7 +435,15 @@ export default function FactibilidadPage() {
                 Factibilidad
               </span>
               <span className="hidden sm:inline-block text-[11px] text-neutral-400 font-mono ml-2">
-                OZmap &bull; {boxes.length > 0 ? `${boxes.length} cajas activas` : "Cargando red..."}
+                {isCommercialAdvisor ? (
+                  clientCoords ? (
+                    `Radio 1 km · ${effectiveBoxes.length} cajas en consulta`
+                  ) : (
+                    "Modo Asesor · Consulta en radio de 1 km"
+                  )
+                ) : (
+                  `OZmap · ${boxes.length > 0 ? `${boxes.length} cajas activas` : "Cargando red..."}`
+                )}
               </span>
             </div>
           </div>
@@ -406,8 +474,16 @@ export default function FactibilidadPage() {
             {/* Refresh button */}
             <button
               type="button"
-              onClick={() => loadBoxes(true)}
-              disabled={refreshing || loading}
+              onClick={() => {
+                if (isCommercialAdvisor) {
+                  if (clientCoords) {
+                    loadRadiusBoxes(clientCoords[0], clientCoords[1], true);
+                  }
+                } else {
+                  loadBoxes(true);
+                }
+              }}
+              disabled={refreshing || loading || (isCommercialAdvisor && !clientCoords)}
               className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-40"
               title="Refrescar cajas desde OZmap"
             >
@@ -552,7 +628,7 @@ export default function FactibilidadPage() {
         {/* Map Workspace */}
         <div className="flex-1 relative w-full h-full min-h-0">
           <FactibilidadMap
-            boxes={boxes}
+            boxes={effectiveBoxes}
             theme={theme}
             selectedBox={selectedBox}
             onSelectBox={setSelectedBox}
@@ -573,6 +649,16 @@ export default function FactibilidadPage() {
               setIsBoxDetailsExpanded(false);
             }}
           />
+
+          {/* Asesor Commercial 1 km guidance pill (Minimalist floating hint) */}
+          {isCommercialAdvisor && !clientCoords && (
+            <div className="absolute top-3 left-3 right-3 sm:left-6 sm:right-auto sm:max-w-md z-30 px-3.5 py-2 bg-white/95 backdrop-blur-md border border-neutral-200/80 shadow-xs text-xs font-sans text-neutral-600 animate-in fade-in duration-150 select-none flex items-center gap-2.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+              <span>
+                <strong className="text-neutral-900 font-medium">Modo Asesor:</strong> Haz clic en el mapa o ingresa coordenadas para consultar la red en un radio de 1 km.
+              </span>
+            </div>
+          )}
 
           {/* Feasibility Diagnosis Panel for Client Coordinates (Retractable 2-State Bar at Top) */}
           {feasibilityResult && !selectedBox && (
