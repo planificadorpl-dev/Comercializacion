@@ -556,7 +556,7 @@ function FactibilidadMapInner({
       <div ref={mapContainerRef} className="w-full h-full z-0 bg-transparent cursor-crosshair" />
 
       {/* Floating GPS Button */}
-      <div className="absolute top-3 right-3 z-10">
+      <div className="absolute bottom-16 sm:bottom-4 right-3 z-10">
         <button
           type="button"
           onClick={handleLocateMe}

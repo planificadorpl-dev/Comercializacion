@@ -199,7 +199,7 @@ export default function FactibilidadPage() {
   };
 
   return (
-    <div className="flex h-screen bg-[#FAFAFA] text-neutral-900 font-sans antialiased overflow-hidden">
+    <div className="flex h-[100dvh] bg-[#FAFAFA] text-neutral-900 font-sans antialiased overflow-hidden">
       {/* Desktop Sidebar */}
       <Sidebar activeSection="factibilidad" />
 
@@ -418,9 +418,9 @@ export default function FactibilidadPage() {
             }}
           />
 
-          {/* Feasibility Diagnosis Panel for Client Coordinates (Retractable 2-State Bar at Bottom) */}
+          {/* Feasibility Diagnosis Panel for Client Coordinates (Retractable 2-State Bar at Top) */}
           {feasibilityResult && !selectedBox && (
-            <div className="absolute bottom-16 sm:bottom-4 left-3 right-3 sm:left-6 sm:right-auto sm:w-[410px] z-20 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-xs animate-in fade-in slide-in-from-bottom-2 duration-150 select-none">
+            <div className="absolute top-2.5 left-3 right-3 sm:left-6 sm:right-auto sm:w-[410px] z-30 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-xs animate-in fade-in slide-in-from-top-2 duration-150 select-none">
               {/* Compact Bar (Always visible in 1 ultra-clean row) */}
               <div className="flex items-center justify-between px-3 py-2.5 gap-2">
                 <button
@@ -503,9 +503,9 @@ export default function FactibilidadPage() {
                     aria-label={isDiagnosisExpanded ? "Contraer diagnóstico" : "Expandir diagnóstico"}
                   >
                     {isDiagnosisExpanded ? (
-                      <ChevronDown className="w-3.5 h-3.5 stroke-[1.25]" />
-                    ) : (
                       <ChevronUp className="w-3.5 h-3.5 stroke-[1.25]" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 stroke-[1.25]" />
                     )}
                   </button>
 
@@ -523,7 +523,7 @@ export default function FactibilidadPage() {
 
               {/* Expanded Technical & Diagnostic Details */}
               {isDiagnosisExpanded && (
-                <div className="px-3 pb-3 pt-1 border-t border-neutral-100 space-y-2.5 max-h-[50vh] sm:max-h-none overflow-y-auto animate-in fade-in duration-150">
+                <div className="px-3 pb-3 pt-1 border-t border-neutral-100 space-y-2.5 max-h-[50dvh] overflow-y-auto animate-in fade-in duration-150">
                   {/* Diagnosis title & client coords */}
                   <div className="flex items-center justify-between gap-2 pt-1">
                     <span className="text-xs font-semibold text-neutral-900">
@@ -661,9 +661,9 @@ export default function FactibilidadPage() {
             </div>
           )}
 
-          {/* Retractable 2-State Information Bar for Box Clicked */}
+          {/* Retractable 2-State Information Bar for Box Clicked (At Top) */}
           {selectedBox && (
-            <div className="absolute bottom-16 sm:bottom-4 left-3 right-3 sm:left-6 sm:right-auto sm:w-[380px] z-20 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-xs animate-in fade-in slide-in-from-bottom-2 duration-150 select-none">
+            <div className="absolute top-2.5 left-3 right-3 sm:left-6 sm:right-auto sm:w-[380px] z-30 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-xs animate-in fade-in slide-in-from-top-2 duration-150 select-none">
               {/* Compact Bar (Always visible in 1 ultra-clean row) */}
               <div className="flex items-center justify-between px-3 py-2.5 gap-2">
                 <button
@@ -744,9 +744,9 @@ export default function FactibilidadPage() {
                     aria-label={isBoxDetailsExpanded ? "Contraer información" : "Expandir información"}
                   >
                     {isBoxDetailsExpanded ? (
-                      <ChevronDown className="w-3.5 h-3.5 stroke-[1.25]" />
-                    ) : (
                       <ChevronUp className="w-3.5 h-3.5 stroke-[1.25]" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 stroke-[1.25]" />
                     )}
                   </button>
 
@@ -767,7 +767,7 @@ export default function FactibilidadPage() {
 
               {/* Expanded Technical Details (Unfolds on demand) */}
               {isBoxDetailsExpanded && (
-                <div className="px-3 pb-3 pt-1 border-t border-neutral-100 text-[11px] font-mono space-y-2 animate-in fade-in duration-150">
+                <div className="px-3 pb-3 pt-1 border-t border-neutral-100 text-[11px] font-mono space-y-2 max-h-[50dvh] overflow-y-auto animate-in fade-in duration-150">
                   <div className="flex justify-between items-center text-neutral-500">
                     <span>Tipo y sector:</span>
                     <span className="text-neutral-800">
