@@ -169,6 +169,12 @@ export async function saveOferta(oferta: any) {
       ]
     );
     if (row) {
+      try {
+        const op = await queryRow("SELECT * FROM public.operadores_competencia WHERE id = $1", [operador_id]);
+        if (op) {
+          row.operador = op;
+        }
+      } catch {}
       revalidatePath("/competencia");
       return row;
     }
@@ -196,6 +202,12 @@ export async function saveOferta(oferta: any) {
         ]
       );
       if (altRow) {
+        try {
+          const op = await queryRow("SELECT * FROM public.operadores_competencia WHERE id = $1", [operador_id]);
+          if (op) {
+            altRow.operador = op;
+          }
+        } catch {}
         revalidatePath("/competencia");
         return altRow;
       }
@@ -227,7 +239,7 @@ export async function saveOferta(oferta: any) {
     const { data, error } = await supabase
       .from("ofertas_competencia")
       .insert([payloadToInsert])
-      .select()
+      .select("*, operador:operadores_competencia(*)")
       .single();
 
     if (error) {
@@ -259,10 +271,35 @@ export async function deleteOferta(id: number) {
 }
 
 export async function getOfertasRecientes(
-  estado?: string,
-  municipio?: string,
-  parroquia?: string
+  estadoOrFiltros?: { estado?: string; municipio?: string; parroquia?: string } | string,
+  municipioArg?: string,
+  parroquiaArg?: string
 ) {
+  let estado: string | undefined;
+  let municipio: string | undefined;
+  let parroquia: string | undefined;
+
+  if (typeof estadoOrFiltros === "object" && estadoOrFiltros !== null) {
+    estado = estadoOrFiltros.estado;
+    municipio = estadoOrFiltros.municipio;
+    parroquia = estadoOrFiltros.parroquia;
+  } else if (typeof estadoOrFiltros === "string") {
+    estado = estadoOrFiltros;
+    municipio = municipioArg;
+    parroquia = parroquiaArg;
+  }
+
+  // Sanitize values (ignore empty strings or "todos")
+  if (typeof estado === "string" && (estado.trim() === "" || estado.toLowerCase().includes("todos"))) {
+    estado = undefined;
+  }
+  if (typeof municipio === "string" && (municipio.trim() === "" || municipio.toLowerCase().includes("todos"))) {
+    municipio = undefined;
+  }
+  if (typeof parroquia === "string" && (parroquia.trim() === "" || parroquia.toLowerCase().includes("todos"))) {
+    parroquia = undefined;
+  }
+
   // 1. PostgreSQL
   try {
     let sql = `
@@ -287,10 +324,12 @@ export async function getOfertasRecientes(
       params.push(parroquia);
     }
 
-    sql += " ORDER BY o.fecha_reporte DESC LIMIT 100";
+    sql += " ORDER BY o.id DESC LIMIT 100";
     const rows = await query(sql, params);
-    if (rows && rows.length > 0) return rows;
-  } catch (pgErr) {}
+    if (rows) return rows;
+  } catch (pgErr: any) {
+    console.error("getOfertasRecientes error pg:", pgErr.message);
+  }
 
   // 2. Supabase fallback
   try {
@@ -298,16 +337,16 @@ export async function getOfertasRecientes(
     let querySup = supabase
       .from("ofertas_competencia")
       .select("*, operador:operadores_competencia(*)")
-      .order("fecha_reporte", { ascending: false });
+      .order("id", { ascending: false });
 
     if (estado) querySup = querySup.eq("estado", estado);
     if (municipio) querySup = querySup.eq("municipio", municipio);
     if (parroquia) querySup = querySup.eq("parroquia", parroquia);
 
     const { data, error } = await querySup.limit(100);
-    if (!error) return data || [];
+    if (!error && data) return data;
   } catch (err: any) {
-    console.warn("getOfertasRecientes error:", err.message);
+    console.warn("getOfertasRecientes fallback error:", err.message);
   }
 
   return [];
@@ -317,10 +356,10 @@ export async function getHistorialOperador(operadorId: number) {
   // 1. PostgreSQL
   try {
     const rows = await query(
-      "SELECT * FROM public.ofertas_competencia WHERE operador_id = $1 ORDER BY fecha_reporte DESC",
+      "SELECT * FROM public.ofertas_competencia WHERE operador_id = $1 ORDER BY id DESC",
       [operadorId]
     );
-    if (rows && rows.length > 0) return rows;
+    if (rows) return rows;
   } catch (pgErr) {}
 
   // 2. Supabase fallback

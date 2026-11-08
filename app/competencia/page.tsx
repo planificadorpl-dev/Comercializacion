@@ -212,15 +212,14 @@ function CompetenciaContent() {
   const loadOfertas = useCallback(async (silent = false) => {
     if (!silent) setLoadingOfertas(true);
     try {
-      const filtros: any = {};
-      if (filterEstado) filtros.estado = filterEstado;
-      if (filterMunicipio) filtros.municipio = filterMunicipio;
-      if (filterParroquia) filtros.parroquia = filterParroquia;
-
-      const data = await getOfertasRecientes(filtros);
-      cachedOfertas = data;
+      const data = await getOfertasRecientes({
+        estado: filterEstado || undefined,
+        municipio: filterMunicipio || undefined,
+        parroquia: filterParroquia || undefined,
+      });
+      cachedOfertas = data || [];
       hasInitialLoadedOfertas = true;
-      setOfertas(data);
+      setOfertas(data || []);
     } catch {
       setToastMsg({ text: "Error al cargar ofertas de mercado", type: "error" });
     } finally {
@@ -287,7 +286,10 @@ function CompetenciaContent() {
         fuente: "panel",
       };
 
-      await saveOferta(payload);
+      const saved = await saveOferta(payload);
+      if (saved) {
+        setOfertas((prev) => [saved, ...prev.filter((o) => o.id !== saved.id)]);
+      }
       setNombrePlan("");
       setVelocidadMb("");
       setPrecioMensual("");
@@ -295,7 +297,7 @@ function CompetenciaContent() {
       setNotas("");
       setIsNewOfferOpen(false);
       setToastMsg({ text: "Oferta registrada exitosamente", type: "success" });
-      loadOfertas(false);
+      loadOfertas(true);
     } catch (err: any) {
       setToastMsg({ text: err.message || "Error al registrar oferta", type: "error" });
     } finally {
