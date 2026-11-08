@@ -25,7 +25,7 @@ const SidebarContext = createContext<SidebarContextType>({
 });
 
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -33,6 +33,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       const stored = localStorage.getItem("sidebar_collapsed");
       if (stored !== null) {
         setIsCollapsed(stored === "true");
+      } else {
+        setIsCollapsed(true);
       }
     } catch {}
   }, []);

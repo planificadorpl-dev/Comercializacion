@@ -1535,7 +1535,6 @@ export default function DashboardPage() {
                     selectedAdvisor={filters.advisors[0]}
                     onSelectAdvisor={handleSelectAdvisor}
                     selectedMonth={filters.months[0]}
-                    onOpenConfig={() => handleOpenConfigWithTab("asesores")}
                   />
                 </div>
               </section>
@@ -1621,7 +1620,6 @@ export default function DashboardPage() {
                   selectedAdvisor={filters.advisors[0]}
                   onSelectAdvisor={handleSelectAdvisor}
                   selectedMonth={filters.months[0]}
-                  onOpenConfig={() => handleOpenConfigWithTab("asesores")}
                 />
               </div>
             </section>
@@ -1673,7 +1671,6 @@ export default function DashboardPage() {
                 data={techsWithAnnualHistory}
                 onSelectTechnician={handleSelectTechnician}
                 selectedTechnician={filters.technicians[0]}
-                onOpenConfig={() => handleOpenConfigWithTab("tecnicos")}
               />
             </div>
 

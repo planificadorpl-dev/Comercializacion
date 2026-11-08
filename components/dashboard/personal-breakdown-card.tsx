@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Search, X, Settings2 } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { cn, formatNumber, formatProperCase } from "@/lib/utils";
 import { Installation, Solicitud, PlanificacionRecord, fetchPlanificacionData, MONTH_ORDER } from "@/lib/dashboard-data";
 import { AdvisorType } from "@/lib/normalization";
@@ -11,11 +11,11 @@ export type CategoryFilter = "all" | AdvisorType | "excolaborador";
 
 const CATEGORY_TABS: { id: CategoryFilter; label: string }[] = [
   { id: "all", label: "Todos" },
-  { id: "comercial", label: "Asesor comercial" },
+  { id: "comercial", label: "Comercial" },
   { id: "taquilla", label: "Taquilla" },
   { id: "externo", label: "Externo" },
   { id: "planificacion", label: "Planificación" },
-  { id: "excolaborador", label: "Excolaboradores" },
+  { id: "excolaborador", label: "Excolaborador" },
   { id: "otro", label: "Otros" },
 ];
 
@@ -28,7 +28,6 @@ interface PersonalBreakdownCardProps {
   selectedAdvisor?: string;
   onSelectAdvisor?: (advisor: string) => void;
   selectedMonth?: string;
-  onOpenConfig?: () => void;
   className?: string;
 }
 
@@ -38,12 +37,12 @@ export function PersonalBreakdownCard({
   selectedAdvisor,
   onSelectAdvisor,
   selectedMonth,
-  onOpenConfig,
   className,
 }: PersonalBreakdownCardProps) {
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("comercial");
   const [activeMetric, setActiveMetric] = useState<MetricType>("instalaciones");
   const [searchTerm, setSearchTerm] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
   const [planRecords, setPlanRecords] = useState<PlanificacionRecord[]>([]);
 
   // Carga ligera de registros de planificación para identificar comerciales activos
@@ -350,7 +349,7 @@ export function PersonalBreakdownCard({
           name: adv,
           normName: nk,
           tipoLabel,
-          isEx: tipoLabel === "Excolaborador",
+          isEx,
           isActiveCommercial: isActive,
           sede: i.sede_taquilla,
           instalaciones: 0,
@@ -381,7 +380,7 @@ export function PersonalBreakdownCard({
       }
 
       const isActive = activeCommercialAdvisors.has(raw) || activeCommercialAdvisors.has(nk);
-      const isEx = !isActive && isAdvisorExColaborador(cleanName, s.canal, s.tipo_asesor);
+      const isEx = !isActive && isAdvisorExColaborador(cleanName, (s as any).canal, s.tipo_asesor);
 
       let tipoLabel = "Asesor comercial";
       if (isActive) {
@@ -389,7 +388,7 @@ export function PersonalBreakdownCard({
       } else if (isEx) {
         tipoLabel = "Excolaborador";
       } else {
-        const normCanal = normKey(s.canal);
+        const normCanal = normKey((s as any).canal);
         if (normCanal.includes("TAQUILL") || nk.includes("TAQUILL") || s.tipo_asesor === "taquilla") {
           tipoLabel = "Taquilla";
         } else if (normCanal.includes("EXTERNO") || nk.includes("EXTERNO") || s.tipo_asesor === "externo") {
@@ -406,7 +405,7 @@ export function PersonalBreakdownCard({
           name: adv,
           normName: nk,
           tipoLabel,
-          isEx: tipoLabel === "Excolaborador",
+          isEx,
           isActiveCommercial: isActive,
           sede: s.sede_taquilla,
           instalaciones: 0,
@@ -474,8 +473,8 @@ export function PersonalBreakdownCard({
       <div className="flex-1 flex flex-col min-h-0">
         {/* Encabezado y controles de visualización tipográficos (Sin marcos ni cajas) */}
         <div className="flex items-center justify-between gap-2 mb-1">
-          <div>
-            <h3 className="text-sm font-semibold text-neutral-900 tracking-tight">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-semibold text-neutral-900 tracking-tight truncate">
               Desglose de personal ({advisorBreakdown.length})
             </h3>
             <p className="text-[11px] text-neutral-500 font-mono mt-0.5 truncate">
@@ -485,7 +484,7 @@ export function PersonalBreakdownCard({
             </p>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Alternador de Métrica: puramente tipográfico */}
             <div className="flex items-center gap-1.5 text-xs font-mono">
               <span className="text-[10px] text-neutral-400 hidden sm:inline">Ordenar:</span>
@@ -516,57 +515,34 @@ export function PersonalBreakdownCard({
               </button>
             </div>
 
-            {/* Config button */}
-            {onOpenConfig && (
-              <button
-                type="button"
-                onClick={onOpenConfig}
-                className="min-w-[32px] min-h-[32px] p-1.5 flex items-center justify-center text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer ml-1"
-                title="Configurar clasificación de personal"
-                aria-label="Configurar clasificación de personal"
-              >
-                <Settings2 className="w-3.5 h-3.5 stroke-[1.5]" />
-              </button>
-            )}
+            {/* Botón de búsqueda minimalista que despliega el campo */}
+            <button
+              type="button"
+              onClick={() => setShowSearch(!showSearch)}
+              className={cn(
+                "p-1.5 transition-colors cursor-pointer flex items-center justify-center min-w-[28px] min-h-[28px]",
+                showSearch || searchTerm
+                  ? "text-neutral-950 font-bold"
+                  : "text-neutral-400 hover:text-neutral-900"
+              )}
+              title="Buscar asesor por nombre"
+              aria-label="Buscar asesor"
+            >
+              <Search className="w-3.5 h-3.5 stroke-[1.75]" />
+            </button>
           </div>
         </div>
 
-        {/* Fila de Categorías y Buscador sutil (Línea base sin recuadros) */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-100 pb-1.5 mt-1.5">
-          {/* Selector de Categorías */}
-          <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar text-xs">
-            {CATEGORY_TABS.filter((tab) => tab.id !== "otro" || (personnelCounts[tab.id] || 0) > 0).map((tab) => {
-              const count = personnelCounts[tab.id] || 0;
-              const isActive = activeCategory === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveCategory(tab.id)}
-                  className={cn(
-                    "whitespace-nowrap transition-colors cursor-pointer py-0.5 text-xs",
-                    isActive
-                      ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
-                      : "text-neutral-400 hover:text-neutral-700"
-                  )}
-                >
-                  {tab.label}{" "}
-                  <span className="font-mono text-[10px] text-neutral-400 ml-0.5">
-                    ({count})
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Buscador minimalista con línea base */}
-          <div className="flex items-center gap-1.5 w-full sm:w-44 border-b border-neutral-200 focus-within:border-neutral-900 transition-colors py-0.5">
+        {/* Buscador de ancho completo integrado cuando se activa */}
+        {(showSearch || searchTerm) && (
+          <div className="flex items-center gap-1.5 w-full border-b border-neutral-300 focus-within:border-neutral-900 transition-colors py-1 mt-1 mb-1">
             <Search className="w-3 h-3 text-neutral-400 shrink-0 stroke-[1.25]" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por nombre..."
+              placeholder="Buscar asesor por nombre..."
+              autoFocus
               className="w-full bg-transparent text-xs text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
             />
             {searchTerm && (
@@ -579,10 +555,36 @@ export function PersonalBreakdownCard({
               </button>
             )}
           </div>
+        )}
+
+        {/* Selector de Categorías (Ocupa el ancho completo sin competir con el buscador) */}
+        <div className="w-full flex items-center gap-3 overflow-x-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden border-b border-neutral-100 pb-1.5 mt-1.5">
+          {CATEGORY_TABS.filter((tab) => tab.id !== "otro" || (personnelCounts[tab.id] || 0) > 0).map((tab) => {
+            const count = personnelCounts[tab.id] || 0;
+            const isActive = activeCategory === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveCategory(tab.id)}
+                className={cn(
+                  "whitespace-nowrap transition-colors cursor-pointer py-0.5 text-xs shrink-0",
+                  isActive
+                    ? "text-neutral-950 font-semibold border-b-2 border-neutral-900 -mb-[2px]"
+                    : "text-neutral-400 hover:text-neutral-700"
+                )}
+              >
+                {tab.label}{" "}
+                <span className="font-mono text-[10px] text-neutral-400 ml-0.5">
+                  ({count})
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Lista / Desglose de Personal (Abierto, con separadores sutiles y scroll fluido) */}
-        <div className="divide-y divide-neutral-100/70 overflow-y-auto max-h-[220px] sm:max-h-[240px] pr-1 flex-1 mt-1 text-xs font-mono">
+        {/* Lista / Desglose de Personal (Abierto, con separadores sutiles y scroll fluido sin scrollbar visible) */}
+        <div className="divide-y divide-neutral-100/70 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden max-h-[220px] sm:max-h-[240px] pr-1 flex-1 mt-1 text-xs font-mono">
           {advisorBreakdown.length === 0 ? (
             <div className="py-8 text-center text-xs text-neutral-400 font-mono">
               No se encontró personal en esta categoría o filtro
@@ -678,4 +680,3 @@ export function PersonalBreakdownCard({
     </div>
   );
 }
-

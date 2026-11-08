@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { SlidersHorizontal, Maximize2, Flame, Settings2 } from "lucide-react";
+import { SlidersHorizontal, Maximize2, Flame } from "lucide-react";
 import { cn, formatNumber, formatProperCase } from "@/lib/utils";
 import { calculatePointsFromValues, generateSmoothPath, generateAreaPath } from "@/lib/svg-curve";
 import { DimensionExplorerModal } from "./dimension-explorer-modal";
@@ -123,19 +123,6 @@ export function TechniciansCard({
               >
                 <Maximize2 className="w-3.5 h-3.5 stroke-[1.75]" />
               </button>
-
-              {/* Quick Configuration Button */}
-              {onOpenConfig && (
-                <button
-                  type="button"
-                  onClick={onOpenConfig}
-                  className="min-w-[36px] min-h-[36px] p-2 flex items-center justify-center text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
-                  title="Configurar técnicos, cuadrillas y vinculación laboral"
-                  aria-label="Configuración de técnicos"
-                >
-                  <Settings2 className="w-3.5 h-3.5 stroke-[1.75]" />
-                </button>
-              )}
             </div>
           </div>
           <p className="text-[11px] font-mono text-neutral-500 mb-4">{subtitle}</p>
