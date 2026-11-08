@@ -20,6 +20,7 @@ interface FactibilidadMapProps {
   onClientCoordsChange: (coords: [number, number] | null) => void;
   targetNap: OzBox | null;
   flyToCoords?: [number, number] | null;
+  onMapInteraction?: () => void;
 }
 
 const getTileConfig = (theme: MapTheme) => {
@@ -87,6 +88,7 @@ function FactibilidadMapInner({
   onClientCoordsChange,
   targetNap,
   flyToCoords,
+  onMapInteraction,
 }: FactibilidadMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -126,6 +128,11 @@ function FactibilidadMapInner({
   useEffect(() => {
     onUserCoordsChangeRef.current = onUserCoordsChange;
   }, [onUserCoordsChange]);
+
+  const onMapInteractionRef = useRef(onMapInteraction);
+  useEffect(() => {
+    onMapInteractionRef.current = onMapInteraction;
+  }, [onMapInteraction]);
 
   // Load Leaflet once on client
   useEffect(() => {
@@ -239,6 +246,13 @@ function FactibilidadMapInner({
       const { lat, lng } = e.latlng;
       if (onClientCoordsChangeRef.current) {
         onClientCoordsChangeRef.current([lat, lng]);
+      }
+    });
+
+    // Collapse details on drag to keep map 100% visible
+    map.on("dragstart", () => {
+      if (onMapInteractionRef.current) {
+        onMapInteractionRef.current();
       }
     });
 

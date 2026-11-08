@@ -66,8 +66,8 @@ export default function FactibilidadPage() {
   >("disponibles");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedBox, setSelectedBox] = useState<OzBox | null>(null);
-  const [isBoxDetailsExpanded, setIsBoxDetailsExpanded] = useState(true);
-  const [isDiagnosisExpanded, setIsDiagnosisExpanded] = useState(true);
+  const [isBoxDetailsExpanded, setIsBoxDetailsExpanded] = useState(false);
+  const [isDiagnosisExpanded, setIsDiagnosisExpanded] = useState(false);
   const [userCoords, setUserCoords] = useState<[number, number] | null>(null);
 
   // Client Coordinates Query Workflow
@@ -107,15 +107,8 @@ export default function FactibilidadPage() {
     loadBoxes();
   }, [loadBoxes]);
 
-  // Open box details by default when selecting a box
-  useEffect(() => {
-    if (selectedBox) setIsBoxDetailsExpanded(true);
-  }, [selectedBox?.id]);
-
-  // Open diagnosis details by default when querying new coordinates
-  useEffect(() => {
-    if (clientCoords) setIsDiagnosisExpanded(true);
-  }, [clientCoords?.[0], clientCoords?.[1]]);
+  // Keep bars compact by default so the map is 100% visible
+  // The user can tap the bar anytime to expand the full technical sheet
 
   // Statistics calculation for the boxes
   const stats = useMemo(() => {
@@ -419,6 +412,10 @@ export default function FactibilidadPage() {
             onClientCoordsChange={handleClientCoordsFromMap}
             targetNap={targetNap}
             flyToCoords={flyToCoords}
+            onMapInteraction={() => {
+              setIsDiagnosisExpanded(false);
+              setIsBoxDetailsExpanded(false);
+            }}
           />
 
           {/* Feasibility Diagnosis Panel for Client Coordinates (Retractable 2-State Bar at Bottom) */}
