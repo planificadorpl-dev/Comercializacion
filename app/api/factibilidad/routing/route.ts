@@ -47,8 +47,41 @@ async function fetchStreetRoute(
         const rawCoords: [number, number][] = route.geometry.coordinates.map(
           ([lng, lat]: [number, number]) => [lat, lng]
         );
+
+        const firstCoord = rawCoords[0];
+        const lastCoord = rawCoords[rawCoords.length - 1];
+        const snap1 = firstCoord ? calculateDistanceMeters(lat1, lng1, firstCoord[0], firstCoord[1]) : 0;
+        const snap2 = lastCoord ? calculateDistanceMeters(lat2, lng2, lastCoord[0], lastCoord[1]) : 0;
+
+        // If snap jump > 45m: The point is located on an unmapped barrio staircase, passage or patio.
+        // Connecting to a distant snapped road creates an absurd spike across neighborhoods.
+        if (snap1 > 45 || snap2 > 45) {
+          return {
+            distance: Math.max(straightDist, Math.round(straightDist * 1.15)),
+            coordinates: [
+              [lat1, lng1],
+              [lat2, lng2],
+            ],
+            isStreetRoute: false,
+          };
+        }
+
+        const totalDist = Math.round(route.distance + snap1 + snap2);
+
+        // If distance collapsed to 0m or less than straight line
+        if (totalDist <= 0 || totalDist < straightDist * 0.85) {
+          return {
+            distance: Math.max(straightDist, Math.round(straightDist * 1.15)),
+            coordinates: [
+              [lat1, lng1],
+              [lat2, lng2],
+            ],
+            isStreetRoute: false,
+          };
+        }
+
         return {
-          distance: Math.round(route.distance),
+          distance: totalDist,
           coordinates: [[lat1, lng1], ...rawCoords, [lat2, lng2]],
           isStreetRoute: true,
         };
@@ -73,8 +106,41 @@ async function fetchStreetRoute(
         const rawCoords: [number, number][] = route.geometry.coordinates.map(
           ([lng, lat]: [number, number]) => [lat, lng]
         );
+
+        const firstCoord = rawCoords[0];
+        const lastCoord = rawCoords[rawCoords.length - 1];
+        const snap1 = firstCoord ? calculateDistanceMeters(lat1, lng1, firstCoord[0], firstCoord[1]) : 0;
+        const snap2 = lastCoord ? calculateDistanceMeters(lat2, lng2, lastCoord[0], lastCoord[1]) : 0;
+
+        // If snap jump > 45m: The point is located on an unmapped barrio staircase, passage or patio.
+        // Connecting to a distant snapped road creates an absurd spike across neighborhoods.
+        if (snap1 > 45 || snap2 > 45) {
+          return {
+            distance: Math.max(straightDist, Math.round(straightDist * 1.15)),
+            coordinates: [
+              [lat1, lng1],
+              [lat2, lng2],
+            ],
+            isStreetRoute: false,
+          };
+        }
+
+        const totalDist = Math.round(route.distance + snap1 + snap2);
+
+        // If distance collapsed to 0m or less than straight line
+        if (totalDist <= 0 || totalDist < straightDist * 0.85) {
+          return {
+            distance: Math.max(straightDist, Math.round(straightDist * 1.15)),
+            coordinates: [
+              [lat1, lng1],
+              [lat2, lng2],
+            ],
+            isStreetRoute: false,
+          };
+        }
+
         return {
-          distance: Math.round(route.distance),
+          distance: totalDist,
           coordinates: [[lat1, lng1], ...rawCoords, [lat2, lng2]],
           isStreetRoute: true,
         };
@@ -157,7 +223,10 @@ export async function POST(req: NextRequest) {
         const rawDetour = straightDist > 0 ? streetDist / straightDist : 1;
         const diff = streetDist - straightDist;
 
-        if (straightDist <= 80 && rawDetour > 2.0 && diff > 75) {
+        if (
+          (straightDist <= 80 && (rawDetour > 2.0 && diff > 60)) ||
+          (straightDist <= 130 && (rawDetour > 2.5 || streetDist > 300))
+        ) {
           // Correct to realistic pole-to-pole drop with sag factor (+20%)
           effectiveDist = Math.max(straightDist, Math.round(straightDist * 1.2));
           isStreet = false;
