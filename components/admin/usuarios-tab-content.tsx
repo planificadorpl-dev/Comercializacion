@@ -131,6 +131,31 @@ export function UsuariosTabContent({
     }
   };
 
+  const handleToggleActive = async (targetUser: AppUser) => {
+    const nextState = !targetUser.activo;
+    // Optimistic update
+    setUsers((prev) =>
+      prev.map((u) => (u.id === targetUser.id ? { ...u, activo: nextState } : u))
+    );
+    try {
+      const res = await updateAppUser(targetUser.id, { activo: nextState });
+      if (res.success) {
+        showToast(`Usuario "${targetUser.nombre}" ${nextState ? "activado" : "desactivado"}`);
+      } else {
+        // Rollback
+        setUsers((prev) =>
+          prev.map((u) => (u.id === targetUser.id ? { ...u, activo: targetUser.activo } : u))
+        );
+        showToast(res.error || "No se pudo actualizar el estado", "error");
+      }
+    } catch {
+      setUsers((prev) =>
+        prev.map((u) => (u.id === targetUser.id ? { ...u, activo: targetUser.activo } : u))
+      );
+      showToast("Error de conexión al cambiar estado del usuario", "error");
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formEmail.trim() || !formNombre.trim()) {
@@ -400,20 +425,23 @@ export function UsuariosTabContent({
                       {roleBadge.access}
                     </td>
                     <td className="py-2.5 px-4">
-                      <span
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(u)}
                         className={cn(
-                          "inline-flex items-center gap-1.5 text-[11px] font-medium",
-                          u.activo ? "text-neutral-800" : "text-neutral-400"
+                          "inline-flex items-center gap-1.5 text-[11px] font-medium transition-colors cursor-pointer select-none group",
+                          u.activo ? "text-neutral-800 hover:text-neutral-950" : "text-neutral-400 hover:text-neutral-700"
                         )}
+                        title={u.activo ? "Click para suspender acceso" : "Click para activar acceso"}
                       >
                         <span
                           className={cn(
-                            "w-1.5 h-1.5 rounded-full",
+                            "w-1.5 h-1.5 rounded-full transition-transform group-hover:scale-125",
                             u.activo ? "bg-emerald-500" : "bg-neutral-300"
                           )}
                         />
-                        {u.activo ? "Activo" : "Inactivo"}
-                      </span>
+                        <span>{u.activo ? "Activo" : "Inactivo"}</span>
+                      </button>
                     </td>
                     <td className="py-2.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -551,7 +579,12 @@ export function UsuariosTabContent({
 
               <div className="flex items-center justify-between text-[11px] text-neutral-400 pt-0.5 border-t border-neutral-50">
                 <span>{roleBadge.access}</span>
-                <span className="inline-flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleToggleActive(u)}
+                  className="inline-flex items-center gap-1.5 cursor-pointer py-1"
+                  title={u.activo ? "Click para suspender acceso" : "Click para activar acceso"}
+                >
                   <span
                     className={cn(
                       "w-1.5 h-1.5 rounded-full",
@@ -561,7 +594,7 @@ export function UsuariosTabContent({
                   <span className={u.activo ? "text-neutral-700 font-medium" : "text-neutral-400"}>
                     {u.activo ? "Activo" : "Inactivo"}
                   </span>
-                </span>
+                </button>
               </div>
             </div>
           );

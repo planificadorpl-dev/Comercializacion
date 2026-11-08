@@ -289,6 +289,8 @@ export function MobileBottomNav() {
                     ? "Actividades"
                     : op.id === "solicitudes"
                     ? "Solicitudes"
+                    : op.id === "factibilidad"
+                    ? "Factibilidad"
                     : "Mercado";
 
                 return (
