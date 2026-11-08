@@ -4,14 +4,7 @@ import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import {
   Menu,
   Plus,
-  PenLine,
   X,
-  Search,
-  Filter,
-  DollarSign,
-  TrendingUp,
-  Layers,
-  Check,
 } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { SidebarOpenButton } from "@/components/providers/sidebar-provider";
@@ -26,28 +19,11 @@ import {
   deleteOferta,
   saveOperador,
 } from "@/app/actions/competencia";
-import { scrapeBCVRate, ExchangeRate } from "@/app/actions/bcv-scraper";
-import { scrapeBinanceRate, BinanceRate } from "@/app/actions/binance-scraper";
-import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useUser } from "@/components/providers/user-provider";
 import { useModules } from "@/components/providers/modules-provider";
 
 // Client module-level cache for instantaneous panel transitions
-let cachedBcvRate: ExchangeRate | null = {
-  moneda: "USD",
-  fuente: "BCV",
-  nombre: "Dólar BCV",
-  valor: 36.5,
-  fechaActualizacion: new Date().toISOString(),
-};
-let cachedBinanceRate: BinanceRate | null = {
-  price: 38.5,
-  asset: "USDT",
-  fiat: "VES",
-  merchantName: "Mercado P2P",
-  tradeType: "BUY",
-};
 let cachedOperadores: any[] = [];
 let cachedOfertas: any[] = [];
 let hasInitialLoadedOfertas = false;
@@ -55,12 +31,7 @@ let hasInitialLoadedOfertas = false;
 function CompetenciaContent() {
   const { user, isAdmin } = useUser();
   const { isModuleEnabledForUser } = useModules();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  // Exchange Rates (initialized with cached values for instant 0ms render)
-  const [bcvRate, setBcvRate] = useState<ExchangeRate | null>(() => cachedBcvRate);
-  const [binanceRate, setBinanceRate] = useState<BinanceRate | null>(() => cachedBinanceRate);
 
   // Operadores & Ofertas
   const [operadores, setOperadores] = useState<any[]>(() => cachedOperadores);
@@ -81,6 +52,7 @@ function CompetenciaContent() {
   // New Offer Form State
   const [opId, setOpId] = useState<string>(() => (cachedOperadores.length > 0 ? String(cachedOperadores[0].id) : ""));
   const [nombrePlan, setNombrePlan] = useState("");
+  const [tecnologia, setTecnologia] = useState("Fibra Óptica");
   const [velocidadMb, setVelocidadMb] = useState<number>(100);
   const [precioMensual, setPrecioMensual] = useState<number>(25);
   const [costoInstalacion, setCostoInstalacion] = useState<number>(0);
@@ -122,19 +94,6 @@ function CompetenciaContent() {
 
   // Load initial data
   useEffect(() => {
-    scrapeBCVRate().then((r) => {
-      if (r) {
-        cachedBcvRate = r;
-        setBcvRate(r);
-      }
-    });
-    scrapeBinanceRate().then((r) => {
-      if (r) {
-        cachedBinanceRate = r;
-        setBinanceRate(r);
-      }
-    });
-
     getOperadores().then((ops) => {
       cachedOperadores = ops;
       setOperadores(ops);
@@ -192,17 +151,17 @@ function CompetenciaContent() {
     try {
       const payload = {
         operador_id: parseInt(opId, 10),
-        nombre_plan: nombrePlan.trim(),
-        velocidad_mb: Number(velocidadMb) || 0,
-        precio_mensual: Number(precioMensual) || 0,
-        costo_instalacion: Number(costoInstalacion) || 0,
+        plan_nombre: nombrePlan.trim(),
+        tecnologia: tecnologia.trim() || "Fibra Óptica",
+        velocidad_mbps: Number(velocidadMb) || 0,
+        tarifa_usd: Number(precioMensual) || 0,
+        costo_instalacion_usd: Number(costoInstalacion) || 0,
         incluye_tv: incluyeTv,
         es_simetrico: esSimetrico,
-        estado: formEstado,
-        municipio: formMunicipio || "General",
-        parroquia: formParroquia || "General",
-        notas: notas.trim() || null,
-        asesor_nombre: "Sistema",
+        estado: formEstado || null,
+        municipio: formMunicipio || null,
+        parroquia: formParroquia || null,
+        promocion: notas.trim() || null,
       };
 
       await saveOferta(payload);
@@ -210,7 +169,7 @@ function CompetenciaContent() {
       setNotas("");
       setIsNewOfferOpen(false);
       setToastMsg({ text: "Oferta registrada exitosamente", type: "success" });
-      loadOfertas();
+      loadOfertas(false);
     } catch (err: any) {
       setToastMsg({ text: err.message || "Error al registrar oferta", type: "error" });
     } finally {
@@ -231,12 +190,70 @@ function CompetenciaContent() {
   };
 
   const filteredOfertas = useMemo(() => {
-    if (!searchOperator) return ofertas;
-    return ofertas.filter((o) =>
-      o.operador?.nombre?.toLowerCase().includes(searchOperator.toLowerCase()) ||
-      o.nombre_plan?.toLowerCase().includes(searchOperator.toLowerCase())
-    );
+    let result = ofertas;
+    if (searchOperator.trim()) {
+      const q = searchOperator.toLowerCase();
+      result = result.filter((o) => {
+        const opName = (o.operador?.nombre || "").toLowerCase();
+        const planName = (o.plan_nombre || o.nombre_plan || "").toLowerCase();
+        const promo = (o.promocion || o.notas || "").toLowerCase();
+        return opName.includes(q) || planName.includes(q) || promo.includes(q);
+      });
+    }
+    return result;
   }, [ofertas, searchOperator]);
+
+  // Market intelligence metrics (pure typography, strictly adhering to AGENTS.md)
+  const marketMetrics = useMemo(() => {
+    const total = filteredOfertas.length;
+    if (total === 0) {
+      return {
+        total: 0,
+        avgPrice: "0.00",
+        avgSpeed: 0,
+        avgPricePerMb: "0.00",
+        topOperator: "Sin datos",
+      };
+    }
+
+    let sumPrice = 0;
+    let sumSpeed = 0;
+    let sumPricePerMb = 0;
+    let validSpeedCount = 0;
+    const operatorCounts: Record<string, number> = {};
+
+    filteredOfertas.forEach((of) => {
+      const price = Number(of.tarifa_usd ?? of.precio_mensual ?? 0);
+      const speed = Number(of.velocidad_mbps ?? of.velocidad_mb ?? 0);
+      sumPrice += price;
+
+      if (speed > 0) {
+        sumSpeed += speed;
+        sumPricePerMb += price / speed;
+        validSpeedCount++;
+      }
+
+      const opName = of.operador?.nombre || "Otro";
+      operatorCounts[opName] = (operatorCounts[opName] || 0) + 1;
+    });
+
+    let topOp = "Sin datos";
+    let maxCount = 0;
+    Object.entries(operatorCounts).forEach(([name, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        topOp = name;
+      }
+    });
+
+    return {
+      total,
+      avgPrice: (sumPrice / total).toFixed(2),
+      avgSpeed: validSpeedCount > 0 ? Math.round(sumSpeed / validSpeedCount) : 0,
+      avgPricePerMb: validSpeedCount > 0 ? (sumPricePerMb / validSpeedCount).toFixed(2) : "0.00",
+      topOperator: topOp,
+    };
+  }, [filteredOfertas]);
 
   if (user && !isAdmin && !isModuleEnabledForUser("competencia", false)) {
     return (
@@ -297,42 +314,62 @@ function CompetenciaContent() {
 
         {/* Content Body */}
         <div className="p-3 sm:p-6 pb-20 xl:pb-6 max-w-5xl w-full mx-auto space-y-5 sm:space-y-6">
-          {/* Financial Rates Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 py-2 px-1 sm:px-3 border-b border-neutral-100 text-xs">
-            <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
-              <div className="flex items-center gap-1.5 text-neutral-600">
-                <span className="text-neutral-400">Tasa BCV:</span>
-                <span className="font-mono font-semibold text-neutral-900">
-                  {bcvRate ? `${bcvRate.valor.toFixed(2)} Bs/USD` : "Cargando..."}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-neutral-600">
-                <span className="text-neutral-400">Binance P2P:</span>
-                <span className="font-mono font-semibold text-neutral-900">
-                  {binanceRate ? `${binanceRate.price.toFixed(2)} Bs/USDT` : "Cargando..."}
-                </span>
-              </div>
+          {/* Action Row */}
+          <div className="flex flex-wrap items-center justify-between gap-3 py-2 border-b border-neutral-100 text-xs">
+            <div className="text-xs text-neutral-500 font-sans">
+              Monitoreo de operadores y planes de telecomunicaciones
             </div>
 
             <div className="flex items-center gap-2 sm:gap-4 ml-auto">
-              <span className="text-[11px] text-neutral-400 hidden sm:inline">
-                {ofertas.length} ofertas
-              </span>
               <button
                 type="button"
                 onClick={() => setIsNewOpOpen(true)}
-                className="min-h-[44px] py-2 px-2 text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer flex items-center"
+                className="py-1.5 px-2 text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer flex items-center"
               >
                 Nuevo operador
               </button>
               <button
                 type="button"
                 onClick={() => setIsNewOfferOpen(true)}
-                className="min-h-[44px] py-2 px-2.5 inline-flex items-center gap-1.5 text-neutral-900 hover:text-neutral-700 font-semibold transition-colors cursor-pointer"
+                className="py-1.5 px-2.5 inline-flex items-center gap-1.5 text-neutral-900 hover:text-neutral-700 font-semibold transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2]" />
                 <span>Registrar oferta</span>
               </button>
+            </div>
+          </div>
+
+          {/* Market Intelligence Metrics (Strictly adhering to AGENTS.md: no cards, no uppercase, no decorative icons) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-3 border-b border-neutral-100 text-xs">
+            <div className="space-y-0.5">
+              <div className="text-[11px] text-neutral-400 font-sans">Ofertas analizadas</div>
+              <div className="text-base sm:text-lg font-semibold font-mono text-neutral-900 tracking-tight">
+                {marketMetrics.total}{" "}
+                <span className="text-[11px] font-sans font-normal text-neutral-400">planes</span>
+              </div>
+            </div>
+
+            <div className="space-y-0.5">
+              <div className="text-[11px] text-neutral-400 font-sans">Tarifa mensual promedio</div>
+              <div className="text-base sm:text-lg font-semibold font-mono text-neutral-900 tracking-tight">
+                ${marketMetrics.avgPrice}{" "}
+                <span className="text-[11px] font-sans font-normal text-neutral-400">/mes</span>
+              </div>
+            </div>
+
+            <div className="space-y-0.5">
+              <div className="text-[11px] text-neutral-400 font-sans">Costo medio por Mbps</div>
+              <div className="text-base sm:text-lg font-semibold font-mono text-neutral-900 tracking-tight">
+                ${marketMetrics.avgPricePerMb}{" "}
+                <span className="text-[11px] font-sans font-normal text-neutral-400">/Mbps</span>
+              </div>
+            </div>
+
+            <div className="space-y-0.5">
+              <div className="text-[11px] text-neutral-400 font-sans">Operador con más presencia</div>
+              <div className="text-base sm:text-lg font-semibold text-neutral-900 tracking-tight truncate">
+                {marketMetrics.topOperator}
+              </div>
             </div>
           </div>
 
@@ -344,7 +381,7 @@ function CompetenciaContent() {
                 value={searchOperator}
                 onChange={(e) => setSearchOperator(e.target.value)}
                 placeholder="Buscar operador o plan..."
-                className="w-full py-2 px-2 text-sm sm:text-xs border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900 placeholder:text-neutral-400"
+                className="w-full py-1.5 px-1 text-xs border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900 placeholder:text-neutral-400"
               />
             </div>
 
@@ -388,17 +425,24 @@ function CompetenciaContent() {
           {/* Offers Table / List */}
           <div className="space-y-4">
             {loadingOfertas ? (
-              <div className="py-16 text-center text-xs text-neutral-400">
+              <div className="py-16 text-center text-xs text-neutral-400 font-sans">
                 Cargando registros de mercado...
               </div>
             ) : filteredOfertas.length === 0 ? (
-              <div className="py-16 text-center text-xs text-neutral-400">
+              <div className="py-16 text-center text-xs text-neutral-400 font-sans">
                 No se encontraron ofertas con los filtros seleccionados.
               </div>
             ) : (
               <div className="divide-y divide-neutral-100 border-b border-neutral-100">
                 {filteredOfertas.map((of) => {
-                  const bcvPrice = bcvRate ? (of.precio_mensual * bcvRate.valor).toFixed(2) : null;
+                  const planName = of.plan_nombre || of.nombre_plan || "Plan estándar";
+                  const speed = Number(of.velocidad_mbps ?? of.velocidad_mb ?? 0);
+                  const price = Number(of.tarifa_usd ?? of.precio_mensual ?? 0);
+                  const installCost = Number(of.costo_instalacion_usd ?? of.costo_instalacion ?? 0);
+                  const promo = of.promocion || of.notas;
+                  const isSymmetric = of.es_simetrico !== false;
+                  const hasTv = of.incluye_tv === true;
+                  const costPerMb = speed > 0 ? (price / speed).toFixed(2) : null;
                   const loc = [of.estado, of.municipio, of.parroquia]
                     .filter((s) => s && s !== "General")
                     .join(", ");
@@ -406,10 +450,10 @@ function CompetenciaContent() {
                   return (
                     <div
                       key={of.id}
-                      className="group p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-neutral-50/60 transition-colors"
+                      className="group py-3.5 px-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-neutral-50/50 transition-colors"
                     >
                       <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span
                             className="w-2 h-2 rounded-full shrink-0"
                             style={{ backgroundColor: of.operador?.color_hex || "#3b82f6" }}
@@ -418,38 +462,43 @@ function CompetenciaContent() {
                             {of.operador?.nombre || "Operador"}
                           </span>
                           <span className="text-[11px] text-neutral-500">
-                            · {of.nombre_plan || `${of.velocidad_mb} Mbps`}
+                            · {planName}
                           </span>
+                          {costPerMb && (
+                            <span className="text-[10px] font-mono text-neutral-400">
+                              (${costPerMb}/Mbps)
+                            </span>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+                        <div className="flex items-center gap-2 sm:gap-3 text-[11px] text-neutral-500 flex-wrap">
                           <span>
-                            <strong>{of.velocidad_mb} Mbps</strong>
-                            {of.es_simetrico ? " simétricos" : ""}
+                            <strong>{speed} Mbps</strong>
+                            {isSymmetric ? " simétricos" : ""}
                           </span>
-                          {of.incluye_tv && <span>· Incluye TV/Streaming</span>}
+                          {hasTv && <span>· Con TV/Streaming</span>}
+                          {installCost > 0 ? (
+                            <span>· Instalación: ${installCost}</span>
+                          ) : (
+                            <span className="text-neutral-400">· Instalación gratis</span>
+                          )}
                           {loc && <span className="text-neutral-400">· {loc}</span>}
                         </div>
 
-                        {of.notas && (
+                        {promo && (
                           <p className="text-[11px] text-neutral-500 italic line-clamp-1">
-                            &ldquo;{of.notas}&rdquo;
+                            &ldquo;{promo}&rdquo;
                           </p>
                         )}
                       </div>
 
                       {/* Pricing & Actions */}
-                      <div className="flex items-center gap-6 text-xs shrink-0 self-end sm:self-center">
+                      <div className="flex items-center gap-4 text-xs shrink-0 self-end sm:self-center">
                         <div className="text-right">
                           <div className="font-mono font-semibold text-neutral-900">
-                            ${of.precio_mensual}
+                            ${price.toFixed(2)}
                             <span className="text-[10px] text-neutral-400 font-sans"> /mes</span>
                           </div>
-                          {bcvPrice && (
-                            <div className="text-[10px] font-mono text-neutral-400">
-                              ~ {bcvPrice} Bs
-                            </div>
-                          )}
                         </div>
 
                         <button
@@ -457,6 +506,7 @@ function CompetenciaContent() {
                           onClick={() => setOfertaToDelete(of.id)}
                           className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-150 text-neutral-400 hover:text-neutral-900 cursor-pointer p-1"
                           title="Eliminar oferta"
+                          aria-label="Eliminar oferta"
                         >
                           <X className="w-3.5 h-3.5 stroke-[1.5]" />
                         </button>
@@ -477,17 +527,18 @@ function CompetenciaContent() {
           onClick={() => !savingOffer && setIsNewOfferOpen(false)}
         >
           <div
-            className="w-full max-w-md max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl border border-neutral-200/90 p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-150"
+            className="w-full max-w-lg max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl border border-neutral-200/90 p-5 sm:p-6 space-y-4 animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-neutral-900 tracking-tight">
+              <h3 className="text-sm font-semibold text-neutral-900 tracking-tight font-sans">
                 Registrar oferta de la competencia
               </h3>
               <button
                 type="button"
                 onClick={() => setIsNewOfferOpen(false)}
                 className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                aria-label="Cerrar modal"
               >
                 <X className="w-4 h-4 stroke-[1.5]" />
               </button>
@@ -518,6 +569,19 @@ function CompetenciaContent() {
                 </div>
 
                 <div className="space-y-1">
+                  <label className="text-[11px] text-neutral-500 block">Tecnología</label>
+                  <input
+                    type="text"
+                    value={tecnologia}
+                    onChange={(e) => setTecnologia(e.target.value)}
+                    placeholder="Ej: Fibra Óptica, Radioenlace..."
+                    className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
                   <label className="text-[11px] text-neutral-500 block">Velocidad (Mbps)</label>
                   <input
                     type="number"
@@ -527,11 +591,9 @@ function CompetenciaContent() {
                     className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors font-mono text-neutral-900"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[11px] text-neutral-500 block">Precio mensual ($)</label>
+                  <label className="text-[11px] text-neutral-500 block">Tarifa mensual ($)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -563,7 +625,7 @@ function CompetenciaContent() {
                     onChange={(e) => setIncluyeTv(e.target.checked)}
                     className="rounded border-neutral-300 text-neutral-900 focus:ring-0"
                   />
-                  <span>Incluye TV / IPTV</span>
+                  <span>Incluye TV / Streaming</span>
                 </label>
 
                 <label className="flex items-center gap-2 cursor-pointer text-neutral-700">
@@ -573,31 +635,59 @@ function CompetenciaContent() {
                     onChange={(e) => setEsSimetrico(e.target.checked)}
                     className="rounded border-neutral-300 text-neutral-900 focus:ring-0"
                   />
-                  <span>Simétrico</span>
+                  <span>Velocidad simétrica</span>
                 </label>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] text-neutral-500 block">Estado</label>
-                <CustomDropdown
-                  value={formEstado}
-                  options={estadosList}
-                  onChange={(val) => {
-                    setFormEstado(val);
-                    setFormMunicipio("");
-                    setFormParroquia("");
-                  }}
-                  compact
-                />
+              {/* Geographic hierarchy selectors */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div className="space-y-1">
+                  <label className="text-[11px] text-neutral-500 block">Estado</label>
+                  <CustomDropdown
+                    value={formEstado}
+                    options={estadosList}
+                    onChange={(val) => {
+                      setFormEstado(val);
+                      setFormMunicipio("");
+                      setFormParroquia("");
+                    }}
+                    compact
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] text-neutral-500 block">Municipio</label>
+                  <CustomDropdown
+                    value={formMunicipio}
+                    options={[{ value: "", label: "General" }, ...formMunicipiosList.map((m) => ({ value: m, label: m }))]}
+                    onChange={(val) => {
+                      setFormMunicipio(val);
+                      setFormParroquia("");
+                    }}
+                    compact
+                    disabled={!formEstado || formMunicipiosList.length === 0}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] text-neutral-500 block">Parroquia</label>
+                  <CustomDropdown
+                    value={formParroquia}
+                    options={[{ value: "", label: "General" }, ...formParroquiasList.map((p) => ({ value: p, label: p }))]}
+                    onChange={setFormParroquia}
+                    compact
+                    disabled={!formMunicipio || formParroquiasList.length === 0}
+                  />
+                </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] text-neutral-500 block">Notas adicionales</label>
+                <label className="text-[11px] text-neutral-500 block">Promoción o notas adicionales</label>
                 <input
                   type="text"
                   value={notas}
                   onChange={(e) => setNotas(e.target.value)}
-                  placeholder="Detalles sobre promoción, meses gratis, etc."
+                  placeholder="Detalles sobre promoción, meses de gracia, equipo incluido..."
                   className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
                 />
               </div>
@@ -634,13 +724,14 @@ function CompetenciaContent() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-neutral-900 tracking-tight">
+              <h3 className="text-sm font-semibold text-neutral-900 tracking-tight font-sans">
                 Nuevo operador de competencia
               </h3>
               <button
                 type="button"
                 onClick={() => setIsNewOpOpen(false)}
                 className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                aria-label="Cerrar modal"
               >
                 <X className="w-4 h-4 stroke-[1.5]" />
               </button>

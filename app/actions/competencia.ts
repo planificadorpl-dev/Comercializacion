@@ -123,41 +123,103 @@ export async function deleteOperador(id: number) {
 // ── Ofertas ────────────────────────────────────────────────────────
 
 export async function saveOferta(oferta: any) {
-  // 1. PostgreSQL
+  const operador_id = parseInt(String(oferta.operador_id), 10);
+  const plan_nombre = (oferta.plan_nombre || oferta.nombre_plan || "").trim();
+  const tecnologia = (oferta.tecnologia || "Fibra Óptica").trim();
+  const velocidad_mbps = Math.round(Number(oferta.velocidad_mbps ?? oferta.velocidad_mb ?? 0));
+  const tarifa_usd = parseFloat(Number(oferta.tarifa_usd ?? oferta.precio_mensual ?? 0).toFixed(2));
+  const costo_instalacion_usd = parseFloat(Number(oferta.costo_instalacion_usd ?? oferta.costo_instalacion ?? 0).toFixed(2));
+  const promocion = (oferta.promocion || oferta.notas || "").trim() || null;
+  const es_simetrico = oferta.es_simetrico !== false;
+  const incluye_tv = oferta.incluye_tv === true;
+  const estado = oferta.estado || null;
+  const municipio = oferta.municipio || null;
+  const parroquia = oferta.parroquia || null;
+  const sector = oferta.sector || null;
+  const fecha_reporte = oferta.fecha_reporte || new Date().toISOString().split("T")[0];
+
+  // 1. PostgreSQL (Intentar con columnas completas incluyendo es_simetrico e incluye_tv)
   try {
     const row = await queryRow(
       `INSERT INTO public.ofertas_competencia (
          operador_id, plan_nombre, tecnologia, velocidad_mbps, tarifa_usd,
-         costo_instalacion_usd, promocion, estado, municipio, parroquia,
-         sector, fecha_reporte
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         costo_instalacion_usd, promocion, es_simetrico, incluye_tv, estado,
+         municipio, parroquia, sector, fecha_reporte
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
       [
-        oferta.operador_id,
-        oferta.plan_nombre || null,
-        oferta.tecnologia || null,
-        oferta.velocidad_mbps || null,
-        oferta.tarifa_usd || null,
-        oferta.costo_instalacion_usd || null,
-        oferta.promocion || null,
-        oferta.estado || null,
-        oferta.municipio || null,
-        oferta.parroquia || null,
-        oferta.sector || null,
-        oferta.fecha_reporte || new Date().toISOString().split("T")[0],
+        operador_id,
+        plan_nombre,
+        tecnologia,
+        velocidad_mbps,
+        tarifa_usd,
+        costo_instalacion_usd,
+        promocion,
+        es_simetrico,
+        incluye_tv,
+        estado,
+        municipio,
+        parroquia,
+        sector,
+        fecha_reporte,
       ]
     );
     if (row) {
       revalidatePath("/competencia");
       return row;
     }
-  } catch (pgErr) {}
+  } catch (pgErr) {
+    // Fallback en PostgreSQL si la tabla aún no tiene las columnas booleanas
+    try {
+      const fallbackRow = await queryRow(
+        `INSERT INTO public.ofertas_competencia (
+           operador_id, plan_nombre, tecnologia, velocidad_mbps, tarifa_usd,
+           costo_instalacion_usd, promocion, estado, municipio, parroquia,
+           sector, fecha_reporte
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         RETURNING *`,
+        [
+          operador_id,
+          plan_nombre,
+          tecnologia,
+          velocidad_mbps,
+          tarifa_usd,
+          costo_instalacion_usd,
+          promocion,
+          estado,
+          municipio,
+          parroquia,
+          sector,
+          fecha_reporte,
+        ]
+      );
+      if (fallbackRow) {
+        revalidatePath("/competencia");
+        return fallbackRow;
+      }
+    } catch (pgErr2) {}
+  }
 
   // 2. Supabase fallback
   const supabase = await createClient();
+  const payloadToInsert: Record<string, any> = {
+    operador_id,
+    plan_nombre,
+    tecnologia,
+    velocidad_mbps,
+    tarifa_usd,
+    costo_instalacion_usd,
+    promocion,
+    estado,
+    municipio,
+    parroquia,
+    sector,
+    fecha_reporte,
+  };
+
   const { data, error } = await supabase
     .from("ofertas_competencia")
-    .insert([oferta])
+    .insert([payloadToInsert])
     .select()
     .single();
 
