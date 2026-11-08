@@ -19,6 +19,10 @@ interface FactibilidadMapProps {
   clientCoords: [number, number] | null;
   onClientCoordsChange: (coords: [number, number] | null) => void;
   targetNap: OzBox | null;
+  routeGeometry?: [number, number][] | null;
+  routeDistance?: number | null;
+  isStreetRoute?: boolean;
+  isCalculatingRoute?: boolean;
   flyToCoords?: [number, number] | null;
   onMapInteraction?: () => void;
 }
@@ -44,7 +48,7 @@ const getTileConfig = (theme: MapTheme) => {
     };
   }
 
-  // Light: OpenStreetMap with clean desaturated minimalist styling (zero watermark, complete street coverage)
+  // Light: OpenStreetMap with clean desaturated minimalist styling
   return {
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     className: "map-tiles-clean-light",
@@ -87,6 +91,10 @@ function FactibilidadMapInner({
   clientCoords,
   onClientCoordsChange,
   targetNap,
+  routeGeometry,
+  routeDistance,
+  isStreetRoute = false,
+  isCalculatingRoute = false,
   flyToCoords,
   onMapInteraction,
 }: FactibilidadMapProps) {
@@ -106,8 +114,8 @@ function FactibilidadMapInner({
   const maxCircleRef = useRef<any>(null);
   const polylineRef = useRef<any>(null);
 
-  // Flag to prevent marker click from leaking to map click
-  const isClickingMarkerRef = useRef(false);
+  // Guard against marker click triggering map click (timestamp-based so it NEVER gets stuck)
+  const lastMarkerClickTimeRef = useRef<number>(0);
 
   const [L, setL] = useState<any>(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -181,7 +189,8 @@ function FactibilidadMapInner({
   useEffect(() => {
     if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
 
-    const canvasRenderer = L.canvas({ tolerance: 16, padding: 0.1 });
+    // Tolerance 4: tight hit testing so clicking near a marker on a street places the client pin accurately
+    const canvasRenderer = L.canvas({ tolerance: 4, padding: 0.1 });
     canvasRendererRef.current = canvasRenderer;
 
     const map = L.map(mapContainerRef.current, {
@@ -192,15 +201,14 @@ function FactibilidadMapInner({
       zoomControl: false,
       attributionControl: false,
       renderer: canvasRenderer,
-      preferCanvas: true, // Hardware-accelerated GPU Canvas for 6,000+ points (Instant, 60 FPS)
+      preferCanvas: true,
       fadeAnimation: true,
       zoomAnimation: true,
-      zoomSnap: 0.5, // Fluid fractional zoom prevents harsh 2x jumps
+      zoomSnap: 0.5,
       zoomDelta: 0.5,
       wheelPxPerZoomLevel: 100,
     });
 
-    // Soften canvas layer during zoom transitions to prevent ballooning/distortion artifacts
     map.on("zoomstart", () => {
       const overlayPane = map.getPane("overlayPane");
       if (overlayPane) {
@@ -238,9 +246,10 @@ function FactibilidadMapInner({
     const clientGroup = L.layerGroup().addTo(map);
     clientLayerRef.current = clientGroup;
 
-    // Click on map to place or move client point (guaranteed isolated from marker clicks)
+    // Click on map to place or reposition client pin
+    // Timestamp-guarded: if user just clicked a marker within 250ms, ignore; otherwise ALWAYS responsive!
     map.on("click", (e: any) => {
-      if (isClickingMarkerRef.current || e.originalEvent?._stopped) {
+      if (Date.now() - lastMarkerClickTimeRef.current < 250) {
         return;
       }
       const { lat, lng } = e.latlng;
@@ -249,7 +258,7 @@ function FactibilidadMapInner({
       }
     });
 
-    // Collapse details on drag to keep map 100% visible
+    // Collapse details on drag to keep map visible
     map.on("dragstart", () => {
       if (onMapInteractionRef.current) {
         onMapInteractionRef.current();
@@ -258,7 +267,6 @@ function FactibilidadMapInner({
 
     mapInstanceRef.current = map;
 
-    // ResizeObserver prevents black/unloaded strips when layout dimensions adjust
     const resizeObserver = new ResizeObserver(() => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.invalidateSize({ debounceMoveEvents: true });
@@ -302,7 +310,7 @@ function FactibilidadMapInner({
     });
   }, [flyToCoords]);
 
-  // Render & Update Box Markers IN-PLACE (ZERO full layer wiping)
+  // Render & Update Box Markers IN-PLACE
   useEffect(() => {
     if (!L || !markersLayerRef.current || !mapInstanceRef.current) return;
 
@@ -322,7 +330,6 @@ function FactibilidadMapInner({
 
     filteredBoxes.forEach((box) => {
       let fillColor = "#10b981"; // Emerald
-      let strokeColor = isDark ? "#ffffff" : "#0f172a";
 
       if (!box.isNap) {
         fillColor = "#3b82f6"; // Azul Manga
@@ -335,15 +342,14 @@ function FactibilidadMapInner({
       const isTarget = targetNap?.id === box.id;
       const isSelected = selectedBox?.id === box.id;
       const radius = getBoxRadius(box.isNap, isTarget, isSelected, currentZoom);
-      const weight = isTarget ? 2 : isSelected ? 2 : 1;
-      const color = isTarget ? "#0284c7" : isSelected ? "#ffffff" : strokeColor;
+      const weight = isTarget ? 2.5 : isSelected ? 2 : 1;
+      const color = isTarget ? "#0284c7" : isSelected ? "#ffffff" : isDark ? "#ffffff" : "#0f172a";
       const opacity = isTarget || isSelected ? 1 : 0.75;
       const fillOpacity = isTarget || isSelected ? 1 : 0.85;
 
       const existingMarker = markersMap.get(box.id);
 
       if (existingMarker) {
-        // Marker already on map: update style smoothly in-place!
         existingMarker.setStyle({
           fillColor,
           color,
@@ -353,7 +359,6 @@ function FactibilidadMapInner({
         });
         existingMarker.setRadius(radius);
       } else {
-        // New marker: create and add
         const circle = L.circleMarker([box.lat, box.lng], {
           renderer: canvasRendererRef.current || undefined,
           radius,
@@ -364,30 +369,19 @@ function FactibilidadMapInner({
           fillOpacity,
         });
 
-        // Click on marker: isolates event completely so map click never triggers
+        // Click on marker: clean event stop, never locks map click
         const handleMarkerSelect = (ev: any) => {
-          isClickingMarkerRef.current = true;
+          lastMarkerClickTimeRef.current = Date.now();
           if (ev.originalEvent) {
             L.DomEvent.stopPropagation(ev.originalEvent);
             ev.originalEvent._stopped = true;
           }
-          setTimeout(() => {
-            isClickingMarkerRef.current = false;
-          }, 350);
-
           if (onSelectBoxRef.current) {
             onSelectBoxRef.current(box);
           }
         };
 
         circle.on("click", handleMarkerSelect);
-        circle.on("mousedown touchstart", (ev: any) => {
-          isClickingMarkerRef.current = true;
-          if (ev.originalEvent) {
-            L.DomEvent.stopPropagation(ev.originalEvent);
-            ev.originalEvent._stopped = true;
-          }
-        });
 
         markersGroup.addLayer(circle);
         markersMap.set(box.id, circle);
@@ -395,7 +389,7 @@ function FactibilidadMapInner({
     });
   }, [L, filteredBoxes, selectedBox?.id, targetNap?.id, theme, currentZoom]);
 
-  // Render & Update Client Location, Radii and Feasibility Line IN-PLACE
+  // Render & Update Client Location, Radii and Smart Street Polyline IN-PLACE
   useEffect(() => {
     if (!L || !clientLayerRef.current || !mapInstanceRef.current) return;
     const group = clientLayerRef.current;
@@ -412,7 +406,7 @@ function FactibilidadMapInner({
 
     const [cLat, cLng] = clientCoords;
 
-    // 1000m Circle (1 km Consultation Area)
+    // 1000m Circle (1 km Consultation Area) - interactive: false so it NEVER intercepts clicks
     if (kmCircleRef.current) {
       kmCircleRef.current.setLatLng([cLat, cLng]);
     } else {
@@ -423,10 +417,11 @@ function FactibilidadMapInner({
         dashArray: "6, 10",
         fillColor: "#3b82f6",
         fillOpacity: 0.02,
+        interactive: false,
       }).addTo(group);
     }
 
-    // 150m Circle (Optimal Drop Radius)
+    // 150m Circle (Optimal Drop Radius) - interactive: false
     if (optCircleRef.current) {
       optCircleRef.current.setLatLng([cLat, cLng]);
     } else {
@@ -437,10 +432,11 @@ function FactibilidadMapInner({
         dashArray: "4, 6",
         fillColor: "#10b981",
         fillOpacity: 0.08,
+        interactive: false,
       }).addTo(group);
     }
 
-    // 250m Circle (Maximum Drop Limit)
+    // 250m Circle (Maximum Drop Limit) - interactive: false
     if (maxCircleRef.current) {
       maxCircleRef.current.setLatLng([cLat, cLng]);
     } else {
@@ -451,31 +447,49 @@ function FactibilidadMapInner({
         dashArray: "3, 6",
         fillColor: "#f59e0b",
         fillOpacity: 0.03,
+        interactive: false,
       }).addTo(group);
     }
 
-    // Connecting dashed line to Target NAP
+    // Connecting line to Target NAP (Street route or straight fallback)
     if (targetNap) {
-      const dist = calculateDistanceMeters(cLat, cLng, targetNap.lat, targetNap.lng);
+      const dist = routeDistance ?? calculateDistanceMeters(cLat, cLng, targetNap.lat, targetNap.lng);
       const isOptimal = dist <= 150;
       const lineColor = isOptimal ? "#10b981" : dist <= 250 ? "#f59e0b" : "#ef4444";
-      const lineCoords = [
-        [cLat, cLng],
-        [targetNap.lat, targetNap.lng],
-      ];
+
+      // If we have street waypoints, use them so line follows the actual road
+      const lineCoords: [number, number][] =
+        routeGeometry && routeGeometry.length > 1
+          ? routeGeometry
+          : [
+              [cLat, cLng],
+              [targetNap.lat, targetNap.lng],
+            ];
+
+      const tooltipText = isCalculatingRoute
+        ? "Calculando ruta vial..."
+        : isStreetRoute
+        ? `${dist}m por calle`
+        : `${dist}m (directa)`;
 
       if (polylineRef.current) {
         polylineRef.current.setLatLngs(lineCoords);
-        polylineRef.current.setStyle({ color: lineColor });
-        polylineRef.current.setTooltipContent(`${dist} metros`);
+        polylineRef.current.setStyle({
+          color: lineColor,
+          weight: isStreetRoute ? 3.5 : 2,
+          dashArray: isStreetRoute ? "none" : "6, 6",
+          opacity: 0.95,
+        });
+        polylineRef.current.setTooltipContent(tooltipText);
       } else {
         polylineRef.current = L.polyline(lineCoords, {
           color: lineColor,
-          weight: 2,
-          dashArray: "6, 6",
-          opacity: 0.9,
+          weight: isStreetRoute ? 3.5 : 2,
+          dashArray: isStreetRoute ? "none" : "6, 6",
+          opacity: 0.95,
+          interactive: false, // Never blocks clicks
         })
-          .bindTooltip(`${dist} metros`, {
+          .bindTooltip(tooltipText, {
             permanent: true,
             direction: "center",
             className: "feasibility-dist-badge",
@@ -487,19 +501,21 @@ function FactibilidadMapInner({
       polylineRef.current = null;
     }
 
-    const clientRadius = currentZoom >= 16 ? 8 : 7.5;
-    // Client Location Pin
+    // Draggable Client Location Pin
     if (clientMarkerRef.current) {
       clientMarkerRef.current.setLatLng([cLat, cLng]);
-      clientMarkerRef.current.setRadius(clientRadius);
     } else {
-      clientMarkerRef.current = L.circleMarker([cLat, cLng], {
-        radius: clientRadius,
-        fillColor: "#8b5cf6",
-        color: "#ffffff",
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.95,
+      const pinIcon = L.divIcon({
+        className: "client-pin-dot",
+        html: `<div style="width: 15px; height: 15px; border-radius: 9999px; background: #8b5cf6; border: 2px solid #ffffff; box-shadow: 0 0 0 2.5px rgba(139,92,246,0.35), 0 2px 6px rgba(0,0,0,0.3); cursor: grab;"></div>`,
+        iconSize: [15, 15],
+        iconAnchor: [7.5, 7.5],
+      });
+
+      const marker = L.marker([cLat, cLng], {
+        icon: pinIcon,
+        draggable: true,
+        zIndexOffset: 1000,
       })
         .bindTooltip("Ubicación del cliente", {
           permanent: true,
@@ -508,8 +524,26 @@ function FactibilidadMapInner({
           className: "client-pin-tooltip",
         })
         .addTo(group);
+
+      marker.on("dragend", (ev: any) => {
+        const { lat, lng } = ev.target.getLatLng();
+        if (onClientCoordsChangeRef.current) {
+          onClientCoordsChangeRef.current([lat, lng]);
+        }
+      });
+
+      clientMarkerRef.current = marker;
     }
-  }, [L, clientCoords, targetNap?.id, currentZoom]);
+  }, [
+    L,
+    clientCoords,
+    targetNap?.id,
+    routeGeometry,
+    routeDistance,
+    isStreetRoute,
+    isCalculatingRoute,
+    currentZoom,
+  ]);
 
   // Advisor GPS Geolocation
   const handleLocateMe = useCallback(() => {
@@ -588,6 +622,10 @@ const FactibilidadMap = React.memo(FactibilidadMapInner, (prev, next) => {
     prev.clientCoords?.[0] === next.clientCoords?.[0] &&
     prev.clientCoords?.[1] === next.clientCoords?.[1] &&
     prev.targetNap?.id === next.targetNap?.id &&
+    prev.routeDistance === next.routeDistance &&
+    prev.isStreetRoute === next.isStreetRoute &&
+    prev.isCalculatingRoute === next.isCalculatingRoute &&
+    prev.routeGeometry?.length === next.routeGeometry?.length &&
     prev.flyToCoords?.[0] === next.flyToCoords?.[0] &&
     prev.flyToCoords?.[1] === next.flyToCoords?.[1]
   );

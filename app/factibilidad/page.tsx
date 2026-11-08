@@ -78,6 +78,31 @@ export default function FactibilidadPage() {
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
   const [copiedCoords, setCopiedCoords] = useState(false);
 
+  // Smart Street Route State
+  const [smartRoute, setSmartRoute] = useState<{
+    targetNap: OzBox | null;
+    routeGeometry: [number, number][] | null;
+    distanceMeters: number | null;
+    straightDistanceMeters: number | null;
+    isStreetRoute: boolean;
+    detourFactor: number;
+    hasObstacleDetour: boolean;
+    isCalculating: boolean;
+    feasibilityLevel: "optima" | "factible_larga" | "limite" | "no_factible" | "saturada";
+    isFeasible: boolean;
+    diagnosisTitle: string;
+    diagnosisMessage: string;
+    nearbyCandidates?: {
+      box: OzBox;
+      streetDistance: number;
+      straightDistance: number;
+      isStreetRoute: boolean;
+      coordinates: [number, number][];
+      detourFactor: number;
+      hasObstacleDetour: boolean;
+    }[];
+  } | null>(null);
+
   // Load all boxes from API
   const loadBoxes = useCallback(async (forceRefresh = false) => {
     try {
@@ -107,9 +132,6 @@ export default function FactibilidadPage() {
     loadBoxes();
   }, [loadBoxes]);
 
-  // Keep bars compact by default so the map is 100% visible
-  // The user can tap the bar anytime to expand the full technical sheet
-
   // Statistics calculation for the boxes
   const stats = useMemo(() => {
     const total = boxes.length;
@@ -122,19 +144,139 @@ export default function FactibilidadPage() {
     return { total, naps: naps.length, disponibles, criticas, saturadas, mangas };
   }, [boxes]);
 
-  // Compute feasibility diagnosis when clientCoords changes
-  const feasibilityResult: FeasibilityResult | null = useMemo(() => {
+  // Baseline instant feasibility (Euclidean distance)
+  const baselineResult: FeasibilityResult | null = useMemo(() => {
     if (!clientCoords || boxes.length === 0) return null;
     return analyzeFeasibility(clientCoords, boxes);
   }, [clientCoords, boxes]);
 
-  // Target NAP: highlight nearest available NAP (or nearest NAP)
+  // Query smart street route in background (following actual roads to bypass buildings/obstacles)
+  useEffect(() => {
+    if (!clientCoords || boxes.length === 0) {
+      setSmartRoute(null);
+      return;
+    }
+
+    const abortController = new AbortController();
+    const [cLat, cLng] = clientCoords;
+
+    const napBoxes = boxes.filter((b) => b.isNap);
+    const sorted = napBoxes
+      .map((b) => ({ box: b, d: calculateDistanceMeters(cLat, cLng, b.lat, b.lng) }))
+      .sort((a, b) => a.d - b.d);
+
+    // Pick top 4 available NAPs + 1 nearest overall
+    const available = sorted.filter((item) => item.box.availablePorts > 0).slice(0, 4);
+    const nearestOverall = sorted[0]?.box;
+
+    const candidateBoxes = [...available.map((a) => a.box)];
+    if (nearestOverall && !candidateBoxes.some((c) => c.id === nearestOverall.id)) {
+      candidateBoxes.push(nearestOverall);
+    }
+
+    if (candidateBoxes.length === 0) return;
+
+    setSmartRoute((prev) =>
+      prev
+        ? { ...prev, isCalculating: true }
+        : {
+            targetNap: candidateBoxes[0] || null,
+            routeGeometry: null,
+            distanceMeters: null,
+            straightDistanceMeters: null,
+            isStreetRoute: false,
+            detourFactor: 1,
+            hasObstacleDetour: false,
+            isCalculating: true,
+            feasibilityLevel: "no_factible",
+            isFeasible: false,
+            diagnosisTitle: "Calculando ruta vial...",
+            diagnosisMessage: "Trazando recorrido vial para evitar cruces por edificaciones.",
+          }
+    );
+
+    fetch("/api/factibilidad/routing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientCoords,
+        candidates: candidateBoxes,
+      }),
+      signal: abortController.signal,
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.bestNap) {
+          setSmartRoute({
+            targetNap: data.bestNap,
+            routeGeometry: data.route.coordinates,
+            distanceMeters: data.route.distanceMeters,
+            straightDistanceMeters: data.route.straightDistanceMeters,
+            isStreetRoute: data.route.isStreetRoute,
+            detourFactor: data.route.detourFactor,
+            hasObstacleDetour: data.route.hasObstacleDetour,
+            isCalculating: false,
+            feasibilityLevel: data.feasibility.feasibilityLevel,
+            isFeasible: data.feasibility.isFeasible,
+            diagnosisTitle: data.feasibility.diagnosisTitle,
+            diagnosisMessage: data.feasibility.diagnosisMessage,
+            nearbyCandidates: data.candidates,
+          });
+        }
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") {
+          console.warn("Fallo al calcular ruta inteligente:", err);
+          setSmartRoute((prev) => (prev ? { ...prev, isCalculating: false } : null));
+        }
+      });
+
+    return () => {
+      abortController.abort();
+    };
+  }, [clientCoords, boxes]);
+
+  // Combined Active Feasibility Diagnosis (Prioritizes smart street route over Euclidean line)
+  const feasibilityResult: FeasibilityResult | null = useMemo(() => {
+    if (!clientCoords || !baselineResult) return null;
+    if (!smartRoute || smartRoute.distanceMeters === null) {
+      return baselineResult;
+    }
+
+    return {
+      ...baselineResult,
+      isFeasible: smartRoute.isFeasible,
+      feasibilityLevel: smartRoute.feasibilityLevel,
+      distanceMeters: smartRoute.distanceMeters,
+      straightDistanceMeters: smartRoute.straightDistanceMeters ?? baselineResult.distanceMeters,
+      isStreetRoute: smartRoute.isStreetRoute,
+      routeGeometry: smartRoute.routeGeometry || undefined,
+      detourFactor: smartRoute.detourFactor,
+      hasObstacleDetour: smartRoute.hasObstacleDetour,
+      isCalculatingRoute: smartRoute.isCalculating,
+      nearestAvailableNap:
+        smartRoute.targetNap && smartRoute.targetNap.availablePorts > 0
+          ? smartRoute.targetNap
+          : baselineResult.nearestAvailableNap,
+      nearestNap: smartRoute.targetNap || baselineResult.nearestNap,
+      distanceToAvailableMeters:
+        smartRoute.targetNap && smartRoute.targetNap.availablePorts > 0
+          ? smartRoute.distanceMeters
+          : baselineResult.distanceToAvailableMeters,
+      diagnosisTitle: smartRoute.diagnosisTitle,
+      diagnosisMessage: smartRoute.diagnosisMessage,
+    };
+  }, [clientCoords, baselineResult, smartRoute]);
+
+  // Target NAP: best NAP assigned via street route
   const targetNap = useMemo(() => {
-    const nap = feasibilityResult?.nearestAvailableNap || feasibilityResult?.nearestNap || null;
-    if (!nap || !clientCoords) return null;
-    const dist = calculateDistanceMeters(clientCoords[0], clientCoords[1], nap.lat, nap.lng);
-    return dist <= 2000 ? nap : null;
-  }, [feasibilityResult, clientCoords]);
+    return (
+      smartRoute?.targetNap ||
+      feasibilityResult?.nearestAvailableNap ||
+      feasibilityResult?.nearestNap ||
+      null
+    );
+  }, [smartRoute, feasibilityResult]);
 
   // Handle client coordinates submission from form
   const handleQueryCoords = useCallback(
@@ -171,6 +313,7 @@ export default function FactibilidadPage() {
   const handleClearQuery = () => {
     setClientCoords(null);
     setFlyToCoords(null);
+    setSmartRoute(null);
     setCoordInput("");
     setCoordError(null);
     setSelectedBox(null);
@@ -411,6 +554,10 @@ export default function FactibilidadPage() {
             clientCoords={clientCoords}
             onClientCoordsChange={handleClientCoordsFromMap}
             targetNap={targetNap}
+            routeGeometry={smartRoute?.routeGeometry}
+            routeDistance={smartRoute?.distanceMeters}
+            isStreetRoute={smartRoute?.isStreetRoute}
+            isCalculatingRoute={smartRoute?.isCalculating}
             flyToCoords={flyToCoords}
             onMapInteraction={() => {
               setIsDiagnosisExpanded(false);
@@ -420,7 +567,7 @@ export default function FactibilidadPage() {
 
           {/* Feasibility Diagnosis Panel for Client Coordinates (Retractable 2-State Bar at Top) */}
           {feasibilityResult && !selectedBox && (
-            <div className="absolute top-2.5 left-3 right-3 sm:left-6 sm:right-auto sm:w-[410px] z-30 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-xs animate-in fade-in slide-in-from-top-2 duration-150 select-none">
+            <div className="absolute top-2.5 left-3 right-3 sm:left-6 sm:right-auto sm:w-[420px] z-30 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-xs animate-in fade-in slide-in-from-top-2 duration-150 select-none">
               {/* Compact Bar (Always visible in 1 ultra-clean row) */}
               <div className="flex items-center justify-between px-3 py-2.5 gap-2">
                 <button
@@ -457,10 +604,28 @@ export default function FactibilidadPage() {
                         )}
                       >
                         &bull; {feasibilityResult.distanceToAvailableMeters}m
+                        {feasibilityResult.isStreetRoute ? (
+                          <span className="text-[10px] text-neutral-400 font-normal ml-0.5">calle</span>
+                        ) : (
+                          <span className="text-[10px] text-neutral-400 font-normal ml-0.5">directa</span>
+                        )}
+                      </span>
+                    )}
+                    {feasibilityResult.hasObstacleDetour && feasibilityResult.straightDistanceMeters && (
+                      <span
+                        className="text-[10px] font-mono text-amber-600/90 ml-0.5 hidden xs:inline"
+                        title={`Línea recta: ${feasibilityResult.straightDistanceMeters}m | Tendido vial: ${feasibilityResult.distanceToAvailableMeters}m`}
+                      >
+                        (+{feasibilityResult.distanceToAvailableMeters! - feasibilityResult.straightDistanceMeters}m desvío)
+                      </span>
+                    )}
+                    {feasibilityResult.isCalculatingRoute && (
+                      <span className="text-[10px] text-neutral-400 font-mono animate-pulse ml-0.5 hidden xs:inline">
+                        calculando ruta...
                       </span>
                     )}
                     {feasibilityResult.nearestAvailableNap && (
-                      <span className="text-[11px] font-mono text-neutral-400 shrink-0 hidden xs:inline">
+                      <span className="text-[11px] font-mono text-neutral-400 shrink-0 hidden sm:inline">
                         ({feasibilityResult.nearestAvailableNap.availablePorts} libres)
                       </span>
                     )}
@@ -539,6 +704,13 @@ export default function FactibilidadPage() {
                     {feasibilityResult.diagnosisMessage}
                   </p>
 
+                  {/* Obstacle / Detour Note */}
+                  {feasibilityResult.hasObstacleDetour && (
+                    <div className="py-1 px-2 text-[11px] font-sans text-neutral-600 border-l border-amber-500/80 bg-neutral-50/50">
+                      Se identificó un perímetro edificado o manzana intermedia. La acometida se trazó siguiendo el recorrido de calle para evitar atravesar edificaciones.
+                    </div>
+                  )}
+
                   {/* Assigned / Nearest Available NAP specs */}
                   {feasibilityResult.nearestAvailableNap && (
                     <div className="border-t border-neutral-100 pt-2 space-y-1.5 text-[11px] font-mono">
@@ -564,8 +736,18 @@ export default function FactibilidadPage() {
                           )}
                         >
                           {feasibilityResult.distanceToAvailableMeters} metros
+                          {feasibilityResult.isStreetRoute ? " (vía calle)" : " (línea recta)"}
                         </span>
                       </div>
+
+                      {feasibilityResult.isStreetRoute && feasibilityResult.straightDistanceMeters && (
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="text-neutral-400">Línea recta (referencial):</span>
+                          <span className="text-neutral-400 line-through">
+                            {feasibilityResult.straightDistanceMeters} metros
+                          </span>
+                        </div>
+                      )}
 
                       <div className="flex justify-between items-center">
                         <span className="text-neutral-400">Puertos libres:</span>
@@ -599,7 +781,35 @@ export default function FactibilidadPage() {
                   )}
 
                   {/* Nearby Alternatives List */}
-                  {feasibilityResult.nearbyNaps.length > 1 && (
+                  {smartRoute?.nearbyCandidates && smartRoute.nearbyCandidates.length > 1 ? (
+                    <div className="border-t border-neutral-100 pt-2">
+                      <span className="text-[10px] text-neutral-400 font-mono block mb-1">
+                        Otras cajas evaluadas en la zona:
+                      </span>
+                      <div className="space-y-1">
+                        {smartRoute.nearbyCandidates.slice(1, 4).map(({ box, streetDistance, isStreetRoute }) => (
+                          <div
+                            key={box.id}
+                            className="flex items-center justify-between text-[11px] font-mono text-neutral-600 hover:text-neutral-950 cursor-pointer"
+                            onClick={() => setSelectedBox(box)}
+                          >
+                            <span className="truncate max-w-[190px]">{box.name.toUpperCase()}</span>
+                            <div className="flex items-center gap-2">
+                              <span>{streetDistance}m {isStreetRoute ? "calle" : ""}</span>
+                              <span
+                                className={cn(
+                                  "font-semibold",
+                                  box.availablePorts > 0 ? "text-emerald-600" : "text-neutral-400"
+                                )}
+                              >
+                                {box.availablePorts} libres
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : feasibilityResult.nearbyNaps.length > 1 ? (
                     <div className="border-t border-neutral-100 pt-2">
                       <span className="text-[10px] text-neutral-400 font-mono block mb-1">
                         Otras cajas cercanas:
@@ -627,7 +837,7 @@ export default function FactibilidadPage() {
                         ))}
                       </div>
                     </div>
-                  )}
+                  ) : null}
 
                   {/* Quick Action Link Buttons */}
                   <div className="flex items-center justify-between gap-3 border-t border-neutral-100 pt-2 text-xs font-mono">

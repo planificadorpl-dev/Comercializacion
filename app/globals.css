@@ -243,6 +243,8 @@
 }
 
 .client-pin-tooltip {
+  pointer-events: none !important;
+  user-select: none !important;
   background: #8b5cf6 !important;
   border: none !important;
   color: #ffffff !important;
@@ -258,6 +260,8 @@
 }
 
 .feasibility-dist-badge {
+  pointer-events: none !important;
+  user-select: none !important;
   background: #171717 !important;
   color: #ffffff !important;
   border: 1px solid #333333 !important;

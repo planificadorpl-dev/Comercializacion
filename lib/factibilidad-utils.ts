@@ -5,10 +5,24 @@ export interface FeasibilityResult {
   isFeasible: boolean;
   feasibilityLevel: "optima" | "factible_larga" | "limite" | "no_factible" | "saturada";
   distanceMeters: number;
+  straightDistanceMeters?: number;
+  isStreetRoute?: boolean;
+  routeGeometry?: [number, number][];
+  detourFactor?: number;
+  hasObstacleDetour?: boolean;
+  isCalculatingRoute?: boolean;
   nearestNap: OzBox | null;
   nearestAvailableNap: OzBox | null;
   distanceToAvailableMeters: number | null;
-  nearbyNaps: { box: OzBox; distance: number }[];
+  nearbyNaps: {
+    box: OzBox;
+    distance: number;
+    straightDistance?: number;
+    isStreetRoute?: boolean;
+    routeGeometry?: [number, number][];
+    detourFactor?: number;
+    hasObstacleDetour?: boolean;
+  }[];
   diagnosisTitle: string;
   diagnosisMessage: string;
 }
@@ -174,19 +188,35 @@ export function analyzeFeasibility(
 }
 
 export function generateWhatsAppResponse(result: FeasibilityResult): string {
-  const { clientCoords, isFeasible, feasibilityLevel, nearestAvailableNap, distanceToAvailableMeters, nearestNap, distanceMeters } = result;
+  const {
+    clientCoords,
+    isFeasible,
+    feasibilityLevel,
+    nearestAvailableNap,
+    distanceToAvailableMeters,
+    nearestNap,
+    distanceMeters,
+    isStreetRoute,
+    hasObstacleDetour,
+  } = result;
   const coordsStr = `${clientCoords[0].toFixed(5)}, ${clientCoords[1].toFixed(5)}`;
 
   if (isFeasible && nearestAvailableNap && distanceToAvailableMeters !== null) {
+    const routeSuffix = isStreetRoute ? "vía trazado de calle" : "acometida estándar";
+    const detourNote = hasObstacleDetour
+      ? `\n• *Trazado de tendido:* Ruta vial optimizada que bordea edificaciones intermedias para garantizar señal de fibra continua.`
+      : "";
+
     return (
       `*POWER LINK - CONSULTA DE FACTIBILIDAD TÉCNICA*\n\n` +
       `¡Hola! Hemos validado tus coordenadas (${coordsStr}):\n\n` +
       `✅ *ESTATUS: FACTIBILIDAD APROBADA*\n` +
       `• *Zona/Sector:* ${nearestAvailableNap.sector || "Área de cobertura activa"}\n` +
       `• *Caja de fibra asignada:* ${nearestAvailableNap.name.toUpperCase()}\n` +
-      `• *Distancia de acometida:* ${distanceToAvailableMeters} metros (${distanceToAvailableMeters <= 150 ? "Óptima" : "Acometida estándar"})\n` +
-      `• *Puertos disponibles:* Sí (${nearestAvailableNap.availablePorts} libres)\n\n` +
-      `¡Tu dirección es 100% apta para instalar Internet de Fibra Óptica! ¿Con qué plan de velocidad te gustaría comenzar?`
+      `• *Distancia de acometida:* ${distanceToAvailableMeters} metros (${routeSuffix})\n` +
+      `• *Puertos disponibles:* Sí (${nearestAvailableNap.availablePorts} libres)` +
+      detourNote +
+      `\n\n¡Tu dirección es 100% apta para instalar Internet de Fibra Óptica! ¿Con qué plan de velocidad te gustaría comenzar?`
     );
   }
 
@@ -206,7 +236,7 @@ export function generateWhatsAppResponse(result: FeasibilityResult): string {
     `*POWER LINK - CONSULTA DE FACTIBILIDAD TÉCNICA*\n\n` +
     `¡Hola! Hemos validado tus coordenadas (${coordsStr}):\n\n` +
     `❌ *ESTATUS: FUERA DE RANGO DIRECTO*\n` +
-    `• En este momento la red de fibra óptica más cercana se encuentra a más de 300 metros de tu punto, lo cual supera el estándar técnico de cable drop para garantizar la máxima velocidad.\n\n` +
+    `• En este momento la red de fibra óptica más cercana se encuentra a más de 300 metros por recorrido de calle desde tu punto, lo cual supera el estándar técnico de cable drop para garantizar la máxima velocidad.\n\n` +
     `Hemos guardado tu ubicación para considerarla en las próximas ampliaciones de cobertura.`
   );
 }
