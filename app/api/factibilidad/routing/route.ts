@@ -6,10 +6,12 @@ interface CandidateEvaluation {
   box: OzBox;
   streetDistance: number;
   straightDistance: number;
+  effectiveDistance: number;
   isStreetRoute: boolean;
   coordinates: [number, number][];
   detourFactor: number;
   hasObstacleDetour: boolean;
+  isTopologyArtifact: boolean;
 }
 
 // In-memory cache to prevent redundant external routing calls
@@ -118,8 +120,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(cached.data);
     }
 
-    // Limit evaluation to at most 5 candidates to guarantee ultra-fast response
-    const targetCandidates: OzBox[] = candidates.slice(0, 5);
+    // Limit evaluation to at most 6 candidates to guarantee ultra-fast response
+    const targetCandidates: OzBox[] = candidates.slice(0, 6);
 
     // Run parallel route queries
     const routeResults = await Promise.allSettled(
@@ -129,42 +131,66 @@ export async function POST(req: NextRequest) {
     const evaluated: CandidateEvaluation[] = targetCandidates.map((box, idx) => {
       const straightDist = calculateDistanceMeters(cLat, cLng, box.lat, box.lng);
       const res = routeResults[idx];
+      let streetDist = straightDist;
+      let isStreet = false;
+      let coords: [number, number][] = [
+        [cLat, cLng],
+        [box.lat, box.lng],
+      ];
+
       if (res.status === "fulfilled") {
-        const { distance, coordinates, isStreetRoute } = res.value;
-        const detourFactor = straightDist > 0 ? Number((distance / straightDist).toFixed(2)) : 1;
-        const hasObstacleDetour = isStreetRoute && detourFactor >= 1.35 && distance - straightDist >= 40;
-        return {
-          box,
-          streetDistance: distance,
-          straightDistance: straightDist,
-          isStreetRoute,
-          coordinates,
-          detourFactor,
-          hasObstacleDetour,
-        };
+        streetDist = res.value.distance;
+        isStreet = res.value.isStreetRoute;
+        coords = res.value.coordinates;
       }
 
-      // Safe fallback if rejected
+      let effectiveDist = streetDist;
+      let isTopologyArtifact = false;
+
+      // Realistic aerial telecom drop physics & OSM topology artifact filter:
+      // In telecom, utility poles are 30-45m apart. Any box within <= 80m straight line is on
+      // the same block, corner or across the immediate street.
+      // If OSRM returns a massive detour (> 2.0x and > 75m extra), it is an OSM routing artifact
+      // (such as one-way restriction, missing pedestrian link between road ways, or highway roundabout loop).
+      // Aerial fiber drop cables do NOT drive around roundabouts; they span directly between poles.
+      if (isStreet) {
+        const rawDetour = straightDist > 0 ? streetDist / straightDist : 1;
+        const diff = streetDist - straightDist;
+
+        if (straightDist <= 80 && rawDetour > 2.0 && diff > 75) {
+          // Correct to realistic pole-to-pole drop with sag factor (+20%)
+          effectiveDist = Math.max(straightDist, Math.round(straightDist * 1.2));
+          isStreet = false;
+          coords = [
+            [cLat, cLng],
+            [box.lat, box.lng],
+          ];
+          isTopologyArtifact = true;
+        }
+      }
+
+      const detourFactor = straightDist > 0 ? Number((effectiveDist / straightDist).toFixed(2)) : 1;
+      const hasObstacleDetour = isStreet && detourFactor >= 1.35 && effectiveDist - straightDist >= 40;
+
       return {
         box,
-        streetDistance: straightDist,
+        streetDistance: effectiveDist,
         straightDistance: straightDist,
-        isStreetRoute: false,
-        coordinates: [
-          [cLat, cLng],
-          [box.lat, box.lng],
-        ],
-        detourFactor: 1,
-        hasObstacleDetour: false,
+        effectiveDistance: effectiveDist,
+        isStreetRoute: isStreet,
+        coordinates: coords,
+        detourFactor,
+        hasObstacleDetour,
+        isTopologyArtifact,
       };
     });
 
     // Separate available boxes (ports > 0) from saturated
     const available = evaluated.filter((item) => item.box.availablePorts > 0);
-    // Sort by actual street distance
-    available.sort((a, b) => a.streetDistance - b.streetDistance);
+    // Sort by effective drop distance (street route when physical, pole span when ultra-close)
+    available.sort((a, b) => a.effectiveDistance - b.effectiveDistance);
 
-    const sortedAll = [...evaluated].sort((a, b) => a.streetDistance - b.streetDistance);
+    const sortedAll = [...evaluated].sort((a, b) => a.effectiveDistance - b.effectiveDistance);
     const nearestOverall = sortedAll[0] || null;
     const bestAvailable = available[0] || null;
 
@@ -173,7 +199,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "No se encontraron rutas factibles" }, { status: 404 });
     }
 
-    const dist = chosen.streetDistance;
+    const dist = chosen.effectiveDistance;
     const straightDist = chosen.straightDistance;
     const isAvailable = chosen.box.availablePorts > 0;
 

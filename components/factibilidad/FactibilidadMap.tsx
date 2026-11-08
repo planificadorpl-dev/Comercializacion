@@ -477,7 +477,7 @@ function FactibilidadMapInner({
         polylineRef.current.setStyle({
           color: lineColor,
           weight: isStreetRoute ? 3.5 : 2,
-          dashArray: isStreetRoute ? "none" : "6, 6",
+          dashArray: isStreetRoute ? "" : "6, 6",
           opacity: 0.95,
         });
         polylineRef.current.setTooltipContent(tooltipText);
@@ -485,7 +485,7 @@ function FactibilidadMapInner({
         polylineRef.current = L.polyline(lineCoords, {
           color: lineColor,
           weight: isStreetRoute ? 3.5 : 2,
-          dashArray: isStreetRoute ? "none" : "6, 6",
+          dashArray: isStreetRoute ? "" : "6, 6",
           opacity: 0.95,
           interactive: false, // Never blocks clicks
         })

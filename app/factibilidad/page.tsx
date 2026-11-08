@@ -165,8 +165,8 @@ export default function FactibilidadPage() {
       .map((b) => ({ box: b, d: calculateDistanceMeters(cLat, cLng, b.lat, b.lng) }))
       .sort((a, b) => a.d - b.d);
 
-    // Pick top 4 available NAPs + 1 nearest overall
-    const available = sorted.filter((item) => item.box.availablePorts > 0).slice(0, 4);
+    // Pick top 6 available NAPs + 1 nearest overall
+    const available = sorted.filter((item) => item.box.availablePorts > 0).slice(0, 6);
     const nearestOverall = sorted[0]?.box;
 
     const candidateBoxes = [...available.map((a) => a.box)];
@@ -176,24 +176,31 @@ export default function FactibilidadPage() {
 
     if (candidateBoxes.length === 0) return;
 
-    setSmartRoute((prev) =>
-      prev
-        ? { ...prev, isCalculating: true }
-        : {
-            targetNap: candidateBoxes[0] || null,
-            routeGeometry: null,
-            distanceMeters: null,
-            straightDistanceMeters: null,
-            isStreetRoute: false,
-            detourFactor: 1,
-            hasObstacleDetour: false,
-            isCalculating: true,
-            feasibilityLevel: "no_factible",
-            isFeasible: false,
-            diagnosisTitle: "Calculando ruta vial...",
-            diagnosisMessage: "Trazando recorrido vial para evitar cruces por edificaciones.",
-          }
-    );
+    const initialBest = candidateBoxes[0] || nearestOverall || null;
+    const initialDist = initialBest
+      ? calculateDistanceMeters(cLat, cLng, initialBest.lat, initialBest.lng)
+      : null;
+
+    // Immediately reset targetNap to the nearest box for this point (clearing stale paths from prior clicks)
+    setSmartRoute({
+      targetNap: initialBest,
+      routeGeometry: null,
+      distanceMeters: initialDist,
+      straightDistanceMeters: initialDist,
+      isStreetRoute: false,
+      detourFactor: 1,
+      hasObstacleDetour: false,
+      isCalculating: true,
+      feasibilityLevel:
+        (initialDist ?? 999) <= 150
+          ? "optima"
+          : (initialDist ?? 999) <= 250
+          ? "factible_larga"
+          : "no_factible",
+      isFeasible: (initialDist ?? 999) <= 250,
+      diagnosisTitle: "Calculando trazado vial...",
+      diagnosisMessage: "Trazando recorrido vial para evitar cruces por edificaciones.",
+    });
 
     fetch("/api/factibilidad/routing", {
       method: "POST",
@@ -222,6 +229,8 @@ export default function FactibilidadPage() {
             diagnosisMessage: data.feasibility.diagnosisMessage,
             nearbyCandidates: data.candidates,
           });
+        } else {
+          setSmartRoute((prev) => (prev ? { ...prev, isCalculating: false } : null));
         }
       })
       .catch((err) => {
