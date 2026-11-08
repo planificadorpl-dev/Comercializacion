@@ -151,17 +151,25 @@ function CompetenciaContent() {
     try {
       const payload = {
         operador_id: parseInt(opId, 10),
+        nombre_plan: nombrePlan.trim(),
         plan_nombre: nombrePlan.trim(),
         tecnologia: tecnologia.trim() || "Fibra Óptica",
+        velocidad_mb: Number(velocidadMb) || 0,
         velocidad_mbps: Number(velocidadMb) || 0,
+        precio_mensual: Number(precioMensual) || 0,
         tarifa_usd: Number(precioMensual) || 0,
+        costo_instalacion: Number(costoInstalacion) || 0,
         costo_instalacion_usd: Number(costoInstalacion) || 0,
         incluye_tv: incluyeTv,
         es_simetrico: esSimetrico,
         estado: formEstado || null,
         municipio: formMunicipio || null,
         parroquia: formParroquia || null,
+        notas: notas.trim() || null,
         promocion: notas.trim() || null,
+        tipo_novedad: "nueva_oferta",
+        asesor_nombre: user?.nombre || "Sistema",
+        fuente: "panel",
       };
 
       await saveOferta(payload);
@@ -223,8 +231,8 @@ function CompetenciaContent() {
     const operatorCounts: Record<string, number> = {};
 
     filteredOfertas.forEach((of) => {
-      const price = Number(of.tarifa_usd ?? of.precio_mensual ?? 0);
-      const speed = Number(of.velocidad_mbps ?? of.velocidad_mb ?? 0);
+      const price = Number(of.precio_mensual ?? of.tarifa_usd ?? 0);
+      const speed = Number(of.velocidad_mb ?? of.velocidad_mbps ?? 0);
       sumPrice += price;
 
       if (speed > 0) {
@@ -435,11 +443,11 @@ function CompetenciaContent() {
             ) : (
               <div className="divide-y divide-neutral-100 border-b border-neutral-100">
                 {filteredOfertas.map((of) => {
-                  const planName = of.plan_nombre || of.nombre_plan || "Plan estándar";
-                  const speed = Number(of.velocidad_mbps ?? of.velocidad_mb ?? 0);
-                  const price = Number(of.tarifa_usd ?? of.precio_mensual ?? 0);
-                  const installCost = Number(of.costo_instalacion_usd ?? of.costo_instalacion ?? 0);
-                  const promo = of.promocion || of.notas;
+                  const planName = of.nombre_plan || of.plan_nombre || "Plan estándar";
+                  const speed = Number(of.velocidad_mb ?? of.velocidad_mbps ?? 0);
+                  const price = Number(of.precio_mensual ?? of.tarifa_usd ?? 0);
+                  const installCost = Number(of.costo_instalacion ?? of.costo_instalacion_usd ?? 0);
+                  const promo = of.notas || of.promocion;
                   const isSymmetric = of.es_simetrico !== false;
                   const hasTv = of.incluye_tv === true;
                   const costPerMb = speed > 0 ? (price / speed).toFixed(2) : null;
