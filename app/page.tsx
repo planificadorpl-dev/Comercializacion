@@ -30,7 +30,6 @@ import { FilterCommandBar, FilterState } from "@/components/dashboard/filter-com
 import { ComparisonModal } from "@/components/dashboard/comparison-modal";
 import { SalesTrendBarChart } from "@/components/dashboard/sales-trend-bar-chart";
 import { SalesByRegionCard } from "@/components/dashboard/sales-by-region-card";
-import { TopAdvisorsCard } from "@/components/dashboard/top-advisors-card";
 import { SectorsCard } from "@/components/dashboard/sectors-card";
 import { TechniciansCard } from "@/components/dashboard/technicians-card";
 import { ConnectionTypeCard } from "@/components/dashboard/connection-type-card";
@@ -1530,29 +1529,12 @@ export default function DashboardPage() {
 
                 <div className="lg:col-span-6 min-h-[380px] relative">
                   <div className="hidden lg:block absolute left-0 top-6 bottom-6 w-[1px] bg-gradient-to-b from-transparent via-neutral-300 to-transparent pointer-events-none" />
-                  <TopAdvisorsCard
-                    title="Top Asesores"
-                    subtitle={
-                      filters.advisors.length > 0
-                        ? `Asesor seleccionado: ${filters.advisors[0]} (${formatNumber(filteredData.length)} inst.)`
-                        : filters.technicians.length > 0
-                        ? `Instalaciones de ${filters.technicians[0]} por asesor`
-                        : filters.sectors.length > 0
-                        ? `Ventas por asesor en ${filters.sectors[0]}`
-                        : momStats.isPartialMonth && momStats.inst.prevMonth
-                        ? `Ranking comercial • Tendencia MoM al día ${momStats.maxDay}`
-                        : momStats.isSingleMonth
-                        ? `Ranking comercial • Tendencia MoM vs ${momStats.inst.prevMonth?.slice(0, 3) || "mes ant."}`
-                        : "Ranking comercial y volumen de solicitudes"
-                    }
-                    data={advisorsWithMoM}
-                    totalAdvisorsCount={options.advisors.length}
-                    onSelectAdvisor={handleSelectAdvisor}
+                  <PersonalBreakdownCard
+                    installations={filteredDataWithoutAdvisor}
+                    solicitudes={filteredSolicitudesWithoutAdvisor}
                     selectedAdvisor={filters.advisors[0]}
-                    isTechnicianFiltered={filters.technicians.length > 0}
-                    technicianName={filters.technicians[0]}
-                    isSectorFiltered={filters.sectors.length > 0}
-                    sectorName={filters.sectors[0]}
+                    onSelectAdvisor={handleSelectAdvisor}
+                    selectedMonth={filters.months[0]}
                     onOpenConfig={() => handleOpenConfigWithTab("asesores")}
                   />
                 </div>
@@ -1630,32 +1612,15 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* 3. TOP ASESORES */}
+              {/* 3. DESGLOSE DE PERSONAL */}
               <div className="lg:col-span-3 min-h-[380px] relative">
                 <div className="hidden lg:block absolute left-0 top-6 bottom-6 w-[1px] bg-gradient-to-b from-transparent via-neutral-300 to-transparent pointer-events-none" />
-                <TopAdvisorsCard
-                  title="Top Asesores"
-                  subtitle={
-                    filters.advisors.length > 0
-                      ? `Asesor seleccionado: ${filters.advisors[0]} (${formatNumber(filteredData.length)} inst.)`
-                      : filters.technicians.length > 0
-                      ? `Instalaciones de ${filters.technicians[0]} por asesor`
-                      : filters.sectors.length > 0
-                      ? `Ventas por asesor en ${filters.sectors[0]}`
-                      : momStats.isPartialMonth && momStats.inst.prevMonth
-                      ? `Ranking comercial • Tendencia MoM al día ${momStats.maxDay}`
-                      : momStats.isSingleMonth
-                      ? `Ranking comercial • Tendencia MoM vs ${momStats.inst.prevMonth?.slice(0, 3) || "mes ant."}`
-                      : "Ranking comercial y volumen de solicitudes"
-                  }
-                  data={advisorsWithMoM}
-                  totalAdvisorsCount={options.advisors.length}
-                  onSelectAdvisor={handleSelectAdvisor}
+                <PersonalBreakdownCard
+                  installations={filteredDataWithoutAdvisor}
+                  solicitudes={filteredSolicitudesWithoutAdvisor}
                   selectedAdvisor={filters.advisors[0]}
-                  isTechnicianFiltered={filters.technicians.length > 0}
-                  technicianName={filters.technicians[0]}
-                  isSectorFiltered={filters.sectors.length > 0}
-                  sectorName={filters.sectors[0]}
+                  onSelectAdvisor={handleSelectAdvisor}
+                  selectedMonth={filters.months[0]}
                   onOpenConfig={() => handleOpenConfigWithTab("asesores")}
                 />
               </div>
@@ -1748,20 +1713,6 @@ export default function DashboardPage() {
                 selectedPlan={filters.plans?.[0]}
               />
             </div>
-          </section>
-
-          {/* HORIZONTAL REFERENCE LINE (Feathered at ends) */}
-          <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-neutral-300 to-transparent my-2" />
-
-          {/* ROW 3: DESGLOSE DE PERSONAL (MUDADO DESDE PLANIFICACIÓN) */}
-          <section className="w-full">
-            <PersonalBreakdownCard
-              installations={filteredData}
-              solicitudes={filteredSolicitudes}
-              selectedAdvisor={filters.advisors[0]}
-              onSelectAdvisor={handleSelectAdvisor}
-              selectedMonth={filters.months[0]}
-            />
           </section>
         </div>
       </main>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Search, X } from "lucide-react";
+import { Search, X, Settings2 } from "lucide-react";
 import { cn, formatNumber, formatProperCase } from "@/lib/utils";
 import { Installation, Solicitud, PlanificacionRecord, fetchPlanificacionData, MONTH_ORDER } from "@/lib/dashboard-data";
 import { AdvisorType } from "@/lib/normalization";
@@ -28,6 +28,7 @@ interface PersonalBreakdownCardProps {
   selectedAdvisor?: string;
   onSelectAdvisor?: (advisor: string) => void;
   selectedMonth?: string;
+  onOpenConfig?: () => void;
   className?: string;
 }
 
@@ -37,9 +38,10 @@ export function PersonalBreakdownCard({
   selectedAdvisor,
   onSelectAdvisor,
   selectedMonth,
+  onOpenConfig,
   className,
 }: PersonalBreakdownCardProps) {
-  const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>("comercial");
   const [activeMetric, setActiveMetric] = useState<MetricType>("instalaciones");
   const [searchTerm, setSearchTerm] = useState("");
   const [planRecords, setPlanRecords] = useState<PlanificacionRecord[]>([]);
@@ -458,188 +460,220 @@ export function PersonalBreakdownCard({
     searchTerm,
   ]);
 
+  const totalInstalaciones = useMemo(() => {
+    return advisorBreakdown.reduce((sum, a) => sum + a.instalaciones, 0);
+  }, [advisorBreakdown]);
+
+  const avgInstalaciones = useMemo(() => {
+    if (advisorBreakdown.length === 0) return "0.0";
+    return (totalInstalaciones / advisorBreakdown.length).toFixed(1);
+  }, [totalInstalaciones, advisorBreakdown.length]);
+
   return (
-    <div className={cn("space-y-4 pt-4", className)}>
-      {/* Encabezado y controles de visualización tipográficos (Sin marcos ni cajas) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-neutral-900 tracking-tight">
-            Desglose de personal ({advisorBreakdown.length})
-          </h2>
-          <p className="text-[11px] text-neutral-400 font-mono">
-            {selectedAdvisor
-              ? `Filtro activo: ${selectedAdvisor} • Haz clic nuevamente para limpiar`
-              : "Selecciona un asesor para filtrar las métricas del panel principal"}
-          </p>
-        </div>
+    <div className={cn("p-4 sm:p-6 bg-white flex flex-col justify-between h-full select-none", className)}>
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Encabezado y controles de visualización tipográficos (Sin marcos ni cajas) */}
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-900 tracking-tight">
+              Desglose de personal ({advisorBreakdown.length})
+            </h3>
+            <p className="text-[11px] text-neutral-500 font-mono mt-0.5 truncate">
+              {selectedAdvisor
+                ? `Filtro activo: ${formatProperCase(selectedAdvisor)} • Haz clic para limpiar`
+                : "Selecciona un asesor para filtrar las métricas"}
+            </p>
+          </div>
 
-        {/* Alternador de Métrica: puramente tipográfico */}
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-[11px] text-neutral-400 font-mono mr-1">Ordenar por:</span>
-          <button
-            type="button"
-            onClick={() => setActiveMetric("instalaciones")}
-            className={cn(
-              "transition-colors text-xs cursor-pointer",
-              activeMetric === "instalaciones"
-                ? "text-emerald-700 font-semibold"
-                : "text-neutral-400 hover:text-neutral-900"
-            )}
-          >
-            Instalaciones
-          </button>
-          <span className="text-neutral-300">·</span>
-          <button
-            type="button"
-            onClick={() => setActiveMetric("solicitudes")}
-            className={cn(
-              "transition-colors text-xs cursor-pointer",
-              activeMetric === "solicitudes"
-                ? "text-sky-700 font-semibold"
-                : "text-neutral-400 hover:text-neutral-900"
-            )}
-          >
-            Solicitudes
-          </button>
-        </div>
-      </div>
-
-      {/* Fila de Categorías y Buscador sutil (Línea base sin recuadros) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-2">
-        {/* Selector de Categorías */}
-        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar text-xs">
-          {CATEGORY_TABS.filter((tab) => tab.id !== "otro" || (personnelCounts[tab.id] || 0) > 0).map((tab) => {
-            const count = personnelCounts[tab.id] || 0;
-            const isActive = activeCategory === tab.id;
-            return (
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Alternador de Métrica: puramente tipográfico */}
+            <div className="flex items-center gap-1.5 text-xs font-mono">
+              <span className="text-[10px] text-neutral-400 hidden sm:inline">Ordenar:</span>
               <button
-                key={tab.id}
                 type="button"
-                onClick={() => setActiveCategory(tab.id)}
+                onClick={() => setActiveMetric("instalaciones")}
                 className={cn(
-                  "whitespace-nowrap transition-colors cursor-pointer py-1 text-xs",
-                  isActive
-                    ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
-                    : "text-neutral-400 hover:text-neutral-700"
+                  "transition-colors text-xs cursor-pointer pb-0.5",
+                  activeMetric === "instalaciones"
+                    ? "text-emerald-700 font-semibold border-b border-emerald-700"
+                    : "text-neutral-400 hover:text-neutral-900"
                 )}
               >
-                {tab.label}{" "}
-                <span className="font-mono text-[10px] text-neutral-400 ml-0.5">
-                  ({count})
-                </span>
+                Inst.
               </button>
-            );
-          })}
+              <span className="text-neutral-300">·</span>
+              <button
+                type="button"
+                onClick={() => setActiveMetric("solicitudes")}
+                className={cn(
+                  "transition-colors text-xs cursor-pointer pb-0.5",
+                  activeMetric === "solicitudes"
+                    ? "text-sky-700 font-semibold border-b border-sky-700"
+                    : "text-neutral-400 hover:text-neutral-900"
+                )}
+              >
+                Sol.
+              </button>
+            </div>
+
+            {/* Config button */}
+            {onOpenConfig && (
+              <button
+                type="button"
+                onClick={onOpenConfig}
+                className="min-w-[32px] min-h-[32px] p-1.5 flex items-center justify-center text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer ml-1"
+                title="Configurar clasificación de personal"
+                aria-label="Configurar clasificación de personal"
+              >
+                <Settings2 className="w-3.5 h-3.5 stroke-[1.5]" />
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Buscador minimalista con línea base */}
-        <div className="flex items-center gap-1.5 w-full sm:w-56 border-b border-neutral-200 focus-within:border-neutral-900 transition-colors py-0.5">
-          <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0 stroke-[1.25]" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nombre..."
-            className="w-full bg-transparent text-xs text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
-          />
-          {searchTerm && (
-            <button
-              type="button"
-              onClick={() => setSearchTerm("")}
-              className="text-neutral-400 hover:text-neutral-900 transition-colors p-0.5 cursor-pointer"
-            >
-              <X className="w-3 h-3 stroke-[1.5]" />
-            </button>
+        {/* Fila de Categorías y Buscador sutil (Línea base sin recuadros) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-100 pb-1.5 mt-1.5">
+          {/* Selector de Categorías */}
+          <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar text-xs">
+            {CATEGORY_TABS.filter((tab) => tab.id !== "otro" || (personnelCounts[tab.id] || 0) > 0).map((tab) => {
+              const count = personnelCounts[tab.id] || 0;
+              const isActive = activeCategory === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveCategory(tab.id)}
+                  className={cn(
+                    "whitespace-nowrap transition-colors cursor-pointer py-0.5 text-xs",
+                    isActive
+                      ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
+                      : "text-neutral-400 hover:text-neutral-700"
+                  )}
+                >
+                  {tab.label}{" "}
+                  <span className="font-mono text-[10px] text-neutral-400 ml-0.5">
+                    ({count})
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Buscador minimalista con línea base */}
+          <div className="flex items-center gap-1.5 w-full sm:w-44 border-b border-neutral-200 focus-within:border-neutral-900 transition-colors py-0.5">
+            <Search className="w-3 h-3 text-neutral-400 shrink-0 stroke-[1.25]" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nombre..."
+              className="w-full bg-transparent text-xs text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm("")}
+                className="text-neutral-400 hover:text-neutral-900 transition-colors p-0.5 cursor-pointer"
+              >
+                <X className="w-3 h-3 stroke-[1.5]" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Lista / Desglose de Personal (Abierto, con separadores sutiles y scroll fluido) */}
+        <div className="divide-y divide-neutral-100/70 overflow-y-auto max-h-[220px] sm:max-h-[240px] pr-1 flex-1 mt-1 text-xs font-mono">
+          {advisorBreakdown.length === 0 ? (
+            <div className="py-8 text-center text-xs text-neutral-400 font-mono">
+              No se encontró personal en esta categoría o filtro
+            </div>
+          ) : (
+            advisorBreakdown.map((adv, idx) => {
+              const isSelected = selectedAdvisor && normKey(selectedAdvisor) === adv.normName;
+
+              return (
+                <div
+                  key={adv.normName}
+                  onClick={() => {
+                    if (onSelectAdvisor) {
+                      onSelectAdvisor(adv.name);
+                    }
+                  }}
+                  className={cn(
+                    "group flex items-center justify-between py-1.5 text-xs transition-colors px-1 cursor-pointer rounded",
+                    isSelected ? "bg-neutral-100/80 font-medium" : "hover:bg-neutral-50/70"
+                  )}
+                >
+                  <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 pr-2">
+                    <span className="text-[10px] font-mono text-neutral-400 w-4 shrink-0">
+                      {String(idx + 1).padStart(2, "0")}
+                    </span>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className={cn(
+                            "truncate font-medium",
+                            isSelected ? "font-bold text-neutral-950" : "text-neutral-900"
+                          )}
+                        >
+                          {adv.name}
+                        </span>
+                        {adv.isEx && (
+                          <span className="text-[9px] font-mono text-neutral-400 shrink-0">
+                            · Ex
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-neutral-400 font-mono truncate">
+                        {adv.isActiveCommercial
+                          ? "Asesor comercial activo"
+                          : adv.sede && adv.sede !== "N/A" && adv.sede !== "OTROS"
+                          ? `Sede: ${adv.sede}`
+                          : adv.tipoLabel}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 font-mono text-right">
+                    <div className="text-right min-w-[36px]">
+                      <span className="text-[9px] text-neutral-400 block font-sans leading-tight">
+                        Inst.
+                      </span>
+                      <span
+                        className={cn(
+                          "text-xs font-semibold tabular-nums",
+                          activeMetric === "instalaciones" ? "text-emerald-700" : "text-neutral-700"
+                        )}
+                      >
+                        {formatNumber(adv.instalaciones)}
+                      </span>
+                    </div>
+
+                    <div className="text-right min-w-[36px]">
+                      <span className="text-[9px] text-neutral-400 block font-sans leading-tight">
+                        Sol.
+                      </span>
+                      <span
+                        className={cn(
+                          "text-xs font-semibold tabular-nums",
+                          activeMetric === "solicitudes" ? "text-sky-700" : "text-neutral-700"
+                        )}
+                      >
+                        {formatNumber(adv.solicitudes)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </div>
 
-      {/* Lista / Desglose de Personal (Abierto, con separadores sutiles y scroll fluido) */}
-      <div className="divide-y divide-neutral-100/70 max-h-96 overflow-y-auto pr-1">
-        {advisorBreakdown.length === 0 ? (
-          <div className="py-8 text-center text-xs text-neutral-400 font-mono">
-            No se encontró personal en esta categoría o filtro
-          </div>
-        ) : (
-          advisorBreakdown.map((adv, idx) => {
-            const isSelected = selectedAdvisor && normKey(selectedAdvisor) === adv.normName;
-
-            return (
-              <div
-                key={adv.normName}
-                onClick={() => {
-                  if (onSelectAdvisor) {
-                    onSelectAdvisor(adv.name);
-                  }
-                }}
-                className={cn(
-                  "group flex items-center justify-between py-2 text-xs transition-colors px-1 cursor-pointer",
-                  isSelected ? "bg-neutral-100/70 font-medium" : "hover:bg-neutral-50/60"
-                )}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-[10px] font-mono text-neutral-400 w-5 shrink-0">
-                    {String(idx + 1).padStart(2, "0")}
-                  </span>
-                  <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "truncate",
-                          isSelected ? "font-bold text-neutral-950" : "text-neutral-900"
-                        )}
-                      >
-                        {adv.name}
-                      </span>
-                      {adv.isEx && (
-                        <span className="text-[10px] font-mono text-neutral-400 shrink-0">
-                          · Excolaborador
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-neutral-400 font-mono">
-                      {adv.isActiveCommercial
-                        ? "Asesor comercial activo"
-                        : adv.sede && adv.sede !== "N/A" && adv.sede !== "OTROS"
-                        ? `Sede: ${adv.sede}`
-                        : adv.tipoLabel}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-6 shrink-0 font-mono text-right">
-                  <div>
-                    <span className="text-[10px] text-neutral-400 block font-sans">
-                      Instalaciones
-                    </span>
-                    <span
-                      className={cn(
-                        "text-xs font-semibold",
-                        activeMetric === "instalaciones" ? "text-emerald-700" : "text-neutral-600"
-                      )}
-                    >
-                      {formatNumber(adv.instalaciones)}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] text-neutral-400 block font-sans">
-                      Solicitudes
-                    </span>
-                    <span
-                      className={cn(
-                        "text-xs font-semibold",
-                        activeMetric === "solicitudes" ? "text-sky-700" : "text-neutral-600"
-                      )}
-                    >
-                      {formatNumber(adv.solicitudes)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
+      {/* Footer */}
+      <div className="pt-2.5 border-t border-neutral-100 text-[11px] font-mono text-neutral-500 mt-2 flex items-center justify-between">
+        <span>Total: {advisorBreakdown.length} integrantes</span>
+        <span className="text-neutral-900 font-bold">Promedio: {avgInstalaciones} inst.</span>
       </div>
     </div>
   );
