@@ -267,19 +267,19 @@ export function SalesByRegionCard({
             /* 3x2 Glowing Natural Curves Grid (Top 6) */
             <div className="grid grid-cols-2 gap-y-2.5 gap-x-2.5 sm:gap-x-3.5">
               {top6WithCurves.map((region) => {
-                const isSelected = selectedZone === region.name;
+                const isSelected = Boolean(selectedZone && selectedZone.toLowerCase() === region.name.toLowerCase());
 
                 return (
                   <div
                     key={region.name}
-                    onClick={() => onSelectZone && onSelectZone(region.name)}
+                    onClick={() => onSelectZone && onSelectZone(formatProperCase(region.name))}
                     className={cn(
                       "flex flex-col p-2 sm:p-2 transition-all cursor-pointer rounded-lg relative group min-h-[82px] sm:min-h-[88px] justify-between",
                       isSelected
                         ? "bg-neutral-100/90 ring-1 ring-neutral-900/15"
                         : "hover:bg-neutral-50/80"
                     )}
-                    title={`Filtrar por zona: ${region.name}`}
+                    title={`Filtrar por zona: ${formatProperCase(region.name)}`}
                   >
                     <div>
                       {/* Top row: Status dot + Zone name + Percentage */}
@@ -318,12 +318,12 @@ export function SalesByRegionCard({
             <div className="max-h-[240px] overflow-y-auto pr-1 space-y-1 text-xs font-mono">
               {data.map((zone, idx) => {
                 const pct = total > 0 ? ((zone.value / total) * 100).toFixed(1) : "0.0";
-                const isSelected = selectedZone === zone.name;
+                const isSelected = Boolean(selectedZone && selectedZone.toLowerCase() === zone.name.toLowerCase());
 
                 return (
                   <div
                     key={`${zone.name}-${idx}`}
-                    onClick={() => onSelectZone && onSelectZone(zone.name)}
+                    onClick={() => onSelectZone && onSelectZone(formatProperCase(zone.name))}
                     className={cn(
                       "flex items-center justify-between p-2 rounded cursor-pointer transition-colors",
                       idx < data.length - 1 && "border-b border-neutral-100/70",
@@ -331,7 +331,7 @@ export function SalesByRegionCard({
                         ? "bg-neutral-100 text-neutral-900 ring-1 ring-neutral-900 font-semibold"
                         : "hover:bg-neutral-50 text-neutral-700"
                     )}
-                    title={`Filtrar por zona: ${zone.name}`}
+                    title={`Filtrar por zona: ${formatProperCase(zone.name)}`}
                   >
                     <span className="flex items-center gap-2 min-w-0 flex-1 pr-2 truncate">
                       <span className="w-4 h-4 rounded text-[9px] font-mono text-neutral-500 bg-neutral-100 flex items-center justify-center shrink-0">

@@ -321,7 +321,7 @@ export async function fetchRawOperationalData(
             return {
                 ...item,
                 mes: formatProperCase(item.mes),
-                zona: loc.zona,
+                zona: formatProperCase(loc.zona),
                 sector: loc.sector,
                 subsector: loc.subsector,
                 municipio: loc.municipio,
@@ -388,7 +388,7 @@ export async function fetchRawOperationalData(
         return {
             ...item,
             mes: formatProperCase(item.mes),
-            zona: loc.zona,
+            zona: formatProperCase(loc.zona),
             sector: loc.sector,
             subsector: loc.subsector,
             municipio: loc.municipio,
@@ -895,7 +895,7 @@ export async function fetchPlanificacionData(forceRefresh = false): Promise<Plan
                     subsector: loc.subsector,
                     estatus: formatProperCase(item.estatus || "Planificado"),
                     estado: loc.estado,
-                    zona: loc.zona,
+                    zona: formatProperCase(loc.zona),
                     servicio: formatProperCase(item.servicio || "Residencial"),
                     oficina: formatProperCase(item.oficina || ""),
                     municipio: loc.municipio,

@@ -139,6 +139,46 @@ export const CANONICAL_ZONES_CONFIG: Record<
   },
 };
 
+export const CANONICAL_ZONE_NAMES: Record<string, string> = {
+  "LOS TEQUES": "Los Teques",
+  "SAN ANTONIO": "San Antonio",
+  "CARRIZAL": "Carrizal",
+  "SAN DIEGO": "San Diego",
+  "DISTRITO CAPITAL": "Distrito Capital",
+  "TEJERIAS": "Tejerías",
+  "TEJERÍAS": "Tejerías",
+  "EL CONSEJO": "El Consejo",
+};
+
+/**
+ * Homologa y devuelve el nombre canónico de la zona en Proper Case oficial.
+ */
+export const toCanonicalZoneName = (zone: string | null | undefined): string => {
+  if (!zone) return "Los Teques";
+  const norm = normGeoKey(zone);
+  if (norm.includes("TEQUES") || norm.includes("GUAICAIPURO")) return "Los Teques";
+  if (norm.includes("ANTONIO") || norm.includes("SALIAS")) return "San Antonio";
+  if (norm.includes("CARRIZAL")) return "Carrizal";
+  if (norm.includes("DIEGO") || norm.includes("CECILIO")) return "San Diego";
+  if (
+    norm.includes("DISTRITO") ||
+    norm.includes("CAPITAL") ||
+    norm.includes("CARACAS") ||
+    norm.includes("LIBERTADOR") ||
+    norm.includes("SUCRE") ||
+    norm.includes("VALLE") ||
+    norm.includes("COCHE") ||
+    norm.includes("VEGA")
+  ) {
+    return "Distrito Capital";
+  }
+  if (norm.includes("TEJERIA")) return "Tejerías";
+  if (norm.includes("CONSEJO") || norm.includes("REVENGA")) return "El Consejo";
+
+  const upper = zone.trim().toUpperCase();
+  return CANONICAL_ZONE_NAMES[upper] || zone.trim();
+};
+
 // ============================================================================
 // 2. PADRÓN DE SECTORES OFICIALES POR ZONA (EXTRAÍDO DEL CUADRO DIARIO)
 // ============================================================================
@@ -617,7 +657,7 @@ export function normalizeLocation(
       return {
         sector: target.canonicalSector,
         subsector: rawCandidate,
-        zona: target.canonicalZone,
+        zona: toCanonicalZoneName(target.canonicalZone),
         parroquia: target.parroquiaOverride || zConfig?.parroquiasMap?.[target.canonicalSector] || zConfig?.parroquiaDefault || rawPar,
         municipio: zConfig?.municipio || rawMun,
         estado: zConfig?.estado || rawEst,
@@ -632,7 +672,7 @@ export function normalizeLocation(
       return {
         sector: match.sector,
         subsector: rawCandidate,
-        zona: match.zone,
+        zona: toCanonicalZoneName(match.zone),
         parroquia: zConfig?.parroquiasMap?.[match.sector] || zConfig?.parroquiaDefault || rawPar,
         municipio: zConfig?.municipio || rawMun,
         estado: zConfig?.estado || rawEst,
@@ -650,7 +690,7 @@ export function normalizeLocation(
         return {
           sector: target.canonicalSector,
           subsector: rawCandidate,
-          zona: target.canonicalZone,
+          zona: toCanonicalZoneName(target.canonicalZone),
           parroquia: target.parroquiaOverride || zConfig?.parroquiasMap?.[target.canonicalSector] || zConfig?.parroquiaDefault || rawPar,
           municipio: zConfig?.municipio || rawMun,
           estado: zConfig?.estado || rawEst,
@@ -663,7 +703,7 @@ export function normalizeLocation(
         return {
           sector: match.sector,
           subsector: rawCandidate,
-          zona: match.zone,
+          zona: toCanonicalZoneName(match.zone),
           parroquia: zConfig?.parroquiasMap?.[match.sector] || zConfig?.parroquiaDefault || rawPar,
           municipio: zConfig?.municipio || rawMun,
           estado: zConfig?.estado || rawEst,
@@ -682,7 +722,7 @@ export function normalizeLocation(
         return {
           sector: target.canonicalSector,
           subsector: rawCandidate,
-          zona: target.canonicalZone,
+          zona: toCanonicalZoneName(target.canonicalZone),
           parroquia: target.parroquiaOverride || zConfig?.parroquiasMap?.[target.canonicalSector] || zConfig?.parroquiaDefault || rawPar,
           municipio: zConfig?.municipio || rawMun,
           estado: zConfig?.estado || rawEst,
@@ -698,7 +738,7 @@ export function normalizeLocation(
         return {
           sector: match.sector,
           subsector: rawCandidate,
-          zona: match.zone,
+          zona: toCanonicalZoneName(match.zone),
           parroquia: zConfig?.parroquiasMap?.[match.sector] || zConfig?.parroquiaDefault || rawPar,
           municipio: zConfig?.municipio || rawMun,
           estado: zConfig?.estado || rawEst,
@@ -773,7 +813,7 @@ export function normalizeLocation(
   return {
     sector: resolvedSector,
     subsector: rawCandidate || resolvedSector,
-    zona: resolvedZone,
+    zona: toCanonicalZoneName(resolvedZone),
     parroquia: resolvedParroquia || zConfig.parroquiaDefault,
     municipio: zConfig.municipio,
     estado: zConfig.estado,

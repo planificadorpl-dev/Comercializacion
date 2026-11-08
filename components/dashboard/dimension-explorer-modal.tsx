@@ -346,7 +346,7 @@ export function DimensionExplorerModal({
           ) : (
             processedItems.map((item, idx) => {
               const pctOfMax = maxValue > 0 ? Math.round((item.value / maxValue) * 100) : 0;
-              const isSelected = selectedItem === item.name;
+              const isSelected = Boolean(selectedItem && selectedItem.toLowerCase() === item.name.toLowerCase());
               const isEx = Boolean(item.isExCollaborator || item.subtext === "Ex Colaborador");
 
               return (
@@ -354,7 +354,7 @@ export function DimensionExplorerModal({
                   key={`${item.name}-${idx}`}
                   onClick={() => {
                     if (onSelectItem) {
-                      onSelectItem(item.name);
+                      onSelectItem(formatProperCase(item.name));
                     }
                     onClose();
                   }}

@@ -228,11 +228,22 @@ export default function DashboardPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Helper for case-insensitive and proper-name zone matching
+  const isZoneMatched = (itemZone?: string | null, itemEstado?: string | null) => {
+    if (filters.zones.length === 0) return true;
+    const zNorm = (itemZone || "").trim().toLowerCase();
+    const eNorm = (itemEstado || "").trim().toLowerCase();
+    return filters.zones.some((fz) => {
+      const fNorm = fz.trim().toLowerCase();
+      return fNorm === zNorm || (itemEstado && fNorm === eNorm);
+    });
+  };
+
   // Filter Logic for Cuadro Diario without month and without date (used for trend charts)
   const filteredDataWithoutMonthOrDate = useMemo(() => {
     return rawData.filter((item) => {
       const matchAdvisor = filters.advisors.length === 0 || filters.advisors.includes(item.asesor);
-      const matchZone = filters.zones.length === 0 || filters.zones.includes(item.zona);
+      const matchZone = isZoneMatched(item.zona);
       const matchStatus = filters.statuses.length === 0 || filters.statuses.includes(item.estatus);
       const matchSector = filters.sectors.length === 0 || filters.sectors.includes(item.sector);
       const matchPlan = !filters.plans || filters.plans.length === 0 || filters.plans.includes(item.plan);
@@ -258,7 +269,7 @@ export default function DashboardPage() {
   const filteredDataWithoutMonth = useMemo(() => {
     return rawData.filter((item) => {
       const matchAdvisor = filters.advisors.length === 0 || filters.advisors.includes(item.asesor);
-      const matchZone = filters.zones.length === 0 || filters.zones.includes(item.zona);
+      const matchZone = isZoneMatched(item.zona);
       const matchStatus = filters.statuses.length === 0 || filters.statuses.includes(item.estatus);
       const matchSector = filters.sectors.length === 0 || filters.sectors.includes(item.sector);
       const matchPlan = !filters.plans || filters.plans.length === 0 || filters.plans.includes(item.plan);
@@ -290,7 +301,7 @@ export default function DashboardPage() {
   const filteredDataWithoutTechnician = useMemo(() => {
     return rawData.filter((item) => {
       const matchAdvisor = filters.advisors.length === 0 || filters.advisors.includes(item.asesor);
-      const matchZone = filters.zones.length === 0 || filters.zones.includes(item.zona);
+      const matchZone = isZoneMatched(item.zona);
       const matchStatus = filters.statuses.length === 0 || filters.statuses.includes(item.estatus);
       const matchSector = filters.sectors.length === 0 || filters.sectors.includes(item.sector);
       const matchPlan = !filters.plans || filters.plans.length === 0 || filters.plans.includes(item.plan);
@@ -320,7 +331,7 @@ export default function DashboardPage() {
   const filteredDataWithoutTechnicianOrMonthOrDate = useMemo(() => {
     return rawData.filter((item) => {
       const matchAdvisor = filters.advisors.length === 0 || filters.advisors.includes(item.asesor);
-      const matchZone = filters.zones.length === 0 || filters.zones.includes(item.zona);
+      const matchZone = isZoneMatched(item.zona);
       const matchStatus = filters.statuses.length === 0 || filters.statuses.includes(item.estatus);
       const matchSector = filters.sectors.length === 0 || filters.sectors.includes(item.sector);
       const matchPlan = !filters.plans || filters.plans.length === 0 || filters.plans.includes(item.plan);
@@ -341,7 +352,7 @@ export default function DashboardPage() {
   const filteredDataWithoutSector = useMemo(() => {
     return rawData.filter((item) => {
       const matchAdvisor = filters.advisors.length === 0 || filters.advisors.includes(item.asesor);
-      const matchZone = filters.zones.length === 0 || filters.zones.includes(item.zona);
+      const matchZone = isZoneMatched(item.zona);
       const matchStatus = filters.statuses.length === 0 || filters.statuses.includes(item.estatus);
       const matchPlan = !filters.plans || filters.plans.length === 0 || filters.plans.includes(item.plan);
       const matchTechnician =
@@ -388,7 +399,7 @@ export default function DashboardPage() {
   // Filtered data specifically without advisor filter (used for TopAdvisorsCard persistence and calculating advisor's % share of total)
   const filteredDataWithoutAdvisor = useMemo(() => {
     return rawData.filter((item) => {
-      const matchZone = filters.zones.length === 0 || filters.zones.includes(item.zona);
+      const matchZone = isZoneMatched(item.zona);
       const matchStatus = filters.statuses.length === 0 || filters.statuses.includes(item.estatus);
       const matchSector = filters.sectors.length === 0 || filters.sectors.includes(item.sector);
       const matchPlan = !filters.plans || filters.plans.length === 0 || filters.plans.includes(item.plan);
@@ -422,10 +433,7 @@ export default function DashboardPage() {
   // Solicitudes without advisor filter (used to compute what % of total solicitudes an advisor accounts for)
   const filteredSolicitudesWithoutAdvisor = useMemo(() => {
     return rawSolicitudes.filter((item) => {
-      const matchZone =
-        filters.zones.length === 0 ||
-        filters.zones.includes(item.zona) ||
-        filters.zones.includes(item.estado);
+      const matchZone = isZoneMatched(item.zona, item.estado);
       const matchSector =
         filters.sectors.length === 0 ||
         filters.sectors.some((s) => item.sector && item.sector.toLowerCase().includes(s.toLowerCase()));
@@ -501,10 +509,7 @@ export default function DashboardPage() {
   const filteredSolicitudesWithoutMonthOrDate = useMemo(() => {
     return rawSolicitudes.filter((item) => {
       const matchAdvisor = filters.advisors.length === 0 || filters.advisors.includes(item.asesor);
-      const matchZone =
-        filters.zones.length === 0 ||
-        filters.zones.includes(item.zona) ||
-        filters.zones.includes(item.estado);
+      const matchZone = isZoneMatched(item.zona, item.estado);
       const matchSector =
         filters.sectors.length === 0 ||
         filters.sectors.some((s) => item.sector && item.sector.toLowerCase().includes(s.toLowerCase()));
@@ -638,7 +643,7 @@ export default function DashboardPage() {
     if (filters.zones.length === 0) {
       return options.sectors;
     }
-    const filteredByZone = rawData.filter((i) => filters.zones.includes(i.zona));
+    const filteredByZone = rawData.filter((i) => isZoneMatched(i.zona));
     return Array.from(new Set(filteredByZone.map((i) => String(i.sector || ""))))
       .filter(Boolean)
       .sort();
@@ -646,13 +651,20 @@ export default function DashboardPage() {
 
 
   const handleFilterChange = (type: keyof FilterState, value: string) => {
+    const normalizedValue = type === "zones" ? formatProperCase(value) : value;
     setFilters((prev) => {
       const rawCurrent = (prev as any)[type];
       const current = Array.isArray(rawCurrent) ? rawCurrent : [];
-      const exists = current.includes(value);
+      const exists = type === "zones"
+        ? current.some((i) => i.toLowerCase() === normalizedValue.toLowerCase())
+        : current.includes(normalizedValue);
       return {
         ...prev,
-        [type]: exists ? current.filter((i) => i !== value) : [...current, value],
+        [type]: exists
+          ? (type === "zones"
+              ? current.filter((i) => i.toLowerCase() !== normalizedValue.toLowerCase())
+              : current.filter((i) => i !== normalizedValue))
+          : [...current, normalizedValue],
       };
     });
   };
@@ -781,14 +793,14 @@ export default function DashboardPage() {
     // 2. Count by zone in current filtered scope (for current card values)
     const currentZoneCounts: Record<string, number> = {};
     filteredData.forEach((item) => {
-      const z = String(item.zona || "N/A");
+      const z = formatProperCase(String(item.zona || "N/A"));
       currentZoneCounts[z] = (currentZoneCounts[z] || 0) + 1;
     });
 
     // 3. Count by zone and month across all months
     const zoneMonthCounts: Record<string, Record<string, number>> = {};
     filteredDataWithoutMonthOrDate.forEach((item) => {
-      const z = String(item.zona || "N/A");
+      const z = formatProperCase(String(item.zona || "N/A"));
       const m = formatProperCase(item.mes || "");
       if (!zoneMonthCounts[z]) zoneMonthCounts[z] = {};
       zoneMonthCounts[z][m] = (zoneMonthCounts[z][m] || 0) + 1;
@@ -808,7 +820,7 @@ export default function DashboardPage() {
         if ((item.mes || "").toUpperCase() === prevM) {
           const d = getDayFromDate(item.fecha);
           if (d > 0 && d <= activeMaxDay) {
-            const z = String(item.zona || "N/A");
+            const z = formatProperCase(String(item.zona || "N/A"));
             prevMonthMtdCounts[z] = (prevMonthMtdCounts[z] || 0) + 1;
           }
         }

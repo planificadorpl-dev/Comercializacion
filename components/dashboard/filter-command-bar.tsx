@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Search, Calendar, FilterX, RotateCcw, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatProperCase } from "@/lib/utils";
 
 export interface FilterState {
   advisors: string[];
@@ -185,7 +185,7 @@ export function FilterCommandBar({
             {/* Meses */}
             {filteredMonths.length > 0 && (
               <div className="mb-2">
-                <p className="px-2 py-0.5 text-[10px] font-mono font-medium uppercase text-neutral-400 tracking-wider">
+                <p className="px-2 py-0.5 text-[10px] font-mono font-medium text-neutral-400">
                   Meses
                 </p>
                 <div className="space-y-0.5">
@@ -207,7 +207,7 @@ export function FilterCommandBar({
             {/* Zonas */}
             {filteredZones.length > 0 && (
               <div className="mb-2">
-                <p className="px-2 py-0.5 text-[10px] font-mono font-medium uppercase text-neutral-400 tracking-wider">
+                <p className="px-2 py-0.5 text-[10px] font-mono font-medium text-neutral-400">
                   Zonas
                 </p>
                 <div className="space-y-0.5">
@@ -229,7 +229,7 @@ export function FilterCommandBar({
             {/* Sectores */}
             {filteredSectors.length > 0 && (
               <div className="mb-2">
-                <p className="px-2 py-0.5 text-[10px] font-mono font-medium uppercase text-neutral-400 tracking-wider">
+                <p className="px-2 py-0.5 text-[10px] font-mono font-medium text-neutral-400">
                   Sectores
                 </p>
                 <div className="space-y-0.5">
@@ -251,7 +251,7 @@ export function FilterCommandBar({
             {/* Asesores */}
             {filteredAdvisors.length > 0 && (
               <div className="mb-2">
-                <p className="px-2 py-0.5 text-[10px] font-mono font-medium uppercase text-neutral-400 tracking-wider">
+                <p className="px-2 py-0.5 text-[10px] font-mono font-medium text-neutral-400">
                   Asesores
                 </p>
                 <div className="space-y-0.5">
@@ -273,7 +273,7 @@ export function FilterCommandBar({
             {/* Técnicos */}
             {filteredTechs.length > 0 && (
               <div className="mb-2">
-                <p className="px-2 py-0.5 text-[10px] font-mono font-medium uppercase text-neutral-400 tracking-wider">
+                <p className="px-2 py-0.5 text-[10px] font-mono font-medium text-neutral-400">
                   Técnicos
                 </p>
                 <div className="space-y-0.5">
@@ -372,7 +372,7 @@ export function FilterCommandBar({
               className="inline-flex items-center gap-1 text-[11px] text-neutral-800 font-medium"
             >
               <span className="text-neutral-400 font-normal">{chip.label}:</span>
-              <span className="text-neutral-900">{chip.value}</span>
+              <span className="text-neutral-900">{formatProperCase(chip.value)}</span>
               <button
                 type="button"
                 onClick={() => onFilterChange(chip.category, chip.value)}
