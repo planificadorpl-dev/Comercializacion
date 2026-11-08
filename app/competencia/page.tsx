@@ -72,6 +72,7 @@ function CompetenciaContent() {
   const [filterEstado, setFilterEstado] = useState("");
   const [filterMunicipio, setFilterMunicipio] = useState("");
   const [filterParroquia, setFilterParroquia] = useState("");
+  const [filterSector, setFilterSector] = useState("");
   const [searchOperator, setSearchOperator] = useState("");
 
   // Modals (Market Offers & Operators)
@@ -123,14 +124,15 @@ function CompetenciaContent() {
   const [savingService, setSavingService] = useState(false);
   const [serviceToDelete, setServiceToDelete] = useState<CompanyService | null>(null);
 
-  // Company Promotion Form State (Promociones por Zona)
+  // Company Promotion Form State (Promociones por Zona con selección de sectores oficiales)
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
   const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
   const [promoFormNombre, setPromoFormNombre] = useState("");
   const [promoFormEstado, setPromoFormEstado] = useState("Aragua");
   const [promoFormMunicipio, setPromoFormMunicipio] = useState("");
   const [promoFormParroquia, setPromoFormParroquia] = useState("");
-  const [promoFormSector, setPromoFormSector] = useState("");
+  const [promoFormSectores, setPromoFormSectores] = useState<string[]>([]);
+  const [sectorSearch, setSectorSearch] = useState("");
   const [promoFormSegmento, setPromoFormSegmento] = useState<"Domiciliario" | "Empresarial" | "Todos">("Domiciliario");
   const [promoFormTipoDesc, setPromoFormTipoDesc] = useState<"mitad_precio" | "porcentaje" | "monto_fijo">("mitad_precio");
   const [promoFormDescValor, setPromoFormDescValor] = useState("50");
@@ -154,6 +156,10 @@ function CompetenciaContent() {
     if (!filterEstado || !filterMunicipio || !geoHierarchy[filterEstado]?.[filterMunicipio]) return [];
     return Object.keys(geoHierarchy[filterEstado][filterMunicipio]).sort();
   }, [filterEstado, filterMunicipio]);
+  const filterSectoresList = useMemo(() => {
+    if (!filterEstado || !filterMunicipio || !filterParroquia || !geoHierarchy[filterEstado]?.[filterMunicipio]?.[filterParroquia]) return [];
+    return (geoHierarchy[filterEstado][filterMunicipio][filterParroquia] || []).sort();
+  }, [filterEstado, filterMunicipio, filterParroquia]);
 
   // Form geography (offers)
   const formMunicipiosList = useMemo(() => {
@@ -165,7 +171,7 @@ function CompetenciaContent() {
     return Object.keys(geoHierarchy[formEstado][formMunicipio]).sort();
   }, [formEstado, formMunicipio]);
 
-  // Promo form geography
+  // Promo form geography (cascade down to official sectors from geoHierarchy)
   const promoMunicipiosList = useMemo(() => {
     if (!promoFormEstado || !geoHierarchy[promoFormEstado]) return [];
     return Object.keys(geoHierarchy[promoFormEstado]).sort();
@@ -174,6 +180,10 @@ function CompetenciaContent() {
     if (!promoFormEstado || !promoFormMunicipio || !geoHierarchy[promoFormEstado]?.[promoFormMunicipio]) return [];
     return Object.keys(geoHierarchy[promoFormEstado][promoFormMunicipio]).sort();
   }, [promoFormEstado, promoFormMunicipio]);
+  const promoSectoresList = useMemo(() => {
+    if (!promoFormEstado || !promoFormMunicipio || !promoFormParroquia || !geoHierarchy[promoFormEstado]?.[promoFormMunicipio]?.[promoFormParroquia]) return [];
+    return (geoHierarchy[promoFormEstado][promoFormMunicipio][promoFormParroquia] || []).sort();
+  }, [promoFormEstado, promoFormMunicipio, promoFormParroquia]);
 
   // Load operators & company pricing
   useEffect(() => {
@@ -450,7 +460,8 @@ function CompetenciaContent() {
     setPromoFormEstado(filterEstado || "Aragua");
     setPromoFormMunicipio(filterMunicipio || "");
     setPromoFormParroquia(filterParroquia || "");
-    setPromoFormSector("");
+    setPromoFormSectores(filterSector ? [filterSector] : []);
+    setSectorSearch("");
     setPromoFormSegmento("Domiciliario");
     setPromoFormTipoDesc("mitad_precio");
     setPromoFormDescValor("50");
@@ -468,7 +479,8 @@ function CompetenciaContent() {
     setPromoFormEstado(p.estado || "Todos");
     setPromoFormMunicipio(p.municipio || "");
     setPromoFormParroquia(p.parroquia || "");
-    setPromoFormSector(p.sector || "");
+    setPromoFormSectores(Array.isArray(p.sectores) ? p.sectores : []);
+    setSectorSearch("");
     setPromoFormSegmento(p.aplica_segmento);
     setPromoFormTipoDesc(p.tipo_descuento_mensual);
     setPromoFormDescValor(String(p.descuento_valor));
@@ -494,7 +506,7 @@ function CompetenciaContent() {
         estado: promoFormEstado,
         municipio: promoFormMunicipio || null,
         parroquia: promoFormParroquia || null,
-        sector: promoFormSector.trim() || null,
+        sectores: promoFormSectores,
         aplica_segmento: promoFormSegmento,
         tipo_descuento_mensual: promoFormTipoDesc,
         descuento_valor: Number(promoFormDescValor) || 50,
@@ -608,7 +620,7 @@ function CompetenciaContent() {
     };
   }, [filteredOfertas]);
 
-  // Resolve matching active promotion for comparator (by filter or manual override)
+  // Resolve matching active promotion for comparator (by Sector > Parroquia > Municipio > Estado or manual override)
   const resolvedPromo = useMemo(() => {
     if (!companyPricing?.promociones) return null;
     const activePromos = companyPricing.promociones.filter((p) => p.activo);
@@ -620,8 +632,21 @@ function CompetenciaContent() {
       return activePromos.find((p) => p.id === compSelectedPromoId) || null;
     }
 
-    // Auto-detect matching promotion by geographic filter (Parroquia > Municipio > Estado)
+    // Auto-detect matching promotion by geographic filter (Sector > Parroquia > Municipio > Estado)
     if (filterParroquia) {
+      if (filterSector) {
+        // Find promotion specifically covering this sector in the parish
+        const matchSector = activePromos.find((p) => {
+          if (!p.parroquia || p.parroquia.toLowerCase() !== filterParroquia.toLowerCase()) return false;
+          if (Array.isArray(p.sectores) && p.sectores.length > 0) {
+            return p.sectores.some((s) => s.toLowerCase() === filterSector.toLowerCase());
+          }
+          return true; // Promo covers all sectors in the parish
+        });
+        if (matchSector) return matchSector;
+      }
+
+      // Match by Parroquia (general)
       const matchParr = activePromos.find(
         (p) => p.parroquia && p.parroquia.toLowerCase() === filterParroquia.toLowerCase()
       );
@@ -643,7 +668,7 @@ function CompetenciaContent() {
     }
 
     return null;
-  }, [companyPricing?.promociones, compSelectedPromoId, filterEstado, filterMunicipio, filterParroquia]);
+  }, [companyPricing?.promociones, compSelectedPromoId, filterEstado, filterMunicipio, filterParroquia, filterSector]);
 
   // Dynamic Comparator calculations: Group Power Link plans and match equivalent market offers
   const comparisonData = useMemo(() => {
@@ -881,8 +906,8 @@ function CompetenciaContent() {
                 </div>
               </div>
 
-              {/* Filters Bar */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+              {/* Filters Bar (including Sector from geoHierarchy) */}
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5 text-xs">
                 <div>
                   <input
                     type="text"
@@ -901,6 +926,7 @@ function CompetenciaContent() {
                       setFilterEstado(val);
                       setFilterMunicipio("");
                       setFilterParroquia("");
+                      setFilterSector("");
                     }}
                     compact
                   />
@@ -913,6 +939,7 @@ function CompetenciaContent() {
                     onChange={(val) => {
                       setFilterMunicipio(val);
                       setFilterParroquia("");
+                      setFilterSector("");
                     }}
                     compact
                     disabled={!filterEstado || municipiosList.length === 0}
@@ -923,9 +950,22 @@ function CompetenciaContent() {
                   <CustomDropdown
                     value={filterParroquia}
                     options={[{ value: "", label: "Todas las parroquias" }, ...parroquiasList.map((p) => ({ value: p, label: p }))]}
-                    onChange={setFilterParroquia}
+                    onChange={(val) => {
+                      setFilterParroquia(val);
+                      setFilterSector("");
+                    }}
                     compact
                     disabled={!filterMunicipio || parroquiasList.length === 0}
+                  />
+                </div>
+
+                <div>
+                  <CustomDropdown
+                    value={filterSector}
+                    options={[{ value: "", label: "Todos los sectores" }, ...filterSectoresList.map((s) => ({ value: s, label: s }))]}
+                    onChange={setFilterSector}
+                    compact
+                    disabled={!filterParroquia || filterSectoresList.length === 0}
                   />
                 </div>
               </div>
@@ -1099,7 +1139,7 @@ function CompetenciaContent() {
                 <div className="flex items-center gap-2">
                   <span>Zona evaluada:</span>
                   <strong className="text-neutral-900 font-medium">
-                    {[filterEstado, filterMunicipio, filterParroquia].filter(Boolean).join(" · ") || "Nacional (todas las zonas)"}
+                    {[filterEstado, filterMunicipio, filterParroquia, filterSector].filter(Boolean).join(" · ") || "Nacional (todas las zonas)"}
                   </strong>
                 </div>
 
@@ -1152,6 +1192,7 @@ function CompetenciaContent() {
                   <div className="text-right shrink-0">
                     <span className="text-[11px] font-mono text-neutral-500">
                       {[resolvedPromo.parroquia, resolvedPromo.municipio, resolvedPromo.estado].filter(Boolean).join(", ")}
+                      {resolvedPromo.sectores && resolvedPromo.sectores.length > 0 ? ` (${resolvedPromo.sectores.length} sectores)` : " (Toda la parroquia)"}
                     </span>
                   </div>
                 </div>
@@ -1330,7 +1371,7 @@ function CompetenciaContent() {
                     Promociones regionales de Power Link
                   </h3>
                   <p className="text-[11px] text-neutral-500 font-sans">
-                    Configuración de planes a mitad de precio, instalaciones gratis o condiciones especiales por estado, municipio o sector.
+                    Configuración de planes a mitad de precio, instalaciones gratis o condiciones especiales por estado, municipio y sectores oficiales.
                   </p>
                 </div>
 
@@ -1359,8 +1400,13 @@ function CompetenciaContent() {
                         promo.estado !== "Todos" ? promo.estado : null,
                         promo.municipio,
                         promo.parroquia,
-                        promo.sector,
                       ].filter(Boolean);
+
+                      const sectoresInfo = Array.isArray(promo.sectores) && promo.sectores.length > 0
+                        ? `${promo.sectores.length} ${promo.sectores.length === 1 ? "sector oficial" : "sectores oficiales"}: ${promo.sectores.slice(0, 4).join(", ")}${promo.sectores.length > 4 ? ` (+${promo.sectores.length - 4} más)` : ""}`
+                        : promo.sector && promo.sector !== "Toda la parroquia" && promo.sector !== "General / Toda la zona"
+                        ? promo.sector
+                        : "Toda la parroquia (Todos los sectores)";
 
                       return (
                         <div
@@ -1384,7 +1430,7 @@ function CompetenciaContent() {
                             </div>
 
                             <div className="text-[11px] text-neutral-500">
-                              {locationParts.length > 0 ? locationParts.join(" ❯ ") : "Aplica a nivel nacional"}
+                              {locationParts.length > 0 ? `${locationParts.join(" ❯ ")} · ${sectoresInfo}` : "Aplica a nivel nacional"}
                             </div>
 
                             <div className="flex items-center gap-3 sm:gap-4 text-[11px] text-neutral-700 flex-wrap pt-0.5">
@@ -2158,7 +2204,7 @@ function CompetenciaContent() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* MODAL: GESTIÓN DE PROMOCIONES POR ZONA                             */}
+      {/* MODAL: GESTIÓN DE PROMOCIONES POR ZONA (SELECCIÓN DE SECTORES OFICIALES) */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {isPromoModalOpen && isAdmin && (
         <div
@@ -2209,6 +2255,7 @@ function CompetenciaContent() {
                         setPromoFormEstado(val);
                         setPromoFormMunicipio("");
                         setPromoFormParroquia("");
+                        setPromoFormSectores([]);
                       }}
                       compact
                     />
@@ -2222,6 +2269,7 @@ function CompetenciaContent() {
                       onChange={(val) => {
                         setPromoFormMunicipio(val);
                         setPromoFormParroquia("");
+                        setPromoFormSectores([]);
                       }}
                       compact
                       disabled={promoFormEstado === "Todos" || promoMunicipiosList.length === 0}
@@ -2233,22 +2281,152 @@ function CompetenciaContent() {
                     <CustomDropdown
                       value={promoFormParroquia}
                       options={[{ value: "", label: "Todas las parroquias" }, ...promoParroquiasList.map((p) => ({ value: p, label: p }))]}
-                      onChange={setPromoFormParroquia}
+                      onChange={(val) => {
+                        setPromoFormParroquia(val);
+                        setPromoFormSectores([]);
+                      }}
                       compact
                       disabled={!promoFormMunicipio || promoParroquiasList.length === 0}
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1 pt-1">
-                  <label className="text-[11px] text-neutral-500 block">Sector o alcance específico (opcional)</label>
-                  <input
-                    type="text"
-                    value={promoFormSector}
-                    onChange={(e) => setPromoFormSector(e.target.value)}
-                    placeholder="Ej: General / Toda la zona, Casco Central, Sectores seleccionados..."
-                    className="w-full py-1.5 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-neutral-900"
-                  />
+                {/* Official sector selector from geoHierarchy */}
+                <div className="space-y-2 pt-2 border-t border-neutral-100">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-neutral-500 font-medium block">
+                      Sectores con promoción (Estructura oficial)
+                    </label>
+                    {promoFormSectores.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPromoFormSectores([])}
+                        className="text-[10px] text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                      >
+                        Cambiar a toda la parroquia
+                      </button>
+                    )}
+                  </div>
+
+                  {!promoFormParroquia ? (
+                    <div className="text-[11px] text-neutral-400 italic py-1">
+                      Elige estado, municipio y parroquia para cargar la lista de sectores oficiales.
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-5 text-xs">
+                        <label className="flex items-center gap-2 cursor-pointer select-none text-neutral-700">
+                          <input
+                            type="radio"
+                            name="promo_sector_choice"
+                            checked={promoFormSectores.length === 0}
+                            onChange={() => setPromoFormSectores([])}
+                            className="text-neutral-900 focus:ring-0"
+                          />
+                          <span>Toda la parroquia ({promoSectoresList.length} sectores)</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer select-none text-neutral-700">
+                          <input
+                            type="radio"
+                            name="promo_sector_choice"
+                            checked={promoFormSectores.length > 0}
+                            onChange={() => {
+                              if (promoFormSectores.length === 0 && promoSectoresList.length > 0) {
+                                setPromoFormSectores([promoSectoresList[0]]);
+                              }
+                            }}
+                            className="text-neutral-900 focus:ring-0"
+                          />
+                          <span>Sectores específicos ({promoFormSectores.length} seleccionados)</span>
+                        </label>
+                      </div>
+
+                      {promoFormSectores.length > 0 && (
+                        <div className="space-y-2 pt-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <input
+                              type="text"
+                              value={sectorSearch}
+                              onChange={(e) => setSectorSearch(e.target.value)}
+                              placeholder={`Buscar en ${promoSectoresList.length} sectores oficiales...`}
+                              className="w-full py-1 px-1 border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent transition-colors text-xs text-neutral-900 placeholder:text-neutral-400"
+                            />
+                            {sectorSearch && (
+                              <button
+                                type="button"
+                                onClick={() => setSectorSearch("")}
+                                className="text-[10px] text-neutral-400 hover:text-neutral-900 cursor-pointer shrink-0"
+                              >
+                                Limpiar
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Sector items scrollable list */}
+                          <div className="max-h-36 overflow-y-auto divide-y divide-neutral-100 border-b border-neutral-100 text-xs">
+                            {promoSectoresList
+                              .filter((sec) => !sectorSearch || sec.toLowerCase().includes(sectorSearch.toLowerCase()))
+                              .map((sec) => {
+                                const isSelected = promoFormSectores.includes(sec);
+                                return (
+                                  <div
+                                    key={sec}
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        setPromoFormSectores(promoFormSectores.filter((s) => s !== sec));
+                                      } else {
+                                        setPromoFormSectores([...promoFormSectores, sec]);
+                                      }
+                                    }}
+                                    className="py-1.5 px-1 flex items-center justify-between hover:bg-neutral-50/60 transition-colors cursor-pointer select-none"
+                                  >
+                                    <span className={cn(isSelected ? "font-medium text-neutral-900" : "text-neutral-600")}>
+                                      {sec}
+                                    </span>
+                                    {isSelected ? (
+                                      <span className="text-[11px] text-neutral-900 font-medium inline-flex items-center gap-1">
+                                        <Check className="w-3 h-3 stroke-[2]" /> Incluido
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] text-neutral-400 hover:text-neutral-700">
+                                        + Añadir
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                          </div>
+
+                          {/* Selected chips with X button */}
+                          <div className="space-y-1 pt-1">
+                            <div className="text-[10px] text-neutral-400 font-mono">
+                              Sectores incluidos en esta promoción ({promoFormSectores.length}):
+                            </div>
+                            <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto py-1">
+                              {promoFormSectores.map((sec) => (
+                                <span
+                                  key={sec}
+                                  className="inline-flex items-center gap-1.5 py-0.5 px-1 border-b border-neutral-300 text-[11px] text-neutral-900"
+                                >
+                                  <span>{sec}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPromoFormSectores(promoFormSectores.filter((s) => s !== sec))}
+                                    className="text-neutral-400 hover:text-neutral-900 cursor-pointer"
+                                    title={`Quitar ${sec}`}
+                                    aria-label={`Quitar ${sec}`}
+                                  >
+                                    <X className="w-3 h-3 stroke-[1.5]" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -36,7 +36,8 @@ export interface CompanyPromotion {
   estado: string;                 // ej: "Aragua", "Miranda", "Todos"
   municipio?: string | null;      // ej: "Santos Michelena", "Guaicaipuro"
   parroquia?: string | null;      // ej: "Las Tejerías", "Los Teques"
-  sector?: string | null;         // ej: "General / Toda la zona", "Sectores seleccionados"
+  sector?: string | null;         // ej: "Toda la parroquia", "5 sectores seleccionados"
+  sectores?: string[];            // lista oficial de sectores seleccionados de geoHierarchy
   tipo_descuento_mensual: "mitad_precio" | "porcentaje" | "monto_fijo";
   descuento_valor: number;        // 50 para mitad de precio (50%), o monto en $
   duracion_meses: number;         // ej: 3 meses
@@ -466,13 +467,19 @@ export async function saveCompanyPromotion(promo: Partial<CompanyPromotion> & { 
   const instalacionGratis = promo.instalacion_gratis ?? (Number(promo.costo_instalacion ?? 0) === 0);
   const costoInstalacion = instalacionGratis ? 0 : parseFloat(Number(promo.costo_instalacion ?? 0).toFixed(2));
 
+  const rawSectores = Array.isArray(promo.sectores) ? promo.sectores.filter(Boolean) : [];
+  const sectorSummary = rawSectores.length > 0
+    ? (rawSectores.length === 1 ? rawSectores[0] : `${rawSectores.length} sectores seleccionados`)
+    : (promo.sector?.trim() || "Toda la parroquia");
+
   const sanitizedPromo: CompanyPromotion = {
     id: promoId,
     nombre: (promo.nombre || "Nueva Promoción").trim(),
     estado: (promo.estado || "Todos").trim(),
     municipio: promo.municipio?.trim() || null,
     parroquia: promo.parroquia?.trim() || null,
-    sector: promo.sector?.trim() || null,
+    sector: sectorSummary,
+    sectores: rawSectores,
     tipo_descuento_mensual: promo.tipo_descuento_mensual || "mitad_precio",
     descuento_valor: parseFloat(Number(promo.descuento_valor ?? 50).toFixed(2)),
     duracion_meses: Math.max(1, Number(promo.duracion_meses) || 3),

@@ -174,36 +174,44 @@
   "promociones": [
     {
       "id": "promo-tejerias",
-      "nombre": "Promoción Las Tejerías",
-      estado: "Aragua",
-      municipio: "Santos Michelena",
-      parroquia: "Las Tejerías",
-      sector: "General / Toda la zona",
-      tipo_descuento_mensual: "mitad_precio",
-      descuento_valor: 50,
-      duracion_meses: 3,
-      costo_instalacion: 0,
-      instalacion_gratis: true,
-      aplica_segmento: "Domiciliario",
-      activo: true,
-      notas: "Plan a mitad de precio por 3 meses con costo de instalación $0 (completamente gratis)."
+      "nombre": "Promoción Las Tejerías (Mitad de precio + Instalación Gratis)",
+      "estado": "Aragua",
+      "municipio": "Santos Michelena",
+      "parroquia": "Las Tejerías",
+      "sector": "Toda la parroquia",
+      "sectores": [],
+      "tipo_descuento_mensual": "mitad_precio",
+      "descuento_valor": 50,
+      "duracion_meses": 3,
+      "costo_instalacion": 0,
+      "instalacion_gratis": true,
+      "aplica_segmento": "Domiciliario",
+      "activo": true,
+      "notas": "Plan a mitad de precio por 3 meses con costo de instalación $0 (completamente gratis)."
     },
     {
       "id": "promo-los-teques",
       "nombre": "Promoción Los Teques (Sectores)",
-      estado: "Miranda",
-      municipio: "Guaicaipuro",
-      parroquia: "Los Teques",
-      sector: "Sectores seleccionados",
-      tipo_descuento_mensual: "mitad_precio",
-      descuento_valor: 50,
-      duracion_meses: 3,
-      costo_instalacion: 25,
-      instalacion_gratis: false,
-      aplica_segmento: "Domiciliario",
-      activo: true,
-      notas: "Mensualidad a mitad de precio por 3 meses. Se cobra instalación estándar ($25)."
+      "estado": "Miranda",
+      "municipio": "Guaicaipuro",
+      "parroquia": "Los Teques",
+      "sector": "5 sectores seleccionados",
+      "sectores": [
+        "Casco Central",
+        "El Paso",
+        "El Rincón",
+        "La Hoyada",
+        "Los Nuevos Teques"
+      ],
+      "tipo_descuento_mensual": "mitad_precio",
+      "descuento_valor": 50,
+      "duracion_meses": 3,
+      "costo_instalacion": 25,
+      "instalacion_gratis": false,
+      "aplica_segmento": "Domiciliario",
+      "activo": true,
+      "notas": "Mensualidad a mitad de precio por 3 meses. Se cobra instalación estándar ($25)."
     }
   ],
-  "updated_at": "2026-11-08T02:16:00.000Z"
+  "updated_at": "2026-11-08T02:25:00.000Z"
 }
