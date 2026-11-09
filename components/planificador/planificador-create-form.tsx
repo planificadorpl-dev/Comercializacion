@@ -101,9 +101,13 @@ export function PlanificadorCreateForm({
   const [selectionMode, setSelectionMode] = useState<"single" | "multi">("single");
 
   // 2. Date Selection
-  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<string>(
+    () => new Date().toISOString().split("T")[0]
+  );
   const [dateMode, setDateMode] = useState<"single" | "multiple">("single");
-  const [endDate, setEndDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>(
+    () => new Date().toISOString().split("T")[0]
+  );
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([1, 2, 3, 4, 5]); // Lun-Vie
 
   // 3. Location Selection
@@ -240,19 +244,28 @@ export function PlanificadorCreateForm({
     return dates;
   }, [dateMode, selectedDate, endDate, selectedWeekdays]);
 
+  const totalItemsToGenerate = useMemo<number>(() => {
+    return targetDates.length * selectedAdvisors.length;
+  }, [targetDates.length, selectedAdvisors.length]);
+
   // Format date in natural Spanish
   const formatNaturalDate = (isoStr: string) => {
-    if (!isoStr) return "";
+    if (!isoStr || typeof isoStr !== "string" || !isoStr.includes("-")) return "";
     try {
-      const [y, m, d] = isoStr.split("-").map(Number);
+      const parts = isoStr.split("-").map(Number);
+      if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) {
+        return "";
+      }
+      const [y, m, d] = parts;
       const date = new Date(y, m - 1, d);
+      if (isNaN(date.getTime())) return "";
       return date.toLocaleDateString("es-VE", {
         weekday: "short",
         day: "numeric",
         month: "short",
       });
     } catch {
-      return isoStr;
+      return "";
     }
   };
 
@@ -1356,10 +1369,22 @@ export function PlanificadorCreateForm({
               <div className="flex items-center gap-3 text-xs">
                 <button
                   type="button"
+                  onClick={() =>
+                    setSelectionMode((m) => (m === "single" ? "multi" : "single"))
+                  }
+                  className="text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+                >
+                  {selectionMode === "single"
+                    ? "Modo: Un solo asesor"
+                    : "Modo: Varios asesores"}
+                </button>
+                <span className="text-neutral-200">·</span>
+                <button
+                  type="button"
                   onClick={selectAllFilteredAdvisors}
                   className="text-neutral-500 hover:text-neutral-900 cursor-pointer"
                 >
-                  Seleccionar todos
+                  Todos
                 </button>
                 <span className="text-neutral-200">·</span>
                 <button
@@ -1591,6 +1616,79 @@ export function PlanificadorCreateForm({
                       </span>
                     </button>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Collapsible manual geo in complete mode */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowManualGeo(!showManualGeo)}
+                className="text-xs text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+              >
+                {showManualGeo
+                  ? "− Ocultar selector territorial por niveles"
+                  : "+ O seleccionar por Estado, Parroquia y Sector manualmente"}
+              </button>
+
+              {showManualGeo && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-3">
+                  <div>
+                    <label className="text-[11px] text-neutral-400 block mb-1">Estado</label>
+                    <CustomDropdown
+                      value={selectedEstado}
+                      options={Object.keys(metadata.geoHierarchy || {}).sort().map((e) => ({
+                        value: e,
+                        label: e,
+                      }))}
+                      onChange={(e) => {
+                        setSelectedEstado(e);
+                        const mList = Object.keys(metadata.geoHierarchy[e] || {});
+                        if (mList.length > 0) {
+                          setSelectedMunicipio(mList[0]);
+                          const pList = Object.keys(metadata.geoHierarchy[e][mList[0]] || {});
+                          if (pList.length > 0) {
+                            setSelectedParroquia(pList[0]);
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-neutral-400 block mb-1">Municipio</label>
+                    <CustomDropdown
+                      value={selectedMunicipio}
+                      options={availableMunicipios.map((m) => ({ value: m, label: m }))}
+                      onChange={(m) => {
+                        setSelectedMunicipio(m);
+                        const pList = Object.keys(
+                          metadata.geoHierarchy[selectedEstado]?.[m] || {}
+                        );
+                        if (pList.length > 0) setSelectedParroquia(pList[0]);
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-neutral-400 block mb-1">Parroquia</label>
+                    <CustomDropdown
+                      value={selectedParroquia}
+                      options={availableParroquias.map((p) => ({ value: p, label: p }))}
+                      onChange={setSelectedParroquia}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-neutral-400 block mb-1">Sector</label>
+                    <CustomDropdown
+                      value={selectedSector}
+                      options={availableSectores.map((s) => ({ value: s, label: s }))}
+                      onChange={setSelectedSector}
+                      placeholder="Seleccionar..."
+                    />
+                  </div>
                 </div>
               )}
             </div>
