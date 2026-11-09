@@ -79,20 +79,26 @@ export function Sidebar({
   const [asesorModalOpen, setAsesorModalOpen] = useState(false);
   const [asesorSearch, setAsesorSearch] = useState("");
 
-  // Role-based visible navigation groups with dynamic module availability filtering
+  // Role-based / Customized visible navigation groups with dynamic module availability filtering
   const visibleNavGroups = useMemo(() => {
+    const isCustom = Boolean(user?.customAccess && Array.isArray(user?.allowedModules));
+
+    const isItemAllowed = (itemId: string): boolean => {
+      if (isAdmin) return true;
+      if (isCustom && user?.allowedModules) {
+        return user.allowedModules.includes(itemId);
+      }
+      const mod = modules.find((m) => m.id === itemId);
+      const isRoleAllowed = mod ? Boolean(mod.targetRoles && mod.targetRoles.includes(user?.rol as any)) : false;
+      return isRoleAllowed && isModuleEnabledForUser(itemId, false);
+    };
+
     const filterAndEnrichItems = (
       rawItems: { id: string; label: string; short: string; href: string; badge?: string | null }[]
     ) => {
       return rawItems
-        .filter((item) => {
-          // Administrators can see everything
-          if (isAdmin) return true;
-          // Non-administrators only see modules that are enabled for users
-          return isModuleEnabledForUser(item.id, false);
-        })
+        .filter((item) => isItemAllowed(item.id))
         .map((item) => {
-          // If admin, show subtle indicator if module is currently disabled for regular users
           if (isAdmin) {
             const mod = modules.find((m) => m.id === item.id);
             if (mod && !mod.enabledForUsers) {
@@ -103,48 +109,43 @@ export function Sidebar({
         });
     };
 
-    const topPanelsGroup: NavGroup = {
-      items: filterAndEnrichItems([
-        { id: "principal", label: "Página Principal", short: "PP", href: "/", badge: null },
-        { id: "planificacion", label: "Planificación Comercial", short: "PC", href: "/planificacion", badge: null },
-        { id: "evaluaciones", label: "Evaluación y Supervisión", short: "ES", href: "/evaluaciones", badge: null },
-      ]),
-    };
+    const topItems = filterAndEnrichItems([
+      { id: "principal", label: "Página Principal", short: "PP", href: "/", badge: null },
+      { id: "planificacion", label: "Planificación Comercial", short: "PC", href: "/planificacion", badge: null },
+      { id: "evaluaciones", label: "Evaluación y Supervisión", short: "ES", href: "/evaluaciones", badge: null },
+    ]);
 
-    const fieldOpsGroup: NavGroup = {
-      groupTitle: "Operaciones de campo",
-      items: filterAndEnrichItems([
-        { id: "actividades", label: "Registro de Actividades", short: "RA", href: "/actividades", badge: null },
-        { id: "solicitudes", label: "Solicitudes de Servicio", short: "SS", href: "/solicitudes", badge: null },
-        { id: "factibilidad", label: "Factibilidad", short: "FC", href: "/factibilidad", badge: null },
-        { id: "competencia", label: "Estudio de Mercado", short: "EM", href: "/competencia", badge: null },
-      ]),
-    };
+    const fieldItems = filterAndEnrichItems([
+      { id: "actividades", label: "Registro de Actividades", short: "RA", href: "/actividades", badge: null },
+      { id: "solicitudes", label: "Solicitudes de Servicio", short: "SS", href: "/solicitudes", badge: null },
+      { id: "factibilidad", label: "Factibilidad", short: "FC", href: "/factibilidad", badge: null },
+      { id: "competencia", label: "Estudio de Mercado", short: "EM", href: "/competencia", badge: null },
+    ]);
 
-    const adminGroup: NavGroup = {
-      groupTitle: "Sistema",
-      items: [
-        { id: "admin", label: "Administrador", short: "AD", href: "/admin", badge: null },
-      ],
-    };
+    const groups: NavGroup[] = [];
 
-    // 1. Asesores: ONLY field operations (filtered by module availability)
-    if (isAsesor) {
-      return [fieldOpsGroup];
+    if (topItems.length > 0) {
+      groups.push({ items: topItems });
     }
 
-    // 2. Supervisores e Impulsadores: ONLY top panels (filtered by module availability)
-    if (isSupervisorOrImpulsador) {
-      return [topPanelsGroup];
+    if (fieldItems.length > 0) {
+      groups.push({
+        groupTitle: "Operaciones de campo",
+        items: fieldItems,
+      });
     }
 
-    // 3. Administrador: full access to everything
     if (isAdmin) {
-      return [topPanelsGroup, fieldOpsGroup, adminGroup];
+      groups.push({
+        groupTitle: "Sistema",
+        items: [
+          { id: "admin", label: "Administrador", short: "AD", href: "/admin", badge: null },
+        ],
+      });
     }
 
-    return [topPanelsGroup, fieldOpsGroup, adminGroup];
-  }, [isAsesor, isSupervisorOrImpulsador, isAdmin, isModuleEnabledForUser, modules]);
+    return groups;
+  }, [user, isAdmin, isModuleEnabledForUser, modules]);
 
   // Lock body scroll on mobile when drawer is open
   useEffect(() => {

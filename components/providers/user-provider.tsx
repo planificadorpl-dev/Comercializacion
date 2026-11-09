@@ -32,9 +32,19 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 // Route permission definitions
-const FIELD_OPERATIONS_ROUTES = ["/actividades", "/solicitudes", "/competencia"];
+const FIELD_OPERATIONS_ROUTES = ["/actividades", "/solicitudes", "/competencia", "/factibilidad"];
 const SUPERVISION_ROUTES = ["/", "/planificacion", "/evaluaciones"];
 const ADMIN_ROUTES = ["/admin"];
+
+const MODULE_ROUTES_MAP: Record<string, string> = {
+  principal: "/",
+  planificacion: "/planificacion",
+  evaluaciones: "/evaluaciones",
+  actividades: "/actividades",
+  solicitudes: "/solicitudes",
+  factibilidad: "/factibilidad",
+  competencia: "/competencia",
+};
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
@@ -98,23 +108,58 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     // 2. Authenticated user sitting on /login -> redirect to their home
     if (isLoginPage) {
+      if (user.customAccess && Array.isArray(user.allowedModules) && user.allowedModules.length > 0) {
+        const firstRoute = MODULE_ROUTES_MAP[user.allowedModules[0]] || "/";
+        window.location.href = firstRoute;
+        return;
+      }
       window.location.href = user.rol === "asesor" ? "/actividades" : "/";
       return;
     }
 
-    // 3. Role-based restrictions
+    // 3. Admin has total access
+    if (user.rol === "admin") return;
+
+    // Non-admin can NEVER access /admin
+    if (pathname.startsWith("/admin")) {
+      const fallback =
+        user.customAccess && Array.isArray(user.allowedModules) && user.allowedModules.length > 0
+          ? MODULE_ROUTES_MAP[user.allowedModules[0]] || "/"
+          : user.rol === "asesor"
+          ? "/actividades"
+          : "/";
+      window.location.href = fallback;
+      return;
+    }
+
+    // 4. Custom panel access per user
+    if (user.customAccess && Array.isArray(user.allowedModules)) {
+      const allowedPaths = user.allowedModules.map((id) => MODULE_ROUTES_MAP[id]).filter(Boolean);
+      const isAllowed = allowedPaths.some((r) => r === pathname || (r !== "/" && pathname.startsWith(r)));
+
+      if (!isAllowed && allowedPaths.length > 0) {
+        window.location.href = allowedPaths[0];
+      }
+      return;
+    }
+
+    // 5. Default Role-based restrictions
     if (user.rol === "asesor") {
-      // Asesores can ONLY see field operations: /actividades, /solicitudes, /competencia
-      const isForbidden = SUPERVISION_ROUTES.some((r) => r === pathname || (r !== "/" && pathname.startsWith(r))) ||
-        ADMIN_ROUTES.some((r) => pathname.startsWith(r));
+      // Asesores can ONLY see field operations: /actividades, /solicitudes, /competencia, /factibilidad
+      const isForbidden =
+        SUPERVISION_ROUTES.some((r) => r === pathname || (r !== "/" && pathname.startsWith(r))) ||
+        pathname.startsWith("/admin");
 
       if (isForbidden) {
         window.location.href = "/actividades";
       }
     } else if (user.rol === "supervisor" || user.rol === "impulsador") {
-      // Supervisores / Impulsadores can ONLY see the 3 top panels: /, /planificacion, /evaluaciones
-      const isForbidden = FIELD_OPERATIONS_ROUTES.some((r) => pathname.startsWith(r)) ||
-        ADMIN_ROUTES.some((r) => pathname.startsWith(r));
+      // Supervisores / Impulsadores: top panels + factibilidad
+      const isForbidden =
+        (pathname.startsWith("/actividades") ||
+          pathname.startsWith("/solicitudes") ||
+          pathname.startsWith("/competencia")) ||
+        pathname.startsWith("/admin");
 
       if (isForbidden) {
         window.location.href = "/";

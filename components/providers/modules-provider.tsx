@@ -1,13 +1,14 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { SystemModule, DEFAULT_SYSTEM_MODULES } from "@/lib/modules-types";
+import { SystemModule, DEFAULT_SYSTEM_MODULES, AppUserRole } from "@/lib/modules-types";
 
 interface ModulesContextType {
   modules: SystemModule[];
   isLoading: boolean;
   isModuleEnabledForUser: (idOrRoute: string, isAdmin?: boolean) => boolean;
   toggleModule: (id: string, enabledForUsers: boolean) => Promise<{ success: boolean; error?: string }>;
+  updateModuleRoles: (id: string, targetRoles: AppUserRole[]) => Promise<{ success: boolean; error?: string }>;
   refreshModules: () => Promise<void>;
 }
 
@@ -106,6 +107,40 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
     [fetchModules]
   );
 
+  const updateModuleRoles = useCallback(
+    async (id: string, targetRoles: AppUserRole[]): Promise<{ success: boolean; error?: string }> => {
+      // Optimistic update
+      setModules((prev) =>
+        prev.map((m) =>
+          m.id === id
+            ? { ...m, targetRoles, updatedAt: new Date().toISOString() }
+            : m
+        )
+      );
+
+      try {
+        const res = await fetch("/api/admin/modules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ moduleId: id, targetRoles }),
+        });
+        const data = await res.json();
+        if (data.success && Array.isArray(data.modules)) {
+          setModules(data.modules);
+          window.dispatchEvent(new CustomEvent("modules-updated"));
+          return { success: true };
+        } else {
+          await fetchModules();
+          return { success: false, error: data.error || "Error al actualizar roles" };
+        }
+      } catch (err: any) {
+        await fetchModules();
+        return { success: false, error: err.message || "Error de red" };
+      }
+    },
+    [fetchModules]
+  );
+
   return (
     <ModulesContext.Provider
       value={{
@@ -113,6 +148,7 @@ export function ModulesProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         isModuleEnabledForUser,
         toggleModule,
+        updateModuleRoles,
         refreshModules: fetchModules,
       }}
     >

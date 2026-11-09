@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { RotateCw, Search, ShieldAlert, Check, Layers } from "lucide-react";
 import { useModules } from "@/components/providers/modules-provider";
-import { SystemModule } from "@/lib/modules-types";
+import { SystemModule, AppUserRole } from "@/lib/modules-types";
 import { cn } from "@/lib/utils";
 
 interface PanelesTabContentProps {
@@ -11,10 +11,11 @@ interface PanelesTabContentProps {
 }
 
 export function PanelesTabContent({ showToast }: PanelesTabContentProps) {
-  const { modules, isLoading, toggleModule, refreshModules } = useModules();
+  const { modules, isLoading, toggleModule, updateModuleRoles, refreshModules } = useModules();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "enabled" | "disabled">("all");
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
 
   // Filtered module list
   const filteredModules = useMemo(() => {
@@ -64,14 +65,37 @@ export function PanelesTabContent({ showToast }: PanelesTabContentProps) {
     }
   };
 
-  const getTargetRolesText = (roles: string[]) => {
-    if (roles.includes("asesor") && !roles.includes("supervisor")) {
-      return "Asesores de campo";
+  const handleToggleRole = async (module: SystemModule, roleToToggle: AppUserRole) => {
+    const currentRoles = module.targetRoles || [];
+    const isCurrentlyIncluded = currentRoles.includes(roleToToggle);
+    const nextRoles: AppUserRole[] = isCurrentlyIncluded
+      ? currentRoles.filter((r) => r !== roleToToggle)
+      : [...currentRoles, roleToToggle];
+
+    setUpdatingRoleId(`${module.id}-${roleToToggle}`);
+    try {
+      const res = await updateModuleRoles(module.id, nextRoles);
+      if (res.success) {
+        const roleLabel =
+          roleToToggle === "asesor"
+            ? "Asesores"
+            : roleToToggle === "supervisor"
+            ? "Supervisores"
+            : "Impulsadores";
+        showToast(
+          isCurrentlyIncluded
+            ? `Acceso de ${roleLabel} revocado para "${module.name}"`
+            : `Acceso concedido a ${roleLabel} para "${module.name}"`,
+          "success"
+        );
+      } else {
+        showToast(res.error || "No se pudo actualizar el rol", "error");
+      }
+    } catch {
+      showToast("Error de conexión al actualizar roles", "error");
+    } finally {
+      setUpdatingRoleId(null);
     }
-    if (roles.includes("supervisor") || roles.includes("impulsador")) {
-      return "Supervisores e impulsadores";
-    }
-    return "Todos los roles autorizados";
   };
 
   return (
@@ -120,8 +144,7 @@ export function PanelesTabContent({ showToast }: PanelesTabContentProps) {
               Disponibilidad de paneles y módulos
             </h2>
             <p className="text-xs text-neutral-500 font-sans mt-0.5">
-              Desactiva temporalmente los paneles que no están listos para usuarios generales.
-              Tú como Administrador siempre mantienes acceso total a todos los paneles.
+              Personaliza qué roles pueden ver cada panel haciendo clic en los roles de audiencia, o desactiva temporalmente módulos para usuarios generales.
             </p>
           </div>
 
@@ -248,9 +271,46 @@ export function PanelesTabContent({ showToast }: PanelesTabContentProps) {
                       </span>
                     </td>
 
-                    {/* Target Roles */}
-                    <td className="py-3 px-3 text-neutral-500 text-[11px]">
-                      {getTargetRolesText(m.targetRoles)}
+                    {/* Target Roles: Interactive clean role toggles (Rule 1: clean typography, zero frames) */}
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {(
+                          [
+                            { role: "asesor" as AppUserRole, label: "Asesor" },
+                            { role: "supervisor" as AppUserRole, label: "Supervisor" },
+                            { role: "impulsador" as AppUserRole, label: "Impulsador" },
+                          ] as const
+                        ).map(({ role, label }, idx, arr) => {
+                          const isActive = m.targetRoles.includes(role);
+                          const isBusy = updatingRoleId === `${m.id}-${role}`;
+                          return (
+                            <span key={role} className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleRole(m, role)}
+                                disabled={isBusy}
+                                className={cn(
+                                  "text-[11px] transition-colors cursor-pointer select-none",
+                                  isActive
+                                    ? "text-neutral-900 font-semibold"
+                                    : "text-neutral-300 hover:text-neutral-600 line-through decoration-neutral-300 font-normal",
+                                  isBusy && "opacity-50 cursor-wait"
+                                )}
+                                title={
+                                  isActive
+                                    ? `Haz clic para quitar acceso a ${label}`
+                                    : `Haz clic para conceder acceso a ${label}`
+                                }
+                              >
+                                {label}
+                              </button>
+                              {idx < arr.length - 1 && (
+                                <span className="text-neutral-200 select-none text-[10px]">/</span>
+                              )}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </td>
 
                     {/* Status Indicator */}

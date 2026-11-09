@@ -15,6 +15,7 @@ import { CustomDropdown } from "@/components/ui/custom-dropdown";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { useAsesor } from "@/components/providers/asesor-provider";
 import { useUser } from "@/components/providers/user-provider";
+import { useModules } from "@/components/providers/modules-provider";
 import { cn } from "@/lib/utils";
 
 interface UsuariosTabContentProps {
@@ -36,6 +37,7 @@ export function UsuariosTabContent({
   refreshTrigger = 0,
 }: UsuariosTabContentProps) {
   const { availableAsesores } = useAsesor();
+  const { modules } = useModules();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -53,6 +55,40 @@ export function UsuariosTabContent({
   const [formRol, setFormRol] = useState<AppUserRole>("asesor");
   const [formColaborador, setFormColaborador] = useState("");
   const [formActivo, setFormActivo] = useState(true);
+  const [formCustomAccess, setFormCustomAccess] = useState(false);
+  const [formAllowedModules, setFormAllowedModules] = useState<string[]>([]);
+
+  // Helpers for module counts
+  const getRolePanelsCount = useCallback(
+    (role: AppUserRole) => {
+      if (role === "admin") return modules.length;
+      return modules.filter((m) => m.targetRoles && m.targetRoles.includes(role)).length;
+    },
+    [modules]
+  );
+
+  const getUserAccessSummary = useCallback(
+    (u: AppUser) => {
+      if (u.rol === "admin") {
+        return { label: "Total (Paneles + Admin)", isCustom: false };
+      }
+      if (u.customAccess && Array.isArray(u.allowedModules)) {
+        const count = u.allowedModules.length;
+        return {
+          label: `Personalizado (${count} ${count === 1 ? "panel" : "paneles"})`,
+          isCustom: true,
+          count,
+        };
+      }
+      const count = getRolePanelsCount(u.rol);
+      return {
+        label: `Por rol (${count} ${count === 1 ? "panel" : "paneles"})`,
+        isCustom: false,
+        count,
+      };
+    },
+    [getRolePanelsCount]
+  );
 
   // Delete modal confirmation
   const [deleteDialog, setDeleteDialog] = useState<{
@@ -102,6 +138,10 @@ export function UsuariosTabContent({
     setFormRol("asesor");
     setFormColaborador("");
     setFormActivo(true);
+    setFormCustomAccess(false);
+    setFormAllowedModules(
+      modules.filter((m) => m.targetRoles && m.targetRoles.includes("asesor")).map((m) => m.id)
+    );
     setModalOpen(true);
   };
 
@@ -113,7 +153,23 @@ export function UsuariosTabContent({
     setFormRol(user.rol);
     setFormColaborador(user.colaboradorId || user.nombre);
     setFormActivo(user.activo);
+    const isCustom = Boolean(user.customAccess);
+    setFormCustomAccess(isCustom);
+    setFormAllowedModules(
+      user.allowedModules && user.allowedModules.length > 0
+        ? user.allowedModules
+        : modules.filter((m) => m.targetRoles && m.targetRoles.includes(user.rol)).map((m) => m.id)
+    );
     setModalOpen(true);
+  };
+
+  const handleRoleChange = (newRole: AppUserRole) => {
+    setFormRol(newRole);
+    if (!formCustomAccess) {
+      setFormAllowedModules(
+        modules.filter((m) => m.targetRoles && m.targetRoles.includes(newRole)).map((m) => m.id)
+      );
+    }
   };
 
   const handleSelectColaborador = (colaboradorName: string) => {
@@ -177,6 +233,8 @@ export function UsuariosTabContent({
           rol: formRol,
           colaboradorId: formColaborador,
           activo: formActivo,
+          customAccess: formCustomAccess,
+          allowedModules: formCustomAccess ? formAllowedModules : undefined,
         };
         if (formPassword && formPassword.length >= 6) {
           payload.password = formPassword;
@@ -197,6 +255,8 @@ export function UsuariosTabContent({
           password: formPassword,
           rol: formRol,
           colaboradorId: formColaborador,
+          customAccess: formCustomAccess,
+          allowedModules: formCustomAccess ? formAllowedModules : undefined,
         });
 
         if (res.success) {
@@ -391,14 +451,15 @@ export function UsuariosTabContent({
           </thead>
           <tbody className="divide-y divide-neutral-100">
               {filteredUsers.map((u) => {
+                const accessSummary = getUserAccessSummary(u);
                 const roleBadge =
                   u.rol === "admin"
-                    ? { label: "Administrador", access: "Total (Paneles + Admin)", class: "text-neutral-900 font-bold" }
+                    ? { label: "Administrador", access: accessSummary.label, class: "text-neutral-900 font-bold" }
                     : u.rol === "supervisor"
-                    ? { label: "Supervisor", access: "Solo 3 paneles principales", class: "text-neutral-800 font-medium" }
+                    ? { label: "Supervisor", access: accessSummary.label, class: "text-neutral-800 font-medium" }
                     : u.rol === "impulsador"
-                    ? { label: "Asesor impulsador", access: "Solo 3 paneles principales", class: "text-neutral-800 font-medium" }
-                    : { label: "Asesor comercial", access: "Solo Operaciones de campo", class: "text-neutral-600 font-normal" };
+                    ? { label: "Asesor impulsador", access: accessSummary.label, class: "text-neutral-800 font-medium" }
+                    : { label: "Asesor comercial", access: accessSummary.label, class: "text-neutral-600 font-normal" };
 
                 return (
                   <tr
@@ -422,7 +483,9 @@ export function UsuariosTabContent({
                       <span className={roleBadge.class}>{roleBadge.label}</span>
                     </td>
                     <td className="py-2.5 px-4 text-neutral-500 text-[11px]">
-                      {roleBadge.access}
+                      <span className={cn(accessSummary.isCustom && "text-neutral-900 font-medium")}>
+                        {accessSummary.label}
+                      </span>
                     </td>
                     <td className="py-2.5 px-4">
                       <button
@@ -502,14 +565,15 @@ export function UsuariosTabContent({
       {/* Mobile Card List of Users - Optimized for phone screens without horizontal scroll */}
       <div className="md:hidden divide-y divide-neutral-100">
         {filteredUsers.map((u) => {
+          const accessSummary = getUserAccessSummary(u);
           const roleBadge =
             u.rol === "admin"
-              ? { label: "Administrador", access: "Total (Paneles + Admin)", class: "text-neutral-950 font-bold" }
+              ? { label: "Administrador", access: accessSummary.label, class: "text-neutral-950 font-bold" }
               : u.rol === "supervisor"
-              ? { label: "Supervisor", access: "Solo 3 paneles", class: "text-neutral-800 font-medium" }
+              ? { label: "Supervisor", access: accessSummary.label, class: "text-neutral-800 font-medium" }
               : u.rol === "impulsador"
-              ? { label: "Impulsador", access: "Solo 3 paneles", class: "text-neutral-800 font-medium" }
-              : { label: "Asesor", access: "Operaciones de campo", class: "text-neutral-600 font-normal" };
+              ? { label: "Impulsador", access: accessSummary.label, class: "text-neutral-800 font-medium" }
+              : { label: "Asesor", access: accessSummary.label, class: "text-neutral-600 font-normal" };
 
           return (
             <div key={u.id} className="py-3.5 space-y-2">
@@ -578,7 +642,9 @@ export function UsuariosTabContent({
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-neutral-400 pt-0.5 border-t border-neutral-50">
-                <span>{roleBadge.access}</span>
+                <span className={cn(accessSummary.isCustom && "text-neutral-800 font-medium")}>
+                  {accessSummary.label}
+                </span>
                 <button
                   type="button"
                   onClick={() => handleToggleActive(u)}
@@ -696,14 +762,132 @@ export function UsuariosTabContent({
               {/* Rol */}
               <div className="space-y-1">
                 <label className="block text-[11px] font-medium text-neutral-500">
-                  Tipo de usuario y restricciones
+                  Tipo de usuario y rol
                 </label>
                 <CustomDropdown
                   value={formRol}
-                  onChange={(val) => setFormRol(val as AppUserRole)}
+                  onChange={(val) => handleRoleChange(val as AppUserRole)}
                   options={ROLE_OPTIONS}
                   placeholder="Selecciona el rol"
                 />
+              </div>
+
+              {/* Acceso a paneles y módulos */}
+              <div className="space-y-2.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-medium text-neutral-500">
+                    Acceso a paneles y módulos
+                  </label>
+                  <div className="flex items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setFormCustomAccess(false)}
+                      className={cn(
+                        "transition-colors cursor-pointer select-none",
+                        !formCustomAccess
+                          ? "text-neutral-950 font-semibold"
+                          : "text-neutral-400 hover:text-neutral-900 font-medium"
+                      )}
+                    >
+                      Por rol
+                    </button>
+                    <span className="text-neutral-200 text-[10px]">/</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormCustomAccess(true);
+                        if (formAllowedModules.length === 0) {
+                          setFormAllowedModules(
+                            modules.filter((m) => m.targetRoles && m.targetRoles.includes(formRol)).map((m) => m.id)
+                          );
+                        }
+                      }}
+                      className={cn(
+                        "transition-colors cursor-pointer select-none",
+                        formCustomAccess
+                          ? "text-neutral-950 font-semibold"
+                          : "text-neutral-400 hover:text-neutral-900 font-medium"
+                      )}
+                    >
+                      Personalizado
+                    </button>
+                  </div>
+                </div>
+
+                {!formCustomAccess ? (
+                  <p className="text-[11px] text-neutral-400 font-sans leading-relaxed">
+                    Hereda automáticamente los paneles configurados para el rol{" "}
+                    <span className="text-neutral-700 font-medium">{formRol}</span> ({getRolePanelsCount(formRol)} paneles autorizados).
+                  </p>
+                ) : (
+                  <div className="space-y-2 pt-0.5 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between text-[11px] pb-1 border-b border-neutral-100">
+                      <span className="text-neutral-500 font-sans">
+                        Paneles seleccionados ({formAllowedModules.length} de {modules.length}):
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setFormAllowedModules(modules.map((m) => m.id))}
+                          className="text-[11px] text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+                        >
+                          Todos
+                        </button>
+                        <span className="text-neutral-200 text-[10px]">/</span>
+                        <button
+                          type="button"
+                          onClick={() => setFormAllowedModules([])}
+                          className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                        >
+                          Ninguno
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 divide-y divide-neutral-50">
+                      {modules.map((mod) => {
+                        const isChecked = formAllowedModules.includes(mod.id);
+                        return (
+                          <label
+                            key={mod.id}
+                            className="flex items-start gap-2.5 py-1.5 px-1 hover:bg-neutral-50/80 cursor-pointer select-none transition-colors group"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setFormAllowedModules((prev) =>
+                                  isChecked
+                                    ? prev.filter((id) => id !== mod.id)
+                                    : [...prev, mod.id]
+                                );
+                              }}
+                              className="mt-0.5 rounded border-neutral-300 text-neutral-900 focus:ring-0 cursor-pointer"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span
+                                  className={cn(
+                                    "text-xs transition-colors",
+                                    isChecked ? "text-neutral-900 font-semibold" : "text-neutral-500 font-normal"
+                                  )}
+                                >
+                                  {mod.name}
+                                </span>
+                                <span className="text-[10px] font-mono text-neutral-400 shrink-0">
+                                  {mod.route}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-neutral-400 line-clamp-1 mt-0.5">
+                                {mod.description}
+                              </p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Activo / Inactivo */}

@@ -22,6 +22,8 @@ export interface AppUser {
   isImpersonated?: boolean;
   impersonatorAdminId?: string;
   impersonatorAdminName?: string;
+  customAccess?: boolean;
+  allowedModules?: string[];
 }
 
 interface StoredUser extends AppUser {
@@ -74,6 +76,15 @@ function sanitizeUser(u: StoredUser): AppUser {
 }
 
 function rowToStoredUser(row: any): StoredUser {
+  let allowedModules: string[] | undefined = undefined;
+  if (Array.isArray(row.allowed_modules)) {
+    allowedModules = row.allowed_modules;
+  } else if (typeof row.allowed_modules === "string") {
+    try {
+      allowedModules = JSON.parse(row.allowed_modules);
+    } catch {}
+  }
+
   return {
     id: row.id,
     email: row.email,
@@ -84,6 +95,8 @@ function rowToStoredUser(row: any): StoredUser {
     passwordHash: row.password_hash || "",
     createdAt: row.created_at || new Date().toISOString(),
     lastLogin: row.last_login || undefined,
+    customAccess: Boolean(row.custom_access),
+    allowedModules,
   };
 }
 
@@ -98,6 +111,8 @@ function storedUserToRow(u: StoredUser): any {
     password_hash: u.passwordHash,
     created_at: u.createdAt,
     last_login: u.lastLogin || null,
+    custom_access: Boolean(u.customAccess),
+    allowed_modules: u.allowedModules || null,
   };
 }
 
@@ -127,6 +142,11 @@ async function writeUsersLocal(users: StoredUser[]): Promise<void> {
 async function readUsers(): Promise<StoredUser[]> {
   // 1. Try Native PostgreSQL First
   try {
+    try {
+      await query("ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS custom_access BOOLEAN DEFAULT false;");
+      await query("ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS allowed_modules TEXT[];");
+    } catch {}
+
     const rows = await query("SELECT * FROM public.usuarios ORDER BY created_at ASC");
     if (Array.isArray(rows) && rows.length > 0) {
       const parsed = rows.map(rowToStoredUser);
@@ -469,6 +489,8 @@ export async function createAppUser(payload: {
   nombre: string;
   rol: AppUserRole;
   colaboradorId?: string;
+  customAccess?: boolean;
+  allowedModules?: string[];
 }): Promise<{ success: boolean; user?: AppUser; error?: string }> {
   try {
     const currentUser = await getCurrentSessionUser();
@@ -502,14 +524,21 @@ export async function createAppUser(payload: {
       activo: true,
       passwordHash: hashPassword(payload.password),
       createdAt: new Date().toISOString(),
+      customAccess: Boolean(payload.customAccess),
+      allowedModules: payload.customAccess && Array.isArray(payload.allowedModules) ? payload.allowedModules : undefined,
     };
 
     // 1. Guardar en PostgreSQL
     let pgSaved = false;
     try {
+      try {
+        await query("ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS custom_access BOOLEAN DEFAULT false;");
+        await query("ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS allowed_modules TEXT[];");
+      } catch {}
+
       await query(
-        `INSERT INTO public.usuarios (id, email, nombre, rol, colaborador_id, activo, password_hash, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        `INSERT INTO public.usuarios (id, email, nombre, rol, colaborador_id, activo, password_hash, created_at, custom_access, allowed_modules)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           newUser.id,
           newUser.email,
@@ -519,6 +548,8 @@ export async function createAppUser(payload: {
           newUser.activo,
           newUser.passwordHash,
           newUser.createdAt,
+          newUser.customAccess || false,
+          newUser.allowedModules || null,
         ]
       );
       pgSaved = true;
@@ -557,6 +588,8 @@ export async function updateAppUser(
     colaboradorId?: string;
     password?: string;
     activo?: boolean;
+    customAccess?: boolean;
+    allowedModules?: string[];
   }
 ): Promise<{ success: boolean; user?: AppUser; error?: string }> {
   try {
@@ -601,6 +634,16 @@ export async function updateAppUser(
       pgFields.push(`activo = $${pIdx++}`);
       pgValues.push(target.activo);
     }
+    if (updates.customAccess !== undefined) {
+      target.customAccess = updates.customAccess;
+      pgFields.push(`custom_access = $${pIdx++}`);
+      pgValues.push(target.customAccess);
+    }
+    if (updates.allowedModules !== undefined) {
+      target.allowedModules = updates.allowedModules;
+      pgFields.push(`allowed_modules = $${pIdx++}`);
+      pgValues.push(target.allowedModules);
+    }
     if (updates.password && updates.password.trim().length >= 6) {
       target.passwordHash = hashPassword(updates.password.trim());
       pgFields.push(`password_hash = $${pIdx++}`);
@@ -610,6 +653,11 @@ export async function updateAppUser(
     // 1. Actualizar en PostgreSQL
     if (pgFields.length > 0) {
       try {
+        try {
+          await query("ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS custom_access BOOLEAN DEFAULT false;");
+          await query("ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS allowed_modules TEXT[];");
+        } catch {}
+
         pgValues.push(id);
         await query(`UPDATE public.usuarios SET ${pgFields.join(", ")} WHERE id = $${pIdx}`, pgValues);
       } catch (pgErr) {
@@ -626,6 +674,8 @@ export async function updateAppUser(
       if (updates.rol) supPayload.rol = target.rol;
       if (updates.colaboradorId !== undefined) supPayload.colaborador_id = target.colaboradorId || null;
       if (updates.activo !== undefined) supPayload.activo = target.activo;
+      if (updates.customAccess !== undefined) supPayload.custom_access = target.customAccess;
+      if (updates.allowedModules !== undefined) supPayload.allowed_modules = target.allowedModules;
       if (updates.password && updates.password.trim().length >= 6) supPayload.password_hash = target.passwordHash;
       await supabase.from("usuarios").update(supPayload).eq("id", id);
     } catch (dbErr) {}

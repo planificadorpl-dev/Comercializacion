@@ -46,19 +46,28 @@ export async function writeModulesLocal(modules: SystemModule[]): Promise<void> 
 export async function fetchAllModules(): Promise<{ success: boolean; modules: SystemModule[]; error?: string }> {
   // 1. Try Native PostgreSQL First
   try {
+    try {
+      await query("ALTER TABLE public.configuracion_modulos ADD COLUMN IF NOT EXISTS target_roles text[];");
+    } catch {}
+
     const rows = await query<{
       id: string;
       enabled_for_users: boolean;
+      target_roles?: string[];
       updated_at: string;
       updated_by?: string;
-    }>("SELECT id, enabled_for_users, updated_at, updated_by FROM public.configuracion_modulos ORDER BY id ASC");
+    }>("SELECT id, enabled_for_users, target_roles, updated_at, updated_by FROM public.configuracion_modulos ORDER BY id ASC");
 
     if (Array.isArray(rows) && rows.length > 0) {
       const merged = DEFAULT_SYSTEM_MODULES.map((def) => {
         const row = rows.find((r) => r.id === def.id);
         if (row) {
+          const roles = Array.isArray(row.target_roles) && row.target_roles.length > 0
+            ? (row.target_roles as AppUserRole[])
+            : def.targetRoles;
           return {
             ...def,
+            targetRoles: roles,
             enabledForUsers: row.enabled_for_users !== undefined ? Boolean(row.enabled_for_users) : def.enabledForUsers,
             updatedAt: row.updated_at || def.updatedAt,
             updatedBy: row.updated_by || undefined,
@@ -85,8 +94,12 @@ export async function fetchAllModules(): Promise<{ success: boolean; modules: Sy
       const merged = DEFAULT_SYSTEM_MODULES.map((def) => {
         const row = data.find((r: any) => r.id === def.id);
         if (row) {
+          const roles = Array.isArray(row.target_roles) && row.target_roles.length > 0
+            ? (row.target_roles as AppUserRole[])
+            : def.targetRoles;
           return {
             ...def,
+            targetRoles: roles,
             enabledForUsers: row.enabled_for_users !== undefined ? Boolean(row.enabled_for_users) : def.enabledForUsers,
             updatedAt: row.updated_at || def.updatedAt,
             updatedBy: row.updated_by || undefined,
@@ -103,6 +116,65 @@ export async function fetchAllModules(): Promise<{ success: boolean; modules: Sy
 
   const local = await readModulesLocal();
   return { success: true, modules: local };
+}
+
+export async function persistModuleRoles(
+  moduleId: string,
+  targetRoles: AppUserRole[],
+  updatedBy?: string
+): Promise<{ success: boolean; modules?: SystemModule[]; error?: string }> {
+  try {
+    const currentList = await readModulesLocal();
+    const updated = currentList.map((m) =>
+      m.id === moduleId
+        ? {
+            ...m,
+            targetRoles,
+            updatedAt: new Date().toISOString(),
+            updatedBy: updatedBy || m.updatedBy,
+          }
+        : m
+    );
+
+    await writeModulesLocal(updated);
+
+    // 1. Persist to native PostgreSQL
+    try {
+      try {
+        await query("ALTER TABLE public.configuracion_modulos ADD COLUMN IF NOT EXISTS target_roles text[];");
+      } catch {}
+
+      await query(
+        `INSERT INTO public.configuracion_modulos (id, target_roles, updated_at, updated_by)
+         VALUES ($1, $2, NOW(), $3)
+         ON CONFLICT (id) DO UPDATE SET
+           target_roles = EXCLUDED.target_roles,
+           updated_at = NOW(),
+           updated_by = EXCLUDED.updated_by`,
+        [moduleId, targetRoles, updatedBy || "admin"]
+      );
+    } catch {
+      // Ignored if postgres not configured yet
+    }
+
+    // 2. Fallback to Supabase
+    try {
+      const supabase = await createClient();
+      await supabase.from("configuracion_modulos").upsert({
+        id: moduleId,
+        target_roles: targetRoles,
+        updated_at: new Date().toISOString(),
+        updated_by: updatedBy || "admin",
+      });
+    } catch {
+      // Ignored if table doesn't exist yet
+    }
+
+    return { success: true, modules: updated };
+  } catch (err: any) {
+    console.error("Error updating module roles:", err);
+    return { success: false, error: err.message || "Error al actualizar roles del panel" };
+  }
 }
 
 export async function persistModuleStatus(

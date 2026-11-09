@@ -15,6 +15,17 @@ export interface SystemModule {
 
 export const DEFAULT_SYSTEM_MODULES: SystemModule[] = [
   {
+    id: "principal",
+    name: "Página Principal",
+    route: "/",
+    short: "PP",
+    description: "Dashboard ejecutivo con métricas de ventas, cobertura, cobranza y resumen de asesores.",
+    category: "Supervisión y Estrategia",
+    targetRoles: ["supervisor", "impulsador"],
+    enabledForUsers: true,
+    updatedAt: new Date().toISOString(),
+  },
+  {
     id: "planificacion",
     name: "Planificación Comercial",
     route: "/planificacion",
