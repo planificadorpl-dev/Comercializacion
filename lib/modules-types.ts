@@ -43,7 +43,7 @@ export const DEFAULT_SYSTEM_MODULES: SystemModule[] = [
     short: "PA",
     description: "Creación, asignación y sincronización de la planificación de jornadas de asesores con la hoja Data.",
     category: "Supervisión y Estrategia",
-    targetRoles: ["supervisor", "impulsador"],
+    targetRoles: ["admin", "supervisor", "impulsador", "asesor"],
     enabledForUsers: true,
     updatedAt: new Date().toISOString(),
   },

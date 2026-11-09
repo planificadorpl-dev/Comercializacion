@@ -7,8 +7,10 @@
     "description": "Dashboard ejecutivo con métricas de ventas, cobertura, cobranza y resumen de asesores.",
     "category": "Supervisión y Estrategia",
     "targetRoles": [
+      "admin",
       "supervisor",
-      "impulsador"
+      "impulsador",
+      "asesor"
     ],
     "enabledForUsers": true,
     "updatedAt": "2026-11-09T14:53:34.665Z"
@@ -21,8 +23,10 @@
     "description": "Metas comerciales, proyección de ventas, planificación por asesor y agenda de trabajo.",
     "category": "Supervisión y Estrategia",
     "targetRoles": [
+      "admin",
       "supervisor",
-      "impulsador"
+      "impulsador",
+      "asesor"
     ],
     "enabledForUsers": false,
     "updatedAt": "2026-10-27T20:48:46.717Z",
@@ -36,8 +40,10 @@
     "description": "Creación, asignación y sincronización de la planificación de jornadas de asesores con la hoja Data.",
     "category": "Supervisión y Estrategia",
     "targetRoles": [
+      "admin",
       "supervisor",
-      "impulsador"
+      "impulsador",
+      "asesor"
     ],
     "enabledForUsers": true,
     "updatedAt": "2026-11-09T14:53:34.665Z",
@@ -65,8 +71,10 @@
     "description": "Evaluación continua de asesores en campo, rúbricas de supervisión y desempeño operativo.",
     "category": "Supervisión y Estrategia",
     "targetRoles": [
+      "admin",
       "supervisor",
-      "impulsador"
+      "impulsador",
+      "asesor"
     ],
     "enabledForUsers": true,
     "updatedAt": "2026-10-27T20:48:46.717Z",

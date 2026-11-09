@@ -27,8 +27,18 @@ import { PlanificacionMetrics } from "@/components/planificacion/planificacion-m
 import { PlanificacionMonthlyView } from "@/components/planificacion/planificacion-monthly-view";
 import { PlanificacionDailyView } from "@/components/planificacion/planificacion-daily-view";
 import { PlanificacionFilterCommandBar } from "@/components/planificacion/planificacion-filter-command-bar";
+import { PlanificadorCreateForm } from "@/components/planificador/planificador-create-form";
+import { PlanificadorMatrixView } from "@/components/planificador/planificador-matrix-view";
+import { PlanificadorTableView } from "@/components/planificador/planificador-table-view";
+import { PlanificadorEditDialog } from "@/components/planificador/planificador-edit-dialog";
+import {
+  PlanningSheetRecord,
+  PlanningMetadata,
+  NewPlanningItem,
+  getMonthFromDate,
+} from "@/lib/planificacion-service";
 
-type ViewMode = "mensual" | "diaria";
+type ViewMode = "mensual" | "diaria" | "crear";
 
 const normKey = (str: string | null | undefined): string =>
   (str || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
@@ -117,6 +127,103 @@ export default function PlanificacionPage() {
 
   // Fecha de referencia: por defecto 2026-11-02 (o fecha actual)
   const [referenceDate, setReferenceDate] = useState<Date>(() => new Date(2026, 10, 2));
+
+  // Planificador integrado state
+  const [planificadorSubTab, setPlanificadorSubTab] = useState<"crear" | "matriz" | "tabla">("crear");
+  const [planificadorMetadata, setPlanificadorMetadata] = useState<PlanningMetadata | null>(null);
+  const [planificadorRecords, setPlanificadorRecords] = useState<PlanningSheetRecord[]>([]);
+  const [editingSheetRecord, setEditingSheetRecord] = useState<PlanningSheetRecord | null>(null);
+  const [planificadorLoading, setPlanificadorLoading] = useState(false);
+
+  const loadPlanificadorData = useCallback(async (force = false) => {
+    try {
+      setPlanificadorLoading(true);
+      const refreshParam = force ? "?refresh=true" : "";
+      const res = await fetch(`/api/planificacion${refreshParam}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
+      const json = await res.json();
+      if (json.success) {
+        if (json.metadata) setPlanificadorMetadata(json.metadata);
+        if (Array.isArray(json.records)) setPlanificadorRecords(json.records);
+      }
+    } catch (err) {
+      console.warn("Could not load planificador data:", err);
+    } finally {
+      setPlanificadorLoading(false);
+    }
+  }, []);
+
+  const handleSaveEditSheetRecord = async (
+    sheetRowIndex: number,
+    updatedItem: NewPlanningItem
+  ): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/planificacion", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheetRowIndex, item: updatedItem }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        loadPlanificadorData(true);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleDeleteSheetRecord = async (rec: PlanningSheetRecord): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/planificacion?sheetRowIndex=${rec.sheetRowIndex}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (json.success) {
+        loadPlanificadorData(true);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleReplicateDay = async (sourceIso: string, targetIso: string): Promise<boolean> => {
+    const sourceRecords = planificadorRecords.filter((r) => r.isoFecha === sourceIso);
+    if (sourceRecords.length === 0) return false;
+    const targetMonth = getMonthFromDate(targetIso);
+    const newItems: NewPlanningItem[] = sourceRecords.map((r) => ({
+      fecha: targetIso,
+      mes: targetMonth,
+      asesor: r.asesor,
+      estado: r.estado,
+      municipio: r.municipio,
+      parroquia: r.parroquia,
+      sector: r.sector,
+      tipo_actividad: r.tipo_actividad,
+      estatus: "Planificado",
+    }));
+
+    try {
+      const res = await fetch("/api/planificacion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: newItems }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        loadPlanificadorData(true);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
 
   // Carga concurrente de planificación y operaciones para renderizado instantáneo
   const loadData = useCallback(async (force = false) => {
@@ -575,29 +682,59 @@ export default function PlanificacionPage() {
 
         {/* Contenido principal abierto sin tarjetas encerradas */}
         <main className="flex-1 p-4 sm:p-6 pb-28 xl:pb-8 max-w-7xl w-full mx-auto space-y-6">
-          {/* Fila 1: Título de sección "Calendario" y Controles Temporales */}
+          {/* Fila 1: Selector de Modo de Vista y Controles Temporales */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-neutral-100 pb-3">
-            <div className="flex items-center gap-2">
-              {viewMode === "diaria" ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("mensual")}
-                    className="text-xs text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5 stroke-[1.5]" />
-                    <span>Mes</span>
-                  </button>
-                  <span className="text-neutral-300">/</span>
-                  <span className="text-xs font-semibold text-neutral-950">
-                    Detalle diario
-                  </span>
-                </div>
-              ) : (
-                <span className="text-xs font-semibold text-neutral-950">
-                  Calendario
-                </span>
-              )}
+            <div className="flex flex-wrap items-center gap-6">
+              <button
+                type="button"
+                onClick={() => setViewMode("mensual")}
+                className={cn(
+                  "text-xs transition-colors cursor-pointer py-1 relative",
+                  viewMode === "mensual"
+                    ? "text-neutral-900 font-semibold"
+                    : "text-neutral-400 hover:text-neutral-700 font-normal"
+                )}
+              >
+                Calendario mensual
+                {viewMode === "mensual" && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode("diaria")}
+                className={cn(
+                  "text-xs transition-colors cursor-pointer py-1 relative",
+                  viewMode === "diaria"
+                    ? "text-neutral-900 font-semibold"
+                    : "text-neutral-400 hover:text-neutral-700 font-normal"
+                )}
+              >
+                Detalle diario
+                {viewMode === "diaria" && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode("crear");
+                  loadPlanificadorData();
+                }}
+                className={cn(
+                  "text-xs transition-colors cursor-pointer py-1 relative",
+                  viewMode === "crear"
+                    ? "text-neutral-900 font-semibold"
+                    : "text-neutral-400 hover:text-neutral-700 font-normal"
+                )}
+              >
+                Crear planificación (Sheet Data)
+                {viewMode === "crear" && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
+                )}
+              </button>
               {selectedAdvisor && (
                 <div className="flex items-center gap-1.5 ml-2">
                   <span className="text-xs text-neutral-400">· Asesor:</span>
@@ -685,93 +822,203 @@ export default function PlanificacionPage() {
             </div>
           </div>
 
-          {/* Fila 2: Selector de Meses y Buscador Avanzado de Filtros */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3 overflow-x-auto no-scrollbar text-xs">
-              {availableMonths.map((m) => (
+          {viewMode === "crear" ? (
+            <div className="space-y-6 pt-2">
+              {/* Sub-tabs navigation */}
+              <div className="flex items-center gap-6 border-b border-neutral-100 pb-2">
                 <button
-                  key={m}
                   type="button"
-                  onClick={() => handleSelectMonth(m)}
+                  onClick={() => setPlanificadorSubTab("crear")}
                   className={cn(
-                    "transition-colors whitespace-nowrap py-1 cursor-pointer",
-                    normKey(m) === normKey(currentSelectedMonth)
-                      ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
-                      : "text-neutral-400 hover:text-neutral-700"
+                    "text-xs transition-colors cursor-pointer py-1 relative",
+                    planificadorSubTab === "crear"
+                      ? "text-neutral-900 font-medium"
+                      : "text-neutral-400 hover:text-neutral-700 font-normal"
                   )}
                 >
-                  {m}
+                  Asignación rápida / por lotes
+                  {planificadorSubTab === "crear" && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
+                  )}
                 </button>
-              ))}
+
+                <button
+                  type="button"
+                  onClick={() => setPlanificadorSubTab("matriz")}
+                  className={cn(
+                    "text-xs transition-colors cursor-pointer py-1 relative",
+                    planificadorSubTab === "matriz"
+                      ? "text-neutral-900 font-medium"
+                      : "text-neutral-400 hover:text-neutral-700 font-normal"
+                  )}
+                >
+                  Matriz semanal
+                  {planificadorSubTab === "matriz" && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPlanificadorSubTab("tabla")}
+                  className={cn(
+                    "text-xs transition-colors cursor-pointer py-1 relative",
+                    planificadorSubTab === "tabla"
+                      ? "text-neutral-900 font-medium"
+                      : "text-neutral-400 hover:text-neutral-700 font-normal"
+                  )}
+                >
+                  Registros en Sheet Data ({planificadorRecords.length})
+                  {planificadorSubTab === "tabla" && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
+                  )}
+                </button>
+              </div>
+
+              {planificadorLoading && !planificadorMetadata ? (
+                <div className="py-20 text-center text-xs text-neutral-400 font-mono">
+                  Cargando herramientas del planificador desde Google Sheets...
+                </div>
+              ) : planificadorMetadata ? (
+                <>
+                  {planificadorSubTab === "crear" && (
+                    <PlanificadorCreateForm
+                      metadata={planificadorMetadata}
+                      existingRecords={planificadorRecords}
+                      onSuccess={(count) => {
+                        loadPlanificadorData(true);
+                        loadData(true);
+                      }}
+                      defaultMonth={currentSelectedMonth.toUpperCase()}
+                    />
+                  )}
+
+                  {planificadorSubTab === "matriz" && (
+                    <PlanificadorMatrixView
+                      records={planificadorRecords}
+                      metadata={planificadorMetadata}
+                      onEditRecord={(r) => setEditingSheetRecord(r)}
+                      onDeleteRecord={handleDeleteSheetRecord}
+                      onQuickAdd={(adv, d) => {
+                        setPlanificadorSubTab("crear");
+                      }}
+                      onReplicateDay={handleReplicateDay}
+                    />
+                  )}
+
+                  {planificadorSubTab === "tabla" && (
+                    <PlanificadorTableView
+                      records={planificadorRecords}
+                      metadata={planificadorMetadata}
+                      selectedMonth={currentSelectedMonth.toUpperCase()}
+                      onEditRecord={(r) => setEditingSheetRecord(r)}
+                      onDeleteRecord={handleDeleteSheetRecord}
+                    />
+                  )}
+                </>
+              ) : null}
             </div>
-
-            {/* Buscador de filtros con autocompletado y atajo interactivo */}
-            <PlanificacionFilterCommandBar
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              options={filterOptions}
-              selectedAdvisor={selectedAdvisor}
-              onSelectAdvisor={setSelectedAdvisor}
-              selectedSector={selectedSector}
-              onSelectSector={setSelectedSector}
-              selectedMonth={currentSelectedMonth}
-              onSelectMonth={handleSelectMonth}
-              onResetFilters={() => {
-                setSearchTerm("");
-                setSelectedAdvisor(null);
-                setSelectedSector(null);
-                setSelectedDateFilter(null);
-              }}
-            />
-          </div>
-
-
-          {/* Fila 3: Cinta de Métricas Operativas */}
-          <PlanificacionMetrics
-            totalAdvisors={activeMetrics.totalAdvisors}
-            totalSectors={activeMetrics.totalSectors}
-            totalJornadas={activeMetrics.totalJornadas}
-            realizedJornadas={activeMetrics.realizedJornadas}
-            totalSolicitudes={filteredSolicitudes.length}
-            totalInstallations={filteredInstallations.length}
-            predominantActivity={activeMetrics.predominantActivity}
-            periodLabel={activeMetrics.periodLabel}
-          />
-          <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-neutral-300 to-transparent my-1" />
-
-          {/* Fila 4: Visualización Principal según Modo */}
-          {loading ? (
-            <div className="py-24 text-center text-xs text-neutral-400 font-mono">
-              Cargando planificación comercial...
-            </div>
-          ) : viewMode === "diaria" ? (
-            <PlanificacionDailyView
-              dateStr={toIsoDate(referenceDate)}
-              dateLabel={dailyDateLabel}
-              records={dailyRecords}
-              solicitudes={filteredSolicitudes}
-              installations={filteredInstallations}
-              onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
-              selectedAdvisor={selectedAdvisor}
-            />
           ) : (
-            <PlanificacionMonthlyView
-              month={currentSelectedMonth}
-              year={referenceDate.getFullYear()}
-              records={advisorMonthlyRecords}
-              solicitudes={monthlySolicitudes}
-              installations={monthlyInstallations}
-              selectedAdvisor={selectedAdvisor}
-              onSelectDay={handleSelectSpecificDay}
-              onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
-              selectedSector={selectedSector}
-              onSelectSector={setSelectedSector}
-              selectedDateFilter={selectedDateFilter}
-              onSelectDateFilter={setSelectedDateFilter}
-            />
+            <>
+              {/* Fila 2: Selector de Meses y Buscador Avanzado de Filtros */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 overflow-x-auto no-scrollbar text-xs">
+                  {availableMonths.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => handleSelectMonth(m)}
+                      className={cn(
+                        "transition-colors whitespace-nowrap py-1 cursor-pointer",
+                        normKey(m) === normKey(currentSelectedMonth)
+                          ? "text-neutral-950 font-semibold border-b-2 border-neutral-900"
+                          : "text-neutral-400 hover:text-neutral-700"
+                      )}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Buscador de filtros con autocompletado y atajo interactivo */}
+                <PlanificacionFilterCommandBar
+                  searchTerm={searchTerm}
+                  onSearchChange={setSearchTerm}
+                  options={filterOptions}
+                  selectedAdvisor={selectedAdvisor}
+                  onSelectAdvisor={setSelectedAdvisor}
+                  selectedSector={selectedSector}
+                  onSelectSector={setSelectedSector}
+                  selectedMonth={currentSelectedMonth}
+                  onSelectMonth={handleSelectMonth}
+                  onResetFilters={() => {
+                    setSearchTerm("");
+                    setSelectedAdvisor(null);
+                    setSelectedSector(null);
+                    setSelectedDateFilter(null);
+                  }}
+                />
+              </div>
+
+              {/* Fila 3: Cinta de Métricas Operativas */}
+              <PlanificacionMetrics
+                totalAdvisors={activeMetrics.totalAdvisors}
+                totalSectors={activeMetrics.totalSectors}
+                totalJornadas={activeMetrics.totalJornadas}
+                realizedJornadas={activeMetrics.realizedJornadas}
+                totalSolicitudes={filteredSolicitudes.length}
+                totalInstallations={filteredInstallations.length}
+                predominantActivity={activeMetrics.predominantActivity}
+                periodLabel={activeMetrics.periodLabel}
+              />
+              <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-neutral-300 to-transparent my-1" />
+
+              {/* Fila 4: Visualización Principal según Modo */}
+              {loading ? (
+                <div className="py-24 text-center text-xs text-neutral-400 font-mono">
+                  Cargando planificación comercial...
+                </div>
+              ) : viewMode === "diaria" ? (
+                <PlanificacionDailyView
+                  dateStr={toIsoDate(referenceDate)}
+                  dateLabel={dailyDateLabel}
+                  records={dailyRecords}
+                  solicitudes={filteredSolicitudes}
+                  installations={filteredInstallations}
+                  onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
+                  selectedAdvisor={selectedAdvisor}
+                />
+              ) : (
+                <PlanificacionMonthlyView
+                  month={currentSelectedMonth}
+                  year={referenceDate.getFullYear()}
+                  records={advisorMonthlyRecords}
+                  solicitudes={monthlySolicitudes}
+                  installations={monthlyInstallations}
+                  selectedAdvisor={selectedAdvisor}
+                  onSelectDay={handleSelectSpecificDay}
+                  onSelectAdvisor={(adv) => setSelectedAdvisor(adv === selectedAdvisor ? null : adv)}
+                  selectedSector={selectedSector}
+                  onSelectSector={setSelectedSector}
+                  selectedDateFilter={selectedDateFilter}
+                  onSelectDateFilter={setSelectedDateFilter}
+                />
+              )}
+            </>
           )}
         </main>
       </div>
+
+      {/* Edit Record Modal Dialog */}
+      {planificadorMetadata && (
+        <PlanificadorEditDialog
+          record={editingSheetRecord}
+          metadata={planificadorMetadata}
+          isOpen={Boolean(editingSheetRecord)}
+          onClose={() => setEditingSheetRecord(null)}
+          onSave={handleSaveEditSheetRecord}
+        />
+      )}
     </div>
   );
 }
