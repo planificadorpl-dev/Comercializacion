@@ -7,6 +7,7 @@ import {
   batchUpdatePlanningRecords,
   deletePlanningRecord,
   NewPlanningItem,
+  isPastIsoDate,
 } from "@/lib/planificacion-service";
 import { clearSheetsCache } from "@/app/api/sheets/route";
 
@@ -68,12 +69,18 @@ export async function POST(req: Request) {
       );
     }
 
-    // Validate essential fields
+    // Validate essential fields & block past dates
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (!it.fecha) {
         return NextResponse.json(
           { success: false, error: `El item ${i + 1} no tiene fecha definida.` },
+          { status: 400 }
+        );
+      }
+      if (isPastIsoDate(it.fecha)) {
+        return NextResponse.json(
+          { success: false, error: `No se pueden planificar jornadas en fechas que ya pasaron (${it.fecha}).` },
           { status: 400 }
         );
       }
@@ -129,6 +136,15 @@ export async function PUT(req: Request) {
       : null;
 
     if (updates && updates.length > 0) {
+      for (const u of updates) {
+        if (u.item?.fecha && isPastIsoDate(u.item.fecha)) {
+          return NextResponse.json(
+            { success: false, error: `No se pueden modificar jornadas en fechas que ya pasaron (${u.item.fecha}).` },
+            { status: 400 }
+          );
+        }
+      }
+
       const result = await batchUpdatePlanningRecords(updates);
       try {
         clearSheetsCache();
@@ -145,6 +161,13 @@ export async function PUT(req: Request) {
     if (!sheetRowIndex || !item) {
       return NextResponse.json(
         { success: false, error: "Se requiere sheetRowIndex e item para actualizar." },
+        { status: 400 }
+      );
+    }
+
+    if (item.fecha && isPastIsoDate(item.fecha)) {
+      return NextResponse.json(
+        { success: false, error: `No se pueden modificar jornadas en fechas que ya pasaron (${item.fecha}).` },
         { status: 400 }
       );
     }
@@ -179,6 +202,13 @@ export async function DELETE(req: Request) {
     const sheetRowIndex = sheetRowIndexStr ? parseInt(sheetRowIndexStr, 10) : undefined;
     const fecha = searchParams.get("fecha") || undefined;
     const asesor = searchParams.get("asesor") || undefined;
+
+    if (fecha && isPastIsoDate(fecha)) {
+      return NextResponse.json(
+        { success: false, error: "No se pueden eliminar jornadas de fechas que ya pasaron." },
+        { status: 400 }
+      );
+    }
 
     if (!id && !fecha && (!sheetRowIndex || sheetRowIndex < 2)) {
       return NextResponse.json(

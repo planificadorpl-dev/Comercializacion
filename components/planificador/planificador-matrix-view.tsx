@@ -10,6 +10,8 @@ import {
   toIsoDateString,
   toSheetDateFormat,
   getMonthFromDate,
+  getTodayLocalIso,
+  isPastIsoDate,
 } from "@/lib/planificacion-types";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { CustomDropdown } from "@/components/ui/custom-dropdown";
@@ -38,6 +40,8 @@ export function PlanificadorMatrixView({
   onReplicateDay,
 }: PlanificadorMatrixViewProps) {
   // Current reference date (defaults to today)
+  const todayIso = useMemo(() => getTodayLocalIso(), []);
+
   const [currentWeekRefDate, setCurrentWeekRefDate] = useState<Date>(() => {
     const d = new Date();
     // Anchor to Monday of current week
@@ -102,7 +106,10 @@ export function PlanificadorMatrixView({
     for (let i = 0; i < 6; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      const iso = d.toISOString().split("T")[0];
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dayNum = String(d.getDate()).padStart(2, "0");
+      const iso = `${y}-${m}-${dayNum}`;
       const dNum = d.getDate();
       const mNum = d.getMonth() + 1;
       const formatted = `${dNum}/${mNum}`;
@@ -178,6 +185,10 @@ export function PlanificadorMatrixView({
     if (!replicateSourceDate || !replicateTargetDate) return;
     if (replicateSourceDate === replicateTargetDate) {
       setReplicateFeedback("La fecha origen y destino deben ser distintas.");
+      return;
+    }
+    if (replicateTargetDate < todayIso) {
+      setReplicateFeedback("No se puede replicar hacia fechas que ya pasaron.");
       return;
     }
 
@@ -268,14 +279,26 @@ export function PlanificadorMatrixView({
           <thead>
             <tr className="border-b border-neutral-200 text-neutral-400 font-normal">
               <th className="py-2.5 pr-4 font-normal w-40 shrink-0">Asesor</th>
-              {weekDays.map((d) => (
-                <th key={d.iso} className="py-2.5 px-2 font-normal min-w-[130px]">
-                  <div className="flex flex-col">
-                    <span className="text-neutral-900 font-medium">{d.label}</span>
-                    <span className="text-[10px] text-neutral-400 font-mono">{d.formatted}</span>
-                  </div>
-                </th>
-              ))}
+              {weekDays.map((d) => {
+                const isPast = d.iso < todayIso;
+                return (
+                  <th key={d.iso} className="py-2.5 px-2 font-normal min-w-[130px]">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn("font-medium", isPast ? "text-neutral-500" : "text-neutral-900")}>
+                          {d.label}
+                        </span>
+                        {isPast && (
+                          <span className="text-[9px] text-neutral-400 font-normal">
+                            cerrado
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-neutral-400 font-mono">{d.formatted}</span>
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
 
@@ -289,9 +312,16 @@ export function PlanificadorMatrixView({
                 {weekDays.map((d) => {
                   const key = `${adv.trim().toLowerCase()}__${d.iso}`;
                   const assignedItems = matrixMap.get(key) || [];
+                  const isPast = d.iso < todayIso;
 
                   return (
-                    <td key={d.iso} className="py-2 px-2 align-top group/cell relative">
+                    <td
+                      key={d.iso}
+                      className={cn(
+                        "py-2 px-2 align-top group/cell relative",
+                        isPast && "bg-neutral-50/30"
+                      )}
+                    >
                       {assignedItems.length > 0 ? (
                         <div className="space-y-1.5">
                           {assignedItems.map((item) => (
@@ -306,29 +336,31 @@ export function PlanificadorMatrixView({
                                 {item.tipo_actividad}
                               </div>
 
-                              {/* Hover actions: PenLine for edit, X for remove */}
-                              <div className="absolute right-0 top-0 opacity-0 group-hover/item:opacity-100 transition-opacity flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => onEditRecord(item)}
-                                  className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
-                                  title="Editar jornada"
-                                >
-                                  <PenLine className="w-3 h-3 stroke-[1.25]" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setDeletingRecord(item)}
-                                  className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
-                                  title="Eliminar registro"
-                                >
-                                  <X className="w-3 h-3 stroke-[1.5]" />
-                                </button>
-                              </div>
+                              {/* Hover actions: Solo en días presentes o futuros */}
+                              {!isPast && (
+                                <div className="absolute right-0 top-0 opacity-0 group-hover/item:opacity-100 transition-opacity flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => onEditRecord(item)}
+                                    className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                                    title="Editar jornada"
+                                  >
+                                    <PenLine className="w-3 h-3 stroke-[1.25]" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeletingRecord(item)}
+                                    className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+                                    title="Eliminar registro"
+                                  >
+                                    <X className="w-3 h-3 stroke-[1.5]" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
-                      ) : (
+                      ) : !isPast ? (
                         <button
                           type="button"
                           onClick={() => onQuickAdd(adv, d.iso)}
@@ -337,6 +369,10 @@ export function PlanificadorMatrixView({
                         >
                           <Plus className="w-3.5 h-3.5 stroke-[1.25]" />
                         </button>
+                      ) : (
+                        <span className="text-[10px] text-neutral-300 select-none font-mono">
+                          —
+                        </span>
                       )}
                     </td>
                   );

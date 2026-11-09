@@ -16,6 +16,8 @@ import {
   NewPlanningItem,
   SPANISH_MONTHS,
   getMonthFromDate,
+  getTodayLocalIso,
+  isPastIsoDate,
 } from "@/lib/planificacion-types";
 import { clearDashboardDataCache } from "@/lib/dashboard-data";
 import { Loader2 } from "lucide-react";
@@ -118,6 +120,11 @@ export default function PlanificadorPage() {
     sheetRowIndex: number,
     updatedItem: NewPlanningItem
   ): Promise<boolean> => {
+    if (isPastIsoDate(updatedItem.fecha)) {
+      showToast("No se pueden modificar jornadas en fechas que ya pasaron.");
+      return false;
+    }
+
     try {
       const res = await fetch("/api/planificacion", {
         method: "PUT",
@@ -142,6 +149,11 @@ export default function PlanificadorPage() {
 
   // Matrix View: Delete record (optimistic instant update)
   const handleDeleteRecord = async (record: PlanningSheetRecord): Promise<boolean> => {
+    if (isPastIsoDate(record.isoFecha || record.fecha)) {
+      showToast("No se pueden eliminar jornadas de fechas que ya pasaron.");
+      return false;
+    }
+
     handleDeleteSuccess(record);
     showToast(`Jornada de ${record.asesor} eliminada de la hoja Data.`);
 
@@ -164,6 +176,10 @@ export default function PlanificadorPage() {
 
   // Matrix View: Quick Add button click -> switch to daily view on that date
   const handleQuickAdd = (advisor: string, isoDate: string) => {
+    if (isPastIsoDate(isoDate)) {
+      showToast("No se pueden planificar jornadas en fechas que ya pasaron.");
+      return;
+    }
     setInitialDailyDate(isoDate);
     setActiveView("diaria");
     showToast(`Asignando a ${advisor} para el ${isoDate}.`);
@@ -180,7 +196,7 @@ export default function PlanificadorPage() {
       const currentYear = now.getFullYear();
       const isCurrentMonth = now.getMonth() === monthIdx;
       const targetIso = isCurrentMonth
-        ? now.toISOString().split("T")[0]
+        ? getTodayLocalIso()
         : `${currentYear}-${String(monthIdx + 1).padStart(2, "0")}-01`;
 
       setInitialDailyDate(targetIso);
@@ -200,6 +216,11 @@ export default function PlanificadorPage() {
     sourceIsoDate: string,
     targetIsoDate: string
   ): Promise<boolean> => {
+    if (isPastIsoDate(targetIsoDate)) {
+      showToast("No se puede replicar hacia fechas que ya pasaron.");
+      return false;
+    }
+
     const sourceRecords = records.filter((r) => r.isoFecha === sourceIsoDate);
     if (sourceRecords.length === 0) return false;
 

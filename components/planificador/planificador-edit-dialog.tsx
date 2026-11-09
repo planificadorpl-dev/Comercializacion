@@ -8,6 +8,7 @@ import {
   NewPlanningItem,
   getMonthFromDate,
   toIsoDateString,
+  isPastIsoDate,
 } from "@/lib/planificacion-types";
 import { CustomDropdown } from "@/components/ui/custom-dropdown";
 
@@ -73,10 +74,19 @@ export function PlanificadorEditDialog({
       .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
   }, [metadata.geoHierarchy, estado, municipio, parroquia]);
 
+  const isPast = useMemo(() => {
+    if (!record) return false;
+    return isPastIsoDate(record.isoFecha || record.fecha) || isPastIsoDate(fecha);
+  }, [record, fecha]);
+
   if (!isOpen || !record) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isPast) {
+      setErrorMsg("Los días que ya pasaron son históricos y no pueden editarse.");
+      return;
+    }
     if (!fecha) {
       setErrorMsg("La fecha es requerida.");
       return;
@@ -157,7 +167,8 @@ export function PlanificadorEditDialog({
                 type="date"
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
-                className="w-full text-xs border-b border-neutral-200 focus:border-neutral-900 bg-transparent py-1.5 text-neutral-900 outline-hidden font-mono"
+                disabled={isPast}
+                className="w-full text-xs border-b border-neutral-200 focus:border-neutral-900 bg-transparent py-1.5 text-neutral-900 outline-hidden font-mono disabled:opacity-60"
               />
             </div>
 
@@ -172,6 +183,7 @@ export function PlanificadorEditDialog({
                 onChange={(val) => setAsesor(val)}
                 compact
                 searchable
+                disabled={isPast}
               />
             </div>
           </div>
@@ -195,6 +207,7 @@ export function PlanificadorEditDialog({
                   setSector(firstSec);
                 }}
                 compact
+                disabled={isPast}
               />
             </div>
 
@@ -213,6 +226,7 @@ export function PlanificadorEditDialog({
                   setSector(firstSec);
                 }}
                 compact
+                disabled={isPast}
               />
             </div>
 
@@ -229,6 +243,7 @@ export function PlanificadorEditDialog({
                   setSector(firstSec);
                 }}
                 compact
+                disabled={isPast}
               />
             </div>
 
@@ -242,6 +257,7 @@ export function PlanificadorEditDialog({
                 onChange={(val) => setSector(val)}
                 compact
                 searchable
+                disabled={isPast}
               />
             </div>
           </div>
@@ -257,6 +273,7 @@ export function PlanificadorEditDialog({
                 options={metadata.activities}
                 onChange={(val) => setActividad(val)}
                 compact
+                disabled={isPast}
               />
             </div>
 
@@ -269,9 +286,16 @@ export function PlanificadorEditDialog({
                 options={metadata.statuses}
                 onChange={(val) => setEstatus(val)}
                 compact
+                disabled={isPast}
               />
             </div>
           </div>
+
+          {isPast && (
+            <p className="text-xs text-neutral-400 py-1">
+              Esta jornada pertenece a una fecha pasada y es de solo lectura.
+            </p>
+          )}
 
           {errorMsg && (
             <p className="text-xs text-neutral-600 animate-in fade-in">
@@ -286,17 +310,19 @@ export function PlanificadorEditDialog({
               disabled={isSaving}
               className="text-xs text-neutral-400 hover:text-neutral-700 transition-colors cursor-pointer"
             >
-              Cancelar
+              Cerrar
             </button>
 
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="text-xs font-semibold text-neutral-950 hover:text-neutral-600 transition-colors cursor-pointer disabled:opacity-40 flex items-center gap-1.5"
-            >
-              {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin stroke-[1.5]" />}
-              <span>{isSaving ? "Guardando en Sheet..." : "Guardar cambios"}</span>
-            </button>
+            {!isPast && (
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="text-xs font-semibold text-neutral-950 hover:text-neutral-600 transition-colors cursor-pointer disabled:opacity-40 flex items-center gap-1.5"
+              >
+                {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin stroke-[1.5]" />}
+                <span>{isSaving ? "Guardando en Sheet..." : "Guardar cambios"}</span>
+              </button>
+            )}
           </div>
         </form>
       </div>

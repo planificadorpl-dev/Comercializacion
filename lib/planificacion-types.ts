@@ -135,3 +135,21 @@ export function buildFinalFormula(sheetRowIndex: number, asesor: string, parroqu
   return `=IF(C${sheetRowIndex}="", "", "Asesor: " & C${sheetRowIndex} & IF(F${sheetRowIndex}<>"", " - " & F${sheetRowIndex}, "") & IF(H${sheetRowIndex}<>"", " - " & H${sheetRowIndex}, "") & IF(I${sheetRowIndex}<>"", " (" & I${sheetRowIndex} & ")", ""))`;
 }
 
+// Returns today's ISO date (YYYY-MM-DD) in local time (Venezuela / client)
+export function getTodayLocalIso(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Checks if an ISO date string is strictly in the past (before today)
+export function isPastIsoDate(isoDate: string): boolean {
+  if (!isoDate) return false;
+  const standardIso = toIsoDateString(isoDate);
+  if (!standardIso) return false;
+  const today = getTodayLocalIso();
+  return standardIso < today;
+}
+

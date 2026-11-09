@@ -20,6 +20,8 @@ import {
   NewPlanningItem,
   getMonthFromDate,
   toSheetDateFormat,
+  getTodayLocalIso,
+  isPastIsoDate,
 } from "@/lib/planificacion-types";
 
 interface PlanificadorDailySheetProps {
@@ -56,6 +58,7 @@ interface AdvisorDailyRowProps {
   isPlanned: boolean;
   isSelected: boolean;
   showBulkTool: boolean;
+  isReadOnly?: boolean;
   draft: { parroquia: string; sector: string; actividad: string };
   status: "idle" | "saving" | "saved" | "error";
   existingRec?: PlanningSheetRecord;
@@ -73,6 +76,7 @@ const AdvisorDailyRow = memo(function AdvisorDailyRow({
   isPlanned,
   isSelected,
   showBulkTool,
+  isReadOnly = false,
   draft,
   status,
   existingRec,
@@ -88,7 +92,7 @@ const AdvisorDailyRow = memo(function AdvisorDailyRow({
   return (
     <div
       onClick={() => {
-        if (showBulkTool) {
+        if (showBulkTool && !isReadOnly) {
           onToggleSelect(adv);
         }
       }}
@@ -104,7 +108,7 @@ const AdvisorDailyRow = memo(function AdvisorDailyRow({
       {/* 1. Nombre del asesor y estado */}
       <div className="flex items-center justify-between md:justify-start gap-3 min-w-[200px]">
         <div className="flex items-center gap-2.5">
-          {showBulkTool && (
+          {showBulkTool && !isReadOnly && (
             <button
               type="button"
               onClick={(e) => {
@@ -169,7 +173,7 @@ const AdvisorDailyRow = memo(function AdvisorDailyRow({
           ) : isPlanned || status === "saved" ? (
             <div className="flex items-center gap-2">
               <Check className="w-4 h-4 text-neutral-900 stroke-[2] animate-in zoom-in-75 duration-150" />
-              {existingRec && (
+              {existingRec && !isReadOnly && (
                 <button
                   type="button"
                   onClick={() => onRequestDelete(existingRec)}
@@ -184,7 +188,7 @@ const AdvisorDailyRow = memo(function AdvisorDailyRow({
         </div>
       </div>
 
-      {/* 2. Selectores: Parroquia, Sector, Actividad */}
+      {/* 2. Selectores: Parroquia, Sector, Actividad (deshabilitados si es día pasado) */}
       <div
         onClick={(e) => e.stopPropagation()}
         className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 max-w-2xl"
@@ -198,7 +202,8 @@ const AdvisorDailyRow = memo(function AdvisorDailyRow({
             options={parroquiasOptions}
             onChange={(p) => onFieldChange(adv, "parroquia", p)}
             compact
-            placeholder="Seleccionar parroquia..."
+            placeholder={isReadOnly ? "—" : "Seleccionar parroquia..."}
+            disabled={isReadOnly}
           />
         </div>
 
@@ -212,8 +217,13 @@ const AdvisorDailyRow = memo(function AdvisorDailyRow({
             onChange={(s) => onFieldChange(adv, "sector", s)}
             compact
             placeholder={
-              draft.parroquia ? "Seleccionar sector..." : "Elige parroquia primero..."
+              isReadOnly
+                ? "—"
+                : draft.parroquia
+                ? "Seleccionar sector..."
+                : "Elige parroquia primero..."
             }
+            disabled={isReadOnly}
           />
         </div>
 
@@ -226,7 +236,8 @@ const AdvisorDailyRow = memo(function AdvisorDailyRow({
             options={activitiesOptions}
             onChange={(a) => onFieldChange(adv, "actividad", a)}
             compact
-            placeholder="Seleccionar actividad..."
+            placeholder={isReadOnly ? "—" : "Seleccionar actividad..."}
+            disabled={isReadOnly}
           />
         </div>
       </div>
@@ -245,11 +256,11 @@ const AdvisorDailyRow = memo(function AdvisorDailyRow({
           <div className="flex items-center gap-2">
             <div
               className="flex items-center text-neutral-900 py-1"
-              title="Guardado exitosamente"
+              title={isReadOnly ? "Jornada pasada (cerrada)" : "Guardado exitosamente"}
             >
               <Check className="w-4 h-4 text-neutral-900 stroke-[2] animate-in zoom-in-75 duration-150" />
             </div>
-            {existingRec && (
+            {existingRec && !isReadOnly && (
               <button
                 type="button"
                 onClick={() => onRequestDelete(existingRec)}
@@ -261,7 +272,9 @@ const AdvisorDailyRow = memo(function AdvisorDailyRow({
             )}
           </div>
         ) : (
-          <span className="text-[11px] text-neutral-300 py-1">Pendiente</span>
+          <span className="text-[11px] text-neutral-300 py-1">
+            {isReadOnly ? "Sin planificar" : "Pendiente"}
+          </span>
         )}
       </div>
     </div>
@@ -278,14 +291,17 @@ export function PlanificadorDailySheet({
   onDateChange,
   onDeleteSuccess,
 }: PlanificadorDailySheetProps) {
-  // Fecha de hoy en formato ISO (YYYY-MM-DD)
-  const todayIso = useMemo(() => new Date().toISOString().split("T")[0], []);
+  // Fecha de hoy en formato ISO (YYYY-MM-DD) usando hora local
+  const todayIso = useMemo(() => getTodayLocalIso(), []);
 
   // ── 1. DÍA DE LA PLANIFICACIÓN (FECHA ANCLA) ──────────────────────────────
   const [selectedDate, setSelectedDate] = useState<string>(
     initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) ? initialDate : todayIso
   );
   const dateInputRef = useRef<HTMLInputElement>(null);
+
+  // Un día se considera pasado (cerrado/solo lectura) si es estrictamente menor a hoy
+  const isPast = selectedDate < todayIso;
 
   // Sincronizar fecha ancla cuando cambia desde el exterior (ej. selector de mes en el encabezado)
   useEffect(() => {
@@ -546,6 +562,9 @@ export function PlanificadorDailySheet({
     adv: string,
     draftToSave: { parroquia: string; sector: string; actividad: string }
   ) => {
+    // Los días que ya pasaron son históricos y no pueden editarse
+    if (isPast) return;
+
     const advKey = adv.trim().toLowerCase();
     setSavingStatus((prev) => ({ ...prev, [advKey]: "saving" }));
     setFeedbackMessage(null);
@@ -607,6 +626,9 @@ export function PlanificadorDailySheet({
     field: "parroquia" | "sector" | "actividad",
     val: string
   ) => {
+    // Si la fecha ya pasó, no permitir modificaciones
+    if (isPast) return;
+
     const currentDraft = getAdvisorDraft(adv);
     let updatedDraft = { ...currentDraft };
 
@@ -648,7 +670,7 @@ export function PlanificadorDailySheet({
 
   // ── 7. ELIMINAR JORNADA CON CONFIRMACIÓN (RESPUESTA INSTANTÁNEA OPTIMISTA) ───
   const handleConfirmDelete = async () => {
-    if (!recordToDelete) return;
+    if (!recordToDelete || isPast) return;
     const targetRecord = recordToDelete;
     const advKey = targetRecord.asesor.trim().toLowerCase();
     const deletedAdvisor = targetRecord.asesor;
@@ -737,7 +759,7 @@ export function PlanificadorDailySheet({
 
   // Asignar Dirección (Parroquia y Sector) a los asesores seleccionados
   const applyBulkDireccion = async () => {
-    if (selectedAdvisors.size === 0 || !bulkParroquia || !bulkSector) return;
+    if (isPast || selectedAdvisors.size === 0 || !bulkParroquia || !bulkSector) return;
     setIsApplyingBulk(true);
 
     const targetAdvisors = metadata.advisors.filter((adv) =>
@@ -857,7 +879,7 @@ export function PlanificadorDailySheet({
 
   // Asignar Actividad a los asesores seleccionados
   const applyBulkActividad = async () => {
-    if (selectedAdvisors.size === 0 || !bulkActivity) return;
+    if (isPast || selectedAdvisors.size === 0 || !bulkActivity) return;
     setIsApplyingBulk(true);
 
     const targetAdvisors = metadata.advisors.filter((adv) =>
@@ -998,10 +1020,15 @@ export function PlanificadorDailySheet({
             <span className="text-sm font-semibold text-neutral-900 capitalize">
               {formatNaturalDate(selectedDate)}
             </span>
+            {isPast && (
+              <span className="text-[11px] text-neutral-400 font-normal">
+                · Solo lectura
+              </span>
+            )}
           </div>
           <p className="text-xs text-neutral-500 mt-0.5 font-normal">
-            {plannedCount} de {totalCount} asesores planificados hoy ·{" "}
-            {pendingCount === 0 ? "¡Día completado!" : `${pendingCount} pendientes`}
+            {plannedCount} de {totalCount} asesores planificados{isPast ? " ese día" : " hoy"} ·{" "}
+            {pendingCount === 0 ? "Día completado" : `${pendingCount} pendientes`}
           </p>
         </div>
 
@@ -1168,32 +1195,36 @@ export function PlanificadorDailySheet({
             Planificados ({plannedCount})
           </button>
 
-          <span className="text-neutral-200">|</span>
+          {!isPast && (
+            <>
+              <span className="text-neutral-200">|</span>
 
-          {/* Toggle de herramienta en bloque */}
-          <button
-            type="button"
-            onClick={() => {
-              setShowBulkTool(!showBulkTool);
-              if (showBulkTool) {
-                clearSelectedAdvisors();
-              }
-            }}
-            className={cn(
-              "transition-colors cursor-pointer flex items-center gap-1",
-              showBulkTool
-                ? "text-neutral-900 font-semibold"
-                : "text-neutral-500 hover:text-neutral-900"
-            )}
-          >
-            <Copy className="w-3 h-3 stroke-[1.25]" />
-            <span>{showBulkTool ? "Ocultar asignación rápida" : "Asignación rápida"}</span>
-          </button>
+              {/* Toggle de herramienta en bloque */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBulkTool(!showBulkTool);
+                  if (showBulkTool) {
+                    clearSelectedAdvisors();
+                  }
+                }}
+                className={cn(
+                  "transition-colors cursor-pointer flex items-center gap-1",
+                  showBulkTool
+                    ? "text-neutral-900 font-semibold"
+                    : "text-neutral-500 hover:text-neutral-900"
+                )}
+              >
+                <Copy className="w-3 h-3 stroke-[1.25]" />
+                <span>{showBulkTool ? "Ocultar asignación rápida" : "Asignación rápida"}</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {/* ── PANEL DESPLEGABLE DE ASIGNACIÓN RÁPIDA (DIRECCIÓN / ACTIVIDAD) ── */}
-      {showBulkTool && (
+      {showBulkTool && !isPast && (
         <div className="space-y-3 py-3 px-1 border-b border-neutral-100 animate-in fade-in duration-150">
           {/* Fila superior: Selector de Modo (Dirección vs Actividad) y Selección de Asesores */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-neutral-100">
@@ -1460,7 +1491,8 @@ export function PlanificadorDailySheet({
                 initials={initials}
                 isPlanned={isPlanned}
                 isSelected={isSelected}
-                showBulkTool={showBulkTool}
+                showBulkTool={showBulkTool && !isPast}
+                isReadOnly={isPast}
                 draft={draft}
                 status={status}
                 existingRec={existingRec}
