@@ -113,8 +113,8 @@ export default function PlanificacionPage() {
   const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("mensual");
 
-  // Fecha de referencia: por defecto 2026-11-02 (o fecha actual)
-  const [referenceDate, setReferenceDate] = useState<Date>(() => new Date(2026, 10, 2));
+  // Fecha de referencia: por defecto el día de hoy
+  const [referenceDate, setReferenceDate] = useState<Date>(() => new Date());
 
   // Carga concurrente de planificación y operaciones para renderizado instantáneo
   const loadData = useCallback(async (force = false) => {
@@ -132,17 +132,6 @@ export default function PlanificacionPage() {
 
       if (planData && planData.length > 0) {
         setRecords(planData);
-        const sortedDates = planData
-          .map((d) => d.fecha)
-          .filter(Boolean)
-          .sort();
-        if (sortedDates.length > 0) {
-          const latestStr = sortedDates[sortedDates.length - 1];
-          const latestParsed = parseDateSafe(latestStr);
-          if (latestParsed) {
-            setReferenceDate(latestParsed);
-          }
-        }
       }
 
       if (opData) {
@@ -489,15 +478,7 @@ export default function PlanificacionPage() {
 
   const handleToday = () => {
     setSelectedDateFilter(null);
-    const sorted = records.map((r) => r.fecha).filter(Boolean).sort();
-    if (sorted.length > 0) {
-      const parsed = parseDateSafe(sorted[sorted.length - 1]);
-      if (parsed) {
-        setReferenceDate(parsed);
-        return;
-      }
-    }
-    setReferenceDate(new Date(2026, 10, 2));
+    setReferenceDate(new Date());
   };
 
   const handleSelectSpecificDay = (dateStr: string) => {
