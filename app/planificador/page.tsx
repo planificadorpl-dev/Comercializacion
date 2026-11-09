@@ -81,12 +81,12 @@ export default function PlanificadorPage() {
   };
 
   return (
-    <div className="flex h-screen bg-[#FBFBFB] text-neutral-900 font-sans antialiased overflow-hidden selection:bg-neutral-900 selection:text-white">
+    <div className="flex min-h-screen h-[100dvh] bg-[#FBFBFB] text-neutral-900 font-sans antialiased overflow-hidden selection:bg-neutral-900 selection:text-white">
       {/* Sidebar with activeSection planificador */}
       <Sidebar activeSection="planificador" />
 
       {/* Main scrollable canvas */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto overscroll-y-contain">
         {/* Sticky subtle top bar */}
         <header className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 py-3 bg-[#FBFBFB]/90 backdrop-blur-xs border-b border-neutral-100">
           <div className="flex items-center gap-2 sm:gap-3">
@@ -109,7 +109,7 @@ export default function PlanificadorPage() {
         </header>
 
         {/* Content area */}
-        <main className="p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
+        <main className="p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6 pb-48">
           {/* Header */}
           <PlanificadorHeader
             selectedMonth={selectedMonth}

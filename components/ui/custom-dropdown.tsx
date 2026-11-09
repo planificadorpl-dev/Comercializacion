@@ -45,6 +45,7 @@ export function CustomDropdown({
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [resolvedAlign, setResolvedAlign] = useState<"left" | "right">(align);
+  const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -72,6 +73,14 @@ export function CustomDropdown({
         setResolvedAlign("left");
       } else {
         setResolvedAlign(align);
+      }
+
+      // Check vertical room: if near bottom of screen, open upwards
+      const dropdownEstHeight = 260;
+      if (rect.bottom + dropdownEstHeight > window.innerHeight && rect.top > dropdownEstHeight) {
+        setDropUp(true);
+      } else {
+        setDropUp(false);
       }
     }
 
@@ -133,7 +142,8 @@ export function CustomDropdown({
       {open && (
         <div
           className={cn(
-            "absolute mt-1 min-w-[200px] w-full max-w-[calc(100vw-24px)] bg-white rounded-lg shadow-xl border border-neutral-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 flex flex-col",
+            "absolute min-w-[200px] w-full max-w-[calc(100vw-24px)] bg-white rounded-lg shadow-xl border border-neutral-200/90 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 flex flex-col",
+            dropUp ? "bottom-full mb-1" : "top-full mt-1",
             resolvedAlign === "right" ? "right-0 left-auto" : "left-0"
           )}
         >
