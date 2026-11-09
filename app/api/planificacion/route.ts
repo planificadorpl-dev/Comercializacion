@@ -19,7 +19,10 @@ export async function GET(req: Request) {
 
     const [metadata, records] = await Promise.all([
       getPlanningMetadata(forceRefresh),
-      getPlanningSheetRecords(),
+      getPlanningSheetRecords().catch((err) => {
+        console.error("Error cargando registros de hoja Data:", err.message);
+        return [];
+      }),
     ]);
 
     return NextResponse.json(

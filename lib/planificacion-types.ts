@@ -134,3 +134,4 @@ export function getMonthFromDate(dateStr: string): string {
 export function buildFinalFormula(sheetRowIndex: number, asesor: string, parroquia: string, actividad: string, estatus: string): string {
   return `=IF(C${sheetRowIndex}="", "", "Asesor: " & C${sheetRowIndex} & IF(F${sheetRowIndex}<>"", " - " & F${sheetRowIndex}, "") & IF(H${sheetRowIndex}<>"", " - " & H${sheetRowIndex}, "") & IF(I${sheetRowIndex}<>"", " (" & I${sheetRowIndex} & ")", ""))`;
 }
+
