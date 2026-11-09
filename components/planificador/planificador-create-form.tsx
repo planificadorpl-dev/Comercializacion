@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Search,
   X,
@@ -13,14 +13,18 @@ import {
   Activity,
   RotateCcw,
   Loader2,
+  PenLine,
   Sparkles,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CustomDropdown } from "@/components/ui/custom-dropdown";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import {
   PlanningMetadata,
   PlanningSheetRecord,
   NewPlanningItem,
+  SPANISH_MONTHS,
   getMonthFromDate,
   toIsoDateString,
   toSheetDateFormat,
@@ -34,6 +38,52 @@ interface PlanificadorCreateFormProps {
 }
 
 type WizardStep = 1 | 2 | 3 | 4;
+
+/**
+ * Calcula la próxima fecha sin planificación para un asesor dado.
+ * Comienza desde hoy (o el primer día del mes si estamos en otro mes)
+ * y avanza día a día buscando la primera fecha de lunes a sábado libre.
+ */
+function calculateNextUnplannedDate(
+  advisorName: string,
+  records: PlanningSheetRecord[],
+  defaultMonth?: string
+): string {
+  if (!advisorName) return new Date().toISOString().split("T")[0];
+
+  const normAdv = advisorName.trim().toLowerCase();
+  const plannedDates = new Set<string>();
+
+  records.forEach((r) => {
+    if (r.asesor && r.asesor.trim().toLowerCase() === normAdv && r.isoFecha) {
+      plannedDates.add(r.isoFecha);
+    }
+  });
+
+  const now = new Date();
+  let candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // Si se pasa un mes específico diferente al mes actual, iniciar desde el 1ero de ese mes
+  if (defaultMonth) {
+    const monthIdx = SPANISH_MONTHS.indexOf(defaultMonth.toUpperCase());
+    if (monthIdx >= 0 && monthIdx !== now.getMonth()) {
+      candidate = new Date(now.getFullYear(), monthIdx, 1);
+    }
+  }
+
+  // Buscar hasta 60 días en adelante el primer día no planificado (excluyendo domingos)
+  for (let i = 0; i < 60; i++) {
+    const dayOfWeek = candidate.getDay(); // 0 = Domingo
+    const iso = candidate.toISOString().split("T")[0];
+
+    if (dayOfWeek !== 0 && !plannedDates.has(iso)) {
+      return iso;
+    }
+    candidate.setDate(candidate.getDate() + 1);
+  }
+
+  return new Date().toISOString().split("T")[0];
+}
 
 export function PlanificadorCreateForm({
   metadata,
@@ -51,10 +101,9 @@ export function PlanificadorCreateForm({
   const [selectionMode, setSelectionMode] = useState<"single" | "multi">("single");
 
   // 2. Date Selection
-  const todayIso = new Date().toISOString().split("T")[0];
-  const [selectedDate, setSelectedDate] = useState<string>(todayIso);
+  const [selectedDate, setSelectedDate] = useState<string>("");
   const [dateMode, setDateMode] = useState<"single" | "multiple">("single");
-  const [endDate, setEndDate] = useState<string>(todayIso);
+  const [endDate, setEndDate] = useState<string>("");
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([1, 2, 3, 4, 5]); // Lun-Vie
 
   // 3. Location Selection
@@ -69,28 +118,84 @@ export function PlanificadorCreateForm({
   const [selectedActivity, setSelectedActivity] = useState<string>("Recorrido con Instaladores");
   const [selectedStatus, setSelectedStatus] = useState<string>("Planificado");
 
+  // Allow adding a 2nd plan on the same day if user explicitly clicks
+  const [allowSecondActivityOnDay, setAllowSecondActivityOnDay] = useState<boolean>(false);
+
+  // Delete dialog state
+  const [recordToDelete, setRecordToDelete] = useState<PlanningSheetRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // ── FILTERED ADVISORS ─────────────────────────────────────────────────────
+  // ── FILTERED ACTIVE ADVISORS ──────────────────────────────────────────────
   const filteredAdvisors = useMemo(() => {
     if (!advisorSearch.trim()) return metadata.advisors;
     const q = advisorSearch.toLowerCase().trim();
     return metadata.advisors.filter((a) => a.toLowerCase().includes(q));
   }, [metadata.advisors, advisorSearch]);
 
+  // Primary active advisor (if single mode)
+  const currentAdvisor = selectedAdvisors.length > 0 ? selectedAdvisors[0] : "";
+
+  // ── ITINERARIO DEL ASESOR SELECCIONADO ─────────────────────────────────────
+  const advisorItinerary = useMemo(() => {
+    if (!currentAdvisor) return [];
+    const norm = currentAdvisor.trim().toLowerCase();
+    return existingRecords
+      .filter((r) => r.asesor && r.asesor.trim().toLowerCase() === norm)
+      .sort((a, b) => (a.isoFecha || a.fecha).localeCompare(b.isoFecha || b.fecha));
+  }, [currentAdvisor, existingRecords]);
+
+  // ── DETECTAR SI EL DÍA SELECCIONADO YA TIENE PLANIFICACIÓN ─────────────────
+  const existingRecordOnSelectedDate = useMemo<PlanningSheetRecord | null>(() => {
+    if (!currentAdvisor || !selectedDate || dateMode !== "single") return null;
+    const norm = currentAdvisor.trim().toLowerCase();
+    const match = existingRecords.find(
+      (r) => r.isoFecha === selectedDate && r.asesor && r.asesor.trim().toLowerCase() === norm
+    );
+    return match || null;
+  }, [currentAdvisor, selectedDate, dateMode, existingRecords]);
+
+  // When an existing record is detected, load its values into the form fields (unless explicitly adding second)
+  useEffect(() => {
+    if (existingRecordOnSelectedDate && !allowSecondActivityOnDay) {
+      if (existingRecordOnSelectedDate.sector) setSelectedSector(existingRecordOnSelectedDate.sector);
+      if (existingRecordOnSelectedDate.parroquia) setSelectedParroquia(existingRecordOnSelectedDate.parroquia);
+      if (existingRecordOnSelectedDate.municipio) setSelectedMunicipio(existingRecordOnSelectedDate.municipio);
+      if (existingRecordOnSelectedDate.estado) setSelectedEstado(existingRecordOnSelectedDate.estado);
+      if (existingRecordOnSelectedDate.tipo_actividad) setSelectedActivity(existingRecordOnSelectedDate.tipo_actividad);
+      if (existingRecordOnSelectedDate.estatus) setSelectedStatus(existingRecordOnSelectedDate.estatus);
+    }
+  }, [existingRecordOnSelectedDate, allowSecondActivityOnDay]);
+
+  // ── AUTO-SELECCIONAR PRÓXIMA FECHA SIN PLANIFICAR AL ELEGIR ASESOR ────────
+  const applyNextUnplannedDateForAdvisor = useCallback((adv: string) => {
+    const nextDate = calculateNextUnplannedDate(adv, existingRecords, defaultMonth);
+    setSelectedDate(nextDate);
+    setEndDate(nextDate);
+    setDateMode("single");
+    setAllowSecondActivityOnDay(false);
+  }, [existingRecords, defaultMonth]);
+
+  // Handle toggling advisor
   const toggleAdvisor = (adv: string) => {
     if (selectionMode === "single") {
       setSelectedAdvisors([adv]);
+      applyNextUnplannedDateForAdvisor(adv);
       if (viewMode === "wizard") {
         setCurrentStep(2);
       }
     } else {
-      setSelectedAdvisors((prev) =>
-        prev.includes(adv) ? prev.filter((a) => a !== adv) : [...prev, adv]
-      );
+      setSelectedAdvisors((prev) => {
+        const next = prev.includes(adv) ? prev.filter((a) => a !== adv) : [...prev, adv];
+        if (next.length === 1) {
+          applyNextUnplannedDateForAdvisor(next[0]);
+        }
+        return next;
+      });
     }
   };
 
@@ -100,6 +205,7 @@ export function PlanificadorCreateForm({
 
   const clearAdvisorSelection = () => {
     setSelectedAdvisors([]);
+    setSelectedDate(new Date().toISOString().split("T")[0]);
   };
 
   // ── DATE SHORTCUTS & TARGET DATES ─────────────────────────────────────────
@@ -109,6 +215,7 @@ export function PlanificadorCreateForm({
     const iso = d.toISOString().split("T")[0];
     setSelectedDate(iso);
     setDateMode("single");
+    setAllowSecondActivityOnDay(false);
   };
 
   const targetDates = useMemo<string[]>(() => {
@@ -140,9 +247,9 @@ export function PlanificadorCreateForm({
       const [y, m, d] = isoStr.split("-").map(Number);
       const date = new Date(y, m - 1, d);
       return date.toLocaleDateString("es-VE", {
-        weekday: "long",
+        weekday: "short",
         day: "numeric",
-        month: "long",
+        month: "short",
       });
     } catch {
       return isoStr;
@@ -207,36 +314,26 @@ export function PlanificadorCreateForm({
     }
   };
 
-  // ── DETECT CONFLICTS ──────────────────────────────────────────────────────
-  const conflicts = useMemo(() => {
-    const found: { asesor: string; fecha: string; sector: string; actividad: string }[] = [];
-    if (selectedAdvisors.length === 0 || targetDates.length === 0) return found;
-
-    for (const d of targetDates) {
-      for (const adv of selectedAdvisors) {
-        const normAdv = adv.trim().toLowerCase();
-        const existing = existingRecords.find(
-          (r) =>
-            r.isoFecha === d &&
-            r.asesor.trim().toLowerCase() === normAdv
-        );
-        if (existing) {
-          found.push({
-            asesor: adv,
-            fecha: d,
-            sector: existing.sector,
-            actividad: existing.tipo_actividad,
-          });
-        }
-      }
+  // Quick edit directly from the bottom itinerary list
+  const handleSelectItineraryRowForEdit = (rec: PlanningSheetRecord) => {
+    setSelectedAdvisors([rec.asesor]);
+    setSelectedDate(rec.isoFecha || toIsoDateString(rec.fecha));
+    setDateMode("single");
+    setSelectedSector(rec.sector);
+    setSelectedParroquia(rec.parroquia);
+    setSelectedMunicipio(rec.municipio);
+    setSelectedEstado(rec.estado);
+    setSelectedActivity(rec.tipo_actividad);
+    setSelectedStatus(rec.estatus);
+    setAllowSecondActivityOnDay(false);
+    if (viewMode === "wizard") {
+      setCurrentStep(3);
     }
-    return found;
-  }, [selectedAdvisors, targetDates, existingRecords]);
+  };
 
-  // Total items
-  const totalItemsToGenerate = selectedAdvisors.length * targetDates.length;
+  // ── SUBMISSION (CREATION OR INLINE UPDATE) ─────────────────────────────────
+  const isEditingExistingDay = Boolean(existingRecordOnSelectedDate && !allowSecondActivityOnDay);
 
-  // ── SUBMISSION ────────────────────────────────────────────────────────────
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMessage(null);
@@ -260,28 +357,67 @@ export function PlanificadorCreateForm({
       return;
     }
 
-    const items: NewPlanningItem[] = [];
+    setIsSubmitting(true);
 
-    for (const d of targetDates) {
-      const mes = getMonthFromDate(d);
-      for (const adv of selectedAdvisors) {
-        items.push({
-          fecha: d,
-          mes,
-          asesor: adv,
+    try {
+      // CASO A: Actualizar jornada ya existente en esta fecha
+      if (isEditingExistingDay && existingRecordOnSelectedDate) {
+        const updatedItem: NewPlanningItem = {
+          fecha: selectedDate,
+          mes: getMonthFromDate(selectedDate),
+          asesor: currentAdvisor,
           estado: selectedEstado,
           municipio: selectedMunicipio,
           parroquia: selectedParroquia,
           sector: selectedSector,
           tipo_actividad: selectedActivity,
           estatus: selectedStatus,
+        };
+
+        const res = await fetch("/api/planificacion", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sheetRowIndex: existingRecordOnSelectedDate.sheetRowIndex,
+            item: updatedItem,
+          }),
         });
+
+        const json = await res.json();
+        if (json.success) {
+          setFeedbackMessage(
+            `Jornada actualizada exitosamente en la fila ${existingRecordOnSelectedDate.sheetRowIndex} de Sheet Data.`
+          );
+          onSuccess(1);
+          // Advance to next unplanned date
+          if (currentAdvisor) {
+            applyNextUnplannedDateForAdvisor(currentAdvisor);
+          }
+        } else {
+          setErrorMessage(json.error || "No se pudo actualizar la jornada.");
+        }
+        return;
       }
-    }
 
-    setIsSubmitting(true);
+      // CASO B: Crear nueva(s) jornada(s)
+      const items: NewPlanningItem[] = [];
+      for (const d of targetDates) {
+        const mes = getMonthFromDate(d);
+        for (const adv of selectedAdvisors) {
+          items.push({
+            fecha: d,
+            mes,
+            asesor: adv,
+            estado: selectedEstado,
+            municipio: selectedMunicipio,
+            parroquia: selectedParroquia,
+            sector: selectedSector,
+            tipo_actividad: selectedActivity,
+            estatus: selectedStatus,
+          });
+        }
+      }
 
-    try {
       const res = await fetch("/api/planificacion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -297,6 +433,11 @@ export function PlanificadorCreateForm({
           } en la hoja Data.`
         );
         onSuccess(items.length);
+
+        // Advance to next unplanned date automatically for the next entry!
+        if (currentAdvisor) {
+          applyNextUnplannedDateForAdvisor(currentAdvisor);
+        }
       } else {
         setErrorMessage(json.error || "No se pudo guardar la planificación en Google Sheets.");
       }
@@ -307,33 +448,44 @@ export function PlanificadorCreateForm({
     }
   };
 
-  const handleResetForSameAdvisor = () => {
-    setFeedbackMessage(null);
-    setErrorMessage(null);
-    // Move date forward 1 day
-    if (selectedDate) {
-      const d = new Date(selectedDate + "T12:00:00");
-      d.setDate(d.getDate() + 1);
-      setSelectedDate(d.toISOString().split("T")[0]);
-    }
-    if (viewMode === "wizard") setCurrentStep(2);
-  };
+  // ── ELIMINACIÓN DE JORNADA ────────────────────────────────────────────────
+  const handleConfirmDelete = async () => {
+    if (!recordToDelete) return;
+    setIsDeleting(true);
 
-  const handleResetAll = () => {
-    setFeedbackMessage(null);
-    setErrorMessage(null);
-    setSelectedAdvisors([]);
-    setSelectedSector("");
-    if (viewMode === "wizard") setCurrentStep(1);
+    try {
+      const res = await fetch(
+        `/api/planificacion?sheetRowIndex=${recordToDelete.sheetRowIndex}`,
+        { method: "DELETE" }
+      );
+      const json = await res.json();
+
+      if (json.success) {
+        setFeedbackMessage(
+          `Jornada eliminada de la fila ${recordToDelete.sheetRowIndex} de la hoja Data.`
+        );
+        onSuccess(1);
+        setRecordToDelete(null);
+        if (currentAdvisor) {
+          applyNextUnplannedDateForAdvisor(currentAdvisor);
+        }
+      } else {
+        setErrorMessage(json.error || "No se pudo eliminar el registro.");
+      }
+    } catch {
+      setErrorMessage("Error de conexión al eliminar.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
     <div className="space-y-6 pt-2">
-      {/* Top Controls: View Mode & Feedback */}
+      {/* Top Bar: View Mode & Helper */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-100">
         <div>
           <span className="text-xs text-neutral-400">
-            {metadata.advisors.length} asesores activos disponibles para planificación
+            {metadata.advisors.length} asesores activos · Hoja Data sincronizada
           </span>
         </div>
 
@@ -367,25 +519,27 @@ export function PlanificadorCreateForm({
         </div>
       </div>
 
-      {/* Subtle inline messages (Zero colored banners, strictly clean typography) */}
+      {/* Inline Feedback Messages (Strict Rule: Zero colored banner boxes) */}
       {feedbackMessage && (
         <div className="py-2 animate-in fade-in duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-neutral-800 border-b border-neutral-100">
           <span>{feedbackMessage}</span>
           <div className="flex items-center gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={handleResetForSameAdvisor}
-              className="text-neutral-900 font-medium hover:underline cursor-pointer"
-            >
-              Planificar otro día
-            </button>
+            {currentAdvisor && (
+              <button
+                type="button"
+                onClick={() => applyNextUnplannedDateForAdvisor(currentAdvisor)}
+                className="text-neutral-900 font-medium hover:underline cursor-pointer"
+              >
+                Planificar siguiente fecha libre
+              </button>
+            )}
             <span className="text-neutral-300">·</span>
             <button
               type="button"
-              onClick={handleResetAll}
+              onClick={clearAdvisorSelection}
               className="text-neutral-500 hover:text-neutral-900 cursor-pointer"
             >
-              Nueva jornada
+              Nuevo asesor
             </button>
           </div>
         </div>
@@ -405,8 +559,12 @@ export function PlanificadorCreateForm({
           {/* Step Navigation Bar */}
           <div className="flex items-center justify-between gap-1 border-b border-neutral-100 pb-2 overflow-x-auto no-scrollbar">
             {[
-              { num: 1 as WizardStep, label: "Asesor", detail: selectedAdvisors.join(", ") },
-              { num: 2 as WizardStep, label: "Fecha", detail: selectedDate ? toSheetDateFormat(selectedDate) : "" },
+              { num: 1 as WizardStep, label: "Asesor", detail: currentAdvisor },
+              {
+                num: 2 as WizardStep,
+                label: "Fecha",
+                detail: selectedDate ? toSheetDateFormat(selectedDate) : "",
+              },
               { num: 3 as WizardStep, label: "Sector", detail: selectedSector },
               { num: 4 as WizardStep, label: "Actividad", detail: selectedActivity },
             ].map((st) => {
@@ -463,7 +621,7 @@ export function PlanificadorCreateForm({
                     ¿A quién vas a planificar?
                   </h3>
                   <p className="text-xs text-neutral-400 mt-0.5">
-                    Toca un asesor para seleccionarlo y avanzar
+                    Toca un asesor activo para seleccionarlo y avanzar a la próxima fecha libre
                   </p>
                 </div>
 
@@ -516,7 +674,7 @@ export function PlanificadorCreateForm({
               </div>
 
               {/* Active Advisors List - Touch target minimum 48px */}
-              <div className="divide-y divide-neutral-100 max-h-[55vh] overflow-y-auto">
+              <div className="divide-y divide-neutral-100 max-h-[50vh] overflow-y-auto">
                 {filteredAdvisors.length === 0 ? (
                   <div className="py-8 text-center text-xs text-neutral-400">
                     No se encontraron asesores activos con &quot;{advisorSearch}&quot;
@@ -530,6 +688,11 @@ export function PlanificadorCreateForm({
                       .slice(0, 2)
                       .join("")
                       .toUpperCase();
+
+                    // Check how many days are planned for this advisor in existing records
+                    const plannedCount = existingRecords.filter(
+                      (r) => r.asesor && r.asesor.trim().toLowerCase() === adv.trim().toLowerCase()
+                    ).length;
 
                     return (
                       <button
@@ -554,7 +717,13 @@ export function PlanificadorCreateForm({
                           >
                             {initials}
                           </span>
-                          <span className="text-sm">{adv}</span>
+                          <div>
+                            <span className="text-sm block">{adv}</span>
+                            <span className="text-[11px] text-neutral-400">
+                              {plannedCount}{" "}
+                              {plannedCount === 1 ? "jornada registrada" : "jornadas registradas"}
+                            </span>
+                          </div>
                         </div>
 
                         {isSelected ? (
@@ -591,13 +760,27 @@ export function PlanificadorCreateForm({
           {/* ── PASO 2: FECHA ─────────────────────────────────────────── */}
           {currentStep === 2 && (
             <div className="space-y-5 animate-in fade-in duration-150">
-              <div>
-                <h3 className="text-sm font-medium text-neutral-900">
-                  ¿Qué día realizarán la jornada?
-                </h3>
-                <p className="text-xs text-neutral-400 mt-0.5">
-                  Elige una fecha rápida o selecciona un día en el calendario
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                <div>
+                  <h3 className="text-sm font-medium text-neutral-900">
+                    ¿Qué día realizarán la jornada?
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    {currentAdvisor
+                      ? `Asignando a ${currentAdvisor}`
+                      : "Elige la fecha de trabajo"}
+                  </p>
+                </div>
+
+                {currentAdvisor && (
+                  <button
+                    type="button"
+                    onClick={() => applyNextUnplannedDateForAdvisor(currentAdvisor)}
+                    className="text-xs text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+                  >
+                    Ir a próxima fecha sin planificar
+                  </button>
+                )}
               </div>
 
               {/* Quick Tap Presets */}
@@ -632,7 +815,10 @@ export function PlanificadorCreateForm({
               <div className="flex items-center gap-4 text-xs pt-1">
                 <button
                   type="button"
-                  onClick={() => setDateMode("single")}
+                  onClick={() => {
+                    setDateMode("single");
+                    setAllowSecondActivityOnDay(false);
+                  }}
                   className={cn(
                     "cursor-pointer transition-colors",
                     dateMode === "single"
@@ -645,7 +831,10 @@ export function PlanificadorCreateForm({
                 <span className="text-neutral-200">·</span>
                 <button
                   type="button"
-                  onClick={() => setDateMode("multiple")}
+                  onClick={() => {
+                    setDateMode("multiple");
+                    setAllowSecondActivityOnDay(false);
+                  }}
                   className={cn(
                     "cursor-pointer transition-colors",
                     dateMode === "multiple"
@@ -663,7 +852,10 @@ export function PlanificadorCreateForm({
                   <input
                     type="date"
                     value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedDate(e.target.value);
+                      setAllowSecondActivityOnDay(false);
+                    }}
                     className="w-full text-sm border-b border-neutral-200 focus:border-neutral-900 bg-transparent py-2 text-neutral-900 outline-hidden font-mono transition-colors"
                   />
                   <div className="text-xs text-neutral-500 capitalize">
@@ -738,12 +930,43 @@ export function PlanificadorCreateForm({
                 </div>
               )}
 
-              {/* Conflict warning in natural text */}
-              {conflicts.length > 0 && (
-                <div className="pt-2 text-xs text-neutral-500">
-                  <span className="text-neutral-800 font-medium">Nota:</span> Ya existen{" "}
-                  {conflicts.length} asignaciones previas registradas para estos días. Se
-                  crearán registros adicionales si continúas.
+              {/* AVISO IMPORTANTE: SI ESTA FECHA YA TIENE PLANIFICACIÓN (SOLO PUEDE EDITARSE) */}
+              {existingRecordOnSelectedDate && !allowSecondActivityOnDay && (
+                <div className="pt-2 text-xs text-neutral-600 border-t border-neutral-100 space-y-1.5">
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <span className="text-neutral-900 font-medium">
+                        Esta fecha ya está planificada para {currentAdvisor}:
+                      </span>
+                      <span className="block text-neutral-500 mt-0.5">
+                        {existingRecordOnSelectedDate.tipo_actividad} en{" "}
+                        {existingRecordOnSelectedDate.sector} ({existingRecordOnSelectedDate.parroquia})
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setRecordToDelete(existingRecordOnSelectedDate)}
+                      className="text-neutral-400 hover:text-neutral-900 cursor-pointer ml-3 shrink-0"
+                      title="Eliminar esta asignación"
+                    >
+                      <X className="w-3.5 h-3.5 stroke-[1.5]" />
+                    </button>
+                  </div>
+
+                  <div className="pt-1 flex items-center gap-3 text-[11px]">
+                    <span className="text-neutral-500">
+                      Modo activo: los cambios que hagas actualizarán esta fila existente en Sheet Data.
+                    </span>
+                    <span className="text-neutral-300">·</span>
+                    <button
+                      type="button"
+                      onClick={() => setAllowSecondActivityOnDay(true)}
+                      className="text-neutral-400 hover:text-neutral-700 underline cursor-pointer"
+                    >
+                      Crear segunda actividad
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -763,8 +986,9 @@ export function PlanificadorCreateForm({
                   onClick={() => setCurrentStep(3)}
                   className="text-xs text-neutral-900 font-medium hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  <span>Continuar a Sector</span>
-                  <ChevronRight className="w-3.5 h-3.5 stroke-[1.5]" />
+                  <span>
+                    {isEditingExistingDay ? "Modificar Sector →" : "Continuar a Sector →"}
+                  </span>
                 </button>
               </div>
             </div>
@@ -773,20 +997,28 @@ export function PlanificadorCreateForm({
           {/* ── PASO 3: UBICACIÓN (SECTOR) ────────────────────────────── */}
           {currentStep === 3 && (
             <div className="space-y-5 animate-in fade-in duration-150">
-              <div>
-                <h3 className="text-sm font-medium text-neutral-900">
-                  ¿En qué sector estarán?
-                </h3>
-                <p className="text-xs text-neutral-400 mt-0.5">
-                  Escribe el nombre del sector para encontrarlo al instante
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+                <div>
+                  <h3 className="text-sm font-medium text-neutral-900">
+                    {isEditingExistingDay ? "Modificar sector asignado" : "¿En qué sector estarán?"}
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    {currentAdvisor} · {formatNaturalDate(selectedDate)}
+                  </p>
+                </div>
+
+                {isEditingExistingDay && (
+                  <span className="text-xs text-neutral-400">
+                    Editando fila {existingRecordOnSelectedDate?.sheetRowIndex}
+                  </span>
+                )}
               </div>
 
               {/* Current Selection summary if selected */}
               {selectedSector && (
                 <div className="py-2 flex items-baseline justify-between border-b border-neutral-100">
                   <div>
-                    <span className="text-xs text-neutral-400 block">Sector seleccionado:</span>
+                    <span className="text-xs text-neutral-400 block">Sector actual:</span>
                     <span className="text-sm font-medium text-neutral-900">
                       {selectedSector}
                     </span>
@@ -975,15 +1207,15 @@ export function PlanificadorCreateForm({
             <div className="space-y-6 animate-in fade-in duration-150">
               <div>
                 <h3 className="text-sm font-medium text-neutral-900">
-                  ¿Qué actividad realizarán?
+                  {isEditingExistingDay ? "Modificar actividad asignada" : "¿Qué actividad realizarán?"}
                 </h3>
                 <p className="text-xs text-neutral-400 mt-0.5">
-                  Selecciona el tipo de trabajo de campo asignado
+                  Selecciona el tipo de trabajo de campo
                 </p>
               </div>
 
               {/* Activities list touch rows */}
-              <div className="divide-y divide-neutral-100 max-h-64 overflow-y-auto">
+              <div className="divide-y divide-neutral-100 max-h-60 overflow-y-auto">
                 {metadata.activities.map((act) => {
                   const isSelected = selectedActivity === act;
                   return (
@@ -1019,26 +1251,36 @@ export function PlanificadorCreateForm({
                 />
               </div>
 
-              {/* Summary Overview before saving */}
+              {/* Summary Overview */}
               <div className="pt-4 border-t border-neutral-100 space-y-2">
-                <span className="text-xs text-neutral-400 block">Resumen de asignación:</span>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs text-neutral-400 block">
+                    {isEditingExistingDay ? "Resumen de la modificación:" : "Resumen de la jornada:"}
+                  </span>
+                  {isEditingExistingDay && (
+                    <span className="text-[11px] text-neutral-400 font-mono">
+                      Fila {existingRecordOnSelectedDate?.sheetRowIndex}
+                    </span>
+                  )}
+                </div>
+
                 <div className="space-y-1 text-xs text-neutral-700">
                   <div>
-                    <span className="text-neutral-400">Asesor(es):</span>{" "}
-                    <span className="text-neutral-900 font-medium">
-                      {selectedAdvisors.join(", ") || "No seleccionado"}
-                    </span>
+                    <span className="text-neutral-400">Asesor:</span>{" "}
+                    <span className="text-neutral-900 font-medium">{currentAdvisor}</span>
                   </div>
                   <div>
-                    <span className="text-neutral-400">Fecha(s):</span>{" "}
+                    <span className="text-neutral-400">Fecha:</span>{" "}
                     <span className="text-neutral-900 font-medium">
-                      {targetDates.map((d) => toSheetDateFormat(d)).join(", ")}
+                      {selectedDate ? toSheetDateFormat(selectedDate) : ""} ({formatNaturalDate(selectedDate)})
                     </span>
                   </div>
                   <div>
                     <span className="text-neutral-400">Ubicación:</span>{" "}
                     <span className="text-neutral-900 font-medium">
-                      {selectedSector ? `${selectedSector} (${selectedParroquia}, ${selectedMunicipio})` : "No seleccionado"}
+                      {selectedSector
+                        ? `${selectedSector} (${selectedParroquia}, ${selectedMunicipio})`
+                        : "No seleccionado"}
                     </span>
                   </div>
                   <div>
@@ -1059,24 +1301,35 @@ export function PlanificadorCreateForm({
                   <span>Volver a Sector</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleSubmit()}
-                  disabled={isSubmitting || !selectedSector || selectedAdvisors.length === 0}
-                  className="text-sm font-medium text-neutral-900 hover:text-neutral-600 disabled:opacity-40 transition-colors cursor-pointer flex items-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin stroke-[1.25]" />
-                      <span>Guardando en Google Sheets...</span>
-                    </>
-                  ) : (
-                    <span>
-                      Guardar {totalItemsToGenerate}{" "}
-                      {totalItemsToGenerate === 1 ? "jornada" : "jornadas"} en Sheet Data
-                    </span>
+                <div className="flex items-center gap-4">
+                  {isEditingExistingDay && existingRecordOnSelectedDate && (
+                    <button
+                      type="button"
+                      onClick={() => setRecordToDelete(existingRecordOnSelectedDate)}
+                      className="text-xs text-neutral-400 hover:text-neutral-900 cursor-pointer"
+                    >
+                      Eliminar
+                    </button>
                   )}
-                </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSubmit()}
+                    disabled={isSubmitting || !selectedSector || selectedAdvisors.length === 0}
+                    className="text-sm font-medium text-neutral-900 hover:text-neutral-600 disabled:opacity-40 transition-colors cursor-pointer flex items-center gap-2"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin stroke-[1.25]" />
+                        <span>Guardando en Google Sheets...</span>
+                      </>
+                    ) : isEditingExistingDay ? (
+                      <span>Actualizar jornada existente en Sheet Data</span>
+                    ) : (
+                      <span>Guardar jornada en Sheet Data</span>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1146,11 +1399,7 @@ export function PlanificadorCreateForm({
                   <button
                     key={adv}
                     type="button"
-                    onClick={() =>
-                      setSelectedAdvisors((prev) =>
-                        prev.includes(adv) ? prev.filter((a) => a !== adv) : [...prev, adv]
-                      )
-                    }
+                    onClick={() => toggleAdvisor(adv)}
                     className={cn(
                       "text-xs py-1 transition-colors cursor-pointer flex items-center gap-1.5",
                       isSelected
@@ -1191,6 +1440,18 @@ export function PlanificadorCreateForm({
               </div>
 
               <div className="flex items-center gap-3 text-xs">
+                {currentAdvisor && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => applyNextUnplannedDateForAdvisor(currentAdvisor)}
+                      className="text-neutral-500 hover:text-neutral-900 cursor-pointer"
+                    >
+                      Próxima fecha libre
+                    </button>
+                    <span className="text-neutral-200">·</span>
+                  </>
+                )}
                 <button
                   type="button"
                   onClick={() => setDateMode("single")}
@@ -1377,8 +1638,7 @@ export function PlanificadorCreateForm({
           {/* Submit */}
           <div className="flex items-center justify-between pt-2">
             <span className="text-xs text-neutral-400">
-              {totalItemsToGenerate}{" "}
-              {totalItemsToGenerate === 1 ? "registro por guardar" : "registros por guardar"}
+              {isEditingExistingDay ? "Modificando jornada existente" : `${totalItemsToGenerate} jornada(s)`}
             </span>
 
             <button
@@ -1391,6 +1651,8 @@ export function PlanificadorCreateForm({
                   <Loader2 className="w-4 h-4 animate-spin stroke-[1.25]" />
                   <span>Guardando...</span>
                 </>
+              ) : isEditingExistingDay ? (
+                <span>Actualizar jornada en Sheet Data</span>
               ) : (
                 <span>Guardar planificación en Sheet Data</span>
               )}
@@ -1398,6 +1660,123 @@ export function PlanificadorCreateForm({
           </div>
         </form>
       )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* SECCIÓN INFERIOR: ITINERARIO DEL ASESOR SELECCIONADO                 */}
+      {/* "ir viendo abajo lo que voy agregando o ya esta agregado para modificar" */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {currentAdvisor && (
+        <div className="pt-8 border-t border-neutral-100 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
+            <div>
+              <h4 className="text-sm font-medium text-neutral-900">
+                Itinerario de {currentAdvisor} ({advisorItinerary.length}{" "}
+                {advisorItinerary.length === 1 ? "jornada registrada" : "jornadas registradas"})
+              </h4>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                Toca cualquier fila para cargarla en el editor y modificarla, o elimínala con la cruz
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => applyNextUnplannedDateForAdvisor(currentAdvisor)}
+              className="text-xs text-neutral-600 hover:text-neutral-900 transition-colors font-medium cursor-pointer"
+            >
+              + Planificar próxima fecha libre
+            </button>
+          </div>
+
+          {advisorItinerary.length === 0 ? (
+            <div className="py-6 text-xs text-neutral-400 text-center border-b border-neutral-100">
+              {currentAdvisor} aún no tiene jornadas registradas en la hoja Data.
+            </div>
+          ) : (
+            <div className="divide-y divide-neutral-100 border-t border-neutral-100">
+              {advisorItinerary.map((r) => {
+                const isCurrentActiveDate = r.isoFecha === selectedDate;
+
+                return (
+                  <div
+                    key={r.sheetRowIndex}
+                    className={cn(
+                      "py-3 px-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors group",
+                      isCurrentActiveDate
+                        ? "bg-neutral-50/80 -mx-2 px-3 rounded-none"
+                        : "hover:bg-neutral-50/40"
+                    )}
+                  >
+                    <div className="flex items-start sm:items-center gap-3">
+                      <span className="text-xs font-mono font-medium text-neutral-900 shrink-0 w-24">
+                        {r.fecha || toSheetDateFormat(r.isoFecha)}
+                      </span>
+
+                      <div className="text-xs">
+                        <span className="font-medium text-neutral-900">
+                          {r.sector || "Sin sector"}
+                        </span>
+                        {r.parroquia && (
+                          <span className="text-neutral-400 ml-1.5">
+                            ({r.parroquia})
+                          </span>
+                        )}
+                        <span className="text-neutral-300 mx-1.5">·</span>
+                        <span className="text-neutral-600">{r.tipo_actividad}</span>
+                        <span className="text-neutral-400 ml-1.5 text-[11px]">
+                          [{r.estatus || "Planificado"}]
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs shrink-0 self-end sm:self-center">
+                      {isCurrentActiveDate && (
+                        <span className="text-[11px] text-neutral-500 font-medium">
+                          Activo en editor
+                        </span>
+                      )}
+
+                      {/* Edit Button - PenLine stroke-[1.25] */}
+                      <button
+                        type="button"
+                        onClick={() => handleSelectItineraryRowForEdit(r)}
+                        className="text-neutral-400 hover:text-neutral-900 transition-colors p-1 cursor-pointer"
+                        title="Cargar en editor para modificar"
+                      >
+                        <PenLine className="w-3.5 h-3.5 stroke-[1.25]" />
+                      </button>
+
+                      {/* Delete Button - X stroke-[1.5], strictly no trash cans */}
+                      <button
+                        type="button"
+                        onClick={() => setRecordToDelete(r)}
+                        className="text-neutral-400 hover:text-neutral-900 transition-colors p-1 cursor-pointer"
+                        title="Eliminar esta jornada"
+                      >
+                        <X className="w-3.5 h-3.5 stroke-[1.5]" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmDialog
+        isOpen={Boolean(recordToDelete)}
+        title="Eliminar jornada planificada"
+        description={
+          recordToDelete
+            ? `¿Deseas eliminar la jornada de ${recordToDelete.asesor} para el ${recordToDelete.fecha} en ${recordToDelete.sector}? Esta acción modificará directamente la hoja Data.`
+            : ""
+        }
+        confirmLabel={isDeleting ? "Eliminando..." : "Eliminar de Sheet Data"}
+        cancelLabel="Conservar"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setRecordToDelete(null)}
+      />
     </div>
   );
 }
