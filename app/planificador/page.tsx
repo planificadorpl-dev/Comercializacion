@@ -207,15 +207,15 @@ export default function PlanificadorPage() {
       {/* Main scrollable canvas */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {/* Sticky subtle top bar */}
-        <header className="sticky top-0 z-20 flex items-center justify-between px-6 py-3.5 bg-[#FBFBFB]/90 backdrop-blur-xs border-b border-neutral-100">
-          <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 py-3 bg-[#FBFBFB]/90 backdrop-blur-xs border-b border-neutral-100">
+          <div className="flex items-center gap-2 sm:gap-3">
             <SidebarMobileButton />
             <SidebarOpenButton />
-            <span className="text-xs font-semibold text-neutral-900">
+            <span className="text-xs font-semibold text-neutral-900 hidden xs:inline">
               Supervisión Comercial
             </span>
-            <span className="text-neutral-300">/</span>
-            <span className="text-xs text-neutral-500">Planificador de Asesores</span>
+            <span className="text-neutral-300 hidden xs:inline">/</span>
+            <span className="text-xs text-neutral-500 truncate">Planificador de Asesores</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -228,7 +228,7 @@ export default function PlanificadorPage() {
         </header>
 
         {/* Content area */}
-        <main className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
+        <main className="p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
           {/* Header & Tabs */}
           <PlanificadorHeader
             activeTab={activeTab}

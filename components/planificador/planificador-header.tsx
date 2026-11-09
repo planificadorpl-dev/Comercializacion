@@ -87,7 +87,7 @@ export function PlanificadorHeader({
       </div>
 
       {/* Navigation tabs row - Pure text typography, zero boxes or buttons with borders */}
-      <div className="flex items-center gap-6 pt-1">
+      <div className="flex items-center gap-5 sm:gap-6 pt-1 overflow-x-auto no-scrollbar whitespace-nowrap">
         <button
           type="button"
           onClick={() => onSelectTab("crear")}

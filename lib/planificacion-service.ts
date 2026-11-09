@@ -1,5 +1,6 @@
 import { getSheetsClient } from "@/app/lib/googleAuth";
 import { geoHierarchy } from "@/lib/geo_hierarchy";
+import { query, isDatabaseConfigured } from "@/lib/db";
 export * from "./planificacion-types";
 import {
   PLANIFICACION_SPREADSHEET_ID,
@@ -23,6 +24,68 @@ let cachedMetadata: { data: PlanningMetadata; timestamp: number } | null = null;
 const METADATA_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
+ * Obtiene exclusivamente la lista de asesores comerciales ACTIVOS
+ * (excluyendo inactivos, ex-colaboradores y etiquetas del sistema).
+ */
+async function fetchActiveAdvisors(): Promise<string[]> {
+  const exSet = new Set<string>();
+
+  // 1. Cargar overrides de ex-colaboradores desde advisor-config.json
+  try {
+    const fs = await import("fs/promises");
+    const path = await import("path");
+    const configPath = path.join(process.cwd(), "data", "advisor-config.json");
+    const raw = await fs.readFile(configPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    const overrides = parsed?.overrides || {};
+    for (const [k, v] of Object.entries(overrides as Record<string, any>)) {
+      if (v?.status === "ex" || v?.isExCollaborator === true) {
+        exSet.add(k.toLowerCase().trim());
+      }
+    }
+  } catch (err) {
+    // Si no se puede leer el archivo, se continúa
+  }
+
+  // 2. Intentar consultar PostgreSQL asesores_config donde activo = true
+  if (isDatabaseConfigured()) {
+    try {
+      const rows = await query<{ nombre: string }>(
+        "SELECT nombre FROM public.asesores_config WHERE activo = true ORDER BY nombre ASC"
+      );
+      if (rows && rows.length > 0) {
+        const activeList = rows
+          .map((r) => r.nombre.trim())
+          .filter((n) => {
+            if (!n) return false;
+            const lower = n.toLowerCase();
+            if (lower === "planificación" || lower === "planificacion") return false;
+            if (exSet.has(lower)) return false;
+            return true;
+          });
+
+        if (activeList.length > 0) {
+          return activeList;
+        }
+      }
+    } catch (pgErr) {
+      console.warn("Could not query active advisors from PostgreSQL:", pgErr);
+    }
+  }
+
+  // 3. Respaldo curado de asesores activos actuales
+  const defaultActive = [
+    "Andrea Plaza", "Arianna Montaña", "Brainin Berrotera", "Cindy Infante",
+    "Daiana Torres", "Danyelis Muñoz", "Diarnelis Mendoza", "Gabriela Marrero",
+    "Genesis Ochoa", "Lorena Esqueda", "Maria Azuaje", "Naomi Tovar",
+    "Patricia Mendoza", "Stephany Manrique", "Yaisen Herrera", "Yamery Rodriguez",
+    "Yeilis Puentes", "Yesenia Teran", "Yilda Gonzalez", "Yuliana Carvajal"
+  ];
+
+  return defaultActive.filter((n) => !exSet.has(n.toLowerCase().trim()));
+}
+
+/**
  * Fetch reference metadata (advisors, activities, territorial lists) from CONF sheet and geoHierarchy
  */
 export async function getPlanningMetadata(forceRefresh = false): Promise<PlanningMetadata> {
@@ -31,10 +94,12 @@ export async function getPlanningMetadata(forceRefresh = false): Promise<Plannin
     return cachedMetadata.data;
   }
 
-  let advisorsList: string[] = [];
   let activitiesList: string[] = [...STANDARD_ACTIVITIES];
   const geoMap: Record<string, Record<string, Record<string, string[]>>> = JSON.parse(JSON.stringify(geoHierarchy));
   const sectorsCatalog: SectorCatalogItem[] = [];
+
+  // Obtener solo asesores comerciales activos
+  const advisorsList = await fetchActiveAdvisors();
 
   try {
     const sheets = await getSheetsClient();
@@ -44,8 +109,6 @@ export async function getPlanningMetadata(forceRefresh = false): Promise<Plannin
     });
 
     const rows = confRes.data.values || [];
-
-    const advisorsSet = new Set<string>();
     const activitiesSet = new Set<string>(STANDARD_ACTIVITIES);
 
     for (const r of rows) {
@@ -54,12 +117,10 @@ export async function getPlanningMetadata(forceRefresh = false): Promise<Plannin
       const municipio = r[1] ? String(r[1]).trim() : "";
       const parroquia = r[2] ? String(r[2]).trim() : "";
       const sector = r[3] ? String(r[3]).trim() : "";
-      // Col F: Actividades, Col G: Asesores
+      // Col F: Actividades
       const act = r[5] ? String(r[5]).trim() : "";
-      const adv = r[6] ? String(r[6]).trim() : "";
 
       if (act) activitiesSet.add(act);
-      if (adv) advisorsSet.add(adv);
 
       if (estado && municipio && parroquia && sector) {
         if (!geoMap[estado]) geoMap[estado] = {};
@@ -71,7 +132,6 @@ export async function getPlanningMetadata(forceRefresh = false): Promise<Plannin
       }
     }
 
-    advisorsList = Array.from(advisorsSet).filter(Boolean);
     activitiesList = Array.from(activitiesSet).filter(Boolean);
   } catch (err: any) {
     console.warn("Could not read CONF sheet, falling back to local hierarchies:", err.message);
@@ -95,17 +155,6 @@ export async function getPlanningMetadata(forceRefresh = false): Promise<Plannin
 
   // Sort sectors alphabetically
   sectorsCatalog.sort((a, b) => a.sector.localeCompare(b.sector, "es", { sensitivity: "base" }));
-
-  // Default active advisors fallback if empty
-  if (advisorsList.length === 0) {
-    advisorsList = [
-      "Cindy Infante", "Carlos Ruiz", "Lorena Esqueda", "Yaisen Herrera",
-      "Yesenia Teran", "Patricia Mendoza", "Maria Azuaje", "Genesis Ochoa",
-      "Yilda Gonzalez", "Greacie Cruzado", "Daiana Torres", "Brainin Berrotera",
-      "Stephany Manrique", "Gabriela Marrero", "Yuliana Carvajal", "Arianna Montaña",
-      "Diarnelis Mendoza", "Andrea Plaza", "Naomi Tovar", "Danyelis Muñoz"
-    ];
-  }
 
   advisorsList.sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
 
