@@ -360,32 +360,41 @@ export function PlanificadorDailySheet({
     setIsDeleting(true);
 
     const advKey = recordToDelete.asesor.trim().toLowerCase();
+    const deletedAdvisor = recordToDelete.asesor;
+
+    // Reset optimista inmediato para respuesta instantánea
+    setDrafts((prev) => ({
+      ...prev,
+      [deletedAdvisor]: {
+        parroquia: "",
+        sector: "",
+        actividad: "Recorrido con Instaladores",
+      },
+    }));
+    setSavingStatus((prev) => {
+      const next = { ...prev };
+      delete next[advKey];
+      return next;
+    });
 
     try {
-      const res = await fetch(
-        `/api/planificacion?sheetRowIndex=${recordToDelete.sheetRowIndex}`,
-        { method: "DELETE" }
-      );
+      const params = new URLSearchParams();
+      if (recordToDelete.id) params.set("id", String(recordToDelete.id));
+      if (recordToDelete.sheetRowIndex) {
+        params.set("sheetRowIndex", String(recordToDelete.sheetRowIndex));
+      }
+      if (recordToDelete.isoFecha) params.set("fecha", recordToDelete.isoFecha);
+      if (recordToDelete.asesor) params.set("asesor", recordToDelete.asesor);
+
+      const res = await fetch(`/api/planificacion?${params.toString()}`, {
+        method: "DELETE",
+      });
       const json = await res.json();
 
       if (json.success) {
         setFeedbackMessage(
-          `Jornada de ${recordToDelete.asesor} eliminada de la hoja Data.`
+          `Jornada de ${deletedAdvisor} eliminada correctamente.`
         );
-        // Reset local draft & status
-        setDrafts((prev) => ({
-          ...prev,
-          [recordToDelete.asesor]: {
-            parroquia: "",
-            sector: "",
-            actividad: "Recorrido con Instaladores",
-          },
-        }));
-        setSavingStatus((prev) => {
-          const next = { ...prev };
-          delete next[advKey];
-          return next;
-        });
         onSuccess(1);
         setRecordToDelete(null);
       } else {

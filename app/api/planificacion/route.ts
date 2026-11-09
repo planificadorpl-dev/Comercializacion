@@ -151,17 +151,25 @@ export async function PUT(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
     const sheetRowIndexStr = searchParams.get("sheetRowIndex");
-    const sheetRowIndex = parseInt(sheetRowIndexStr || "", 10);
+    const sheetRowIndex = sheetRowIndexStr ? parseInt(sheetRowIndexStr, 10) : undefined;
+    const fecha = searchParams.get("fecha") || undefined;
+    const asesor = searchParams.get("asesor") || undefined;
 
-    if (isNaN(sheetRowIndex) || sheetRowIndex < 2) {
+    if (!id && !fecha && (!sheetRowIndex || sheetRowIndex < 2)) {
       return NextResponse.json(
-        { success: false, error: "Índice de fila inválido para eliminar." },
+        { success: false, error: "Se requiere id, fecha+asesor o índice de fila para eliminar." },
         { status: 400 }
       );
     }
 
-    const result = await deletePlanningRecord(sheetRowIndex);
+    const result = await deletePlanningRecord({
+      id: id || undefined,
+      sheetRowIndex,
+      fecha,
+      asesor,
+    });
 
     try {
       clearSheetsCache();
@@ -176,7 +184,7 @@ export async function DELETE(req: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Error al eliminar el registro de la hoja",
+        error: error.message || "Error al eliminar la jornada",
       },
       { status: 500 }
     );

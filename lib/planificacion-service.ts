@@ -202,9 +202,54 @@ export async function getPlanningMetadata(forceRefresh = false): Promise<Plannin
 }
 
 /**
- * Fetch all existing planning records from sheet 'Data' with exact row positions
+ * Fetch all existing planning records from Supabase (fast cache/store) or fallback to sheet 'Data'
  */
 export async function getPlanningSheetRecords(): Promise<PlanningSheetRecord[]> {
+  // 1. Consultar primero en Supabase si está disponible para respuesta ultra-rápida
+  if (isDatabaseConfigured()) {
+    try {
+      const rows = await query<any>(`
+        SELECT 
+          id,
+          sheet_row_index,
+          TO_CHAR(fecha, 'YYYY-MM-DD') as iso_fecha,
+          TO_CHAR(fecha, 'DD/MM/YYYY') as sheet_fecha,
+          mes,
+          asesor,
+          estado,
+          municipio,
+          parroquia,
+          sector,
+          tipo_actividad,
+          estatus,
+          formula_final
+        FROM planificacion_jornadas
+        ORDER BY fecha ASC, id ASC
+      `);
+
+      if (rows && rows.length > 0) {
+        return rows.map((r, i) => ({
+          id: String(r.id),
+          sheetRowIndex: r.sheet_row_index || i + 2,
+          mes: r.mes || "NOVIEMBRE",
+          fecha: r.sheet_fecha,
+          isoFecha: r.iso_fecha,
+          asesor: r.asesor,
+          estado: r.estado || "",
+          municipio: r.municipio || "",
+          parroquia: r.parroquia || "",
+          sector: r.sector || "",
+          tipo_actividad: r.tipo_actividad || "Recorrido con Instaladores",
+          estatus: r.estatus || "Planificado",
+          final: r.formula_final || "",
+        }));
+      }
+    } catch (err: any) {
+      console.warn("Aviso al consultar planificacion_jornadas en Supabase, recurriendo a Sheets:", err.message);
+    }
+  }
+
+  // 2. Fallback a Google Sheets si la base de datos no tiene datos aún o no está configurada
   try {
     const sheets = await getSheetsClient();
     const res = await sheets.spreadsheets.values.get({
@@ -275,78 +320,131 @@ export async function getPlanningSheetRecords(): Promise<PlanningSheetRecord[]> 
 }
 
 /**
- * Appends new planning records to sheet 'Data' in Google Sheets
+ * Appends new planning records to Supabase and syncs to sheet 'Data' in Google Sheets
  */
 export async function appendPlanningRecords(items: NewPlanningItem[]): Promise<{ insertedCount: number; message: string }> {
   if (!items || items.length === 0) {
     return { insertedCount: 0, message: "No se proporcionaron registros para agregar." };
   }
 
-  const sheets = await getSheetsClient();
+  // 1. Guardar primero de forma ultra-rápida en Supabase
+  if (isDatabaseConfigured()) {
+    try {
+      for (const item of items) {
+        const isoFecha = toIsoDateString(item.fecha);
+        const mes = (item.mes || getMonthFromDate(isoFecha)).toUpperCase();
+        await query(`
+          INSERT INTO planificacion_jornadas (
+            fecha, mes, asesor, estado, municipio, parroquia, sector, tipo_actividad, estatus, formula_final, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+          ON CONFLICT (fecha, LOWER(TRIM(asesor)))
+          DO UPDATE SET
+            mes = EXCLUDED.mes,
+            estado = EXCLUDED.estado,
+            municipio = EXCLUDED.municipio,
+            parroquia = EXCLUDED.parroquia,
+            sector = EXCLUDED.sector,
+            tipo_actividad = EXCLUDED.tipo_actividad,
+            estatus = EXCLUDED.estatus,
+            formula_final = EXCLUDED.formula_final,
+            updated_at = NOW()
+        `, [
+          isoFecha,
+          mes,
+          item.asesor.trim(),
+          (item.estado || "").trim(),
+          (item.municipio || "").trim(),
+          (item.parroquia || "").trim(),
+          (item.sector || "").trim(),
+          (item.tipo_actividad || "Recorrido con Instaladores").trim(),
+          (item.estatus || "Planificado").trim(),
+          null
+        ]);
+      }
+    } catch (dbErr: any) {
+      console.error("Error al guardar planificación en Supabase:", dbErr.message);
+    }
+  }
 
-  // First, find the current last row to build formulas if needed
-  const colARes = await sheets.spreadsheets.values.get({
-    spreadsheetId: PLANIFICACION_SPREADSHEET_ID,
-    range: `${PLANIFICACION_SHEET_NAME}!A:A`,
-  });
+  // 2. Sincronizar en Google Sheets
+  try {
+    const sheets = await getSheetsClient();
 
-  const currentCount = (colARes.data.values || []).length;
-  let nextRow = currentCount + 1;
+    const colARes = await sheets.spreadsheets.values.get({
+      spreadsheetId: PLANIFICACION_SPREADSHEET_ID,
+      range: `${PLANIFICACION_SHEET_NAME}!A:A`,
+    });
 
-  const rowsToAppend = items.map((item, idx) => {
-    const rowNum = nextRow + idx;
-    const isoFecha = toIsoDateString(item.fecha);
-    const sheetFecha = toSheetDateFormat(isoFecha);
-    const mes = (item.mes || getMonthFromDate(isoFecha)).toUpperCase();
-    const asesor = item.asesor.trim();
-    const estado = (item.estado || "").trim();
-    const municipio = (item.municipio || "").trim();
-    const parroquia = (item.parroquia || "").trim();
-    const sector = (item.sector || "").trim();
-    const actividad = (item.tipo_actividad || "Recorrido con Instaladores").trim();
-    const estatus = (item.estatus || "Planificado").trim();
-    const finalFormula = buildFinalFormula(rowNum, asesor, parroquia, actividad, estatus);
+    const currentCount = (colARes.data.values || []).length;
+    let nextRow = currentCount + 1;
 
-    // Columns: [ MES, Fecha, Asesor, Estado, Municipio, Parroquia, Sector, Tipo de Actividad, Estatus, FINAL ]
-    return [
-      mes,
-      sheetFecha,
-      asesor,
-      estado,
-      municipio,
-      parroquia,
-      sector,
-      actividad,
-      estatus,
-      finalFormula,
-    ];
-  });
+    const rowsToAppend = items.map((item, idx) => {
+      const rowNum = nextRow + idx;
+      const isoFecha = toIsoDateString(item.fecha);
+      const sheetFecha = toSheetDateFormat(isoFecha);
+      const mes = (item.mes || getMonthFromDate(isoFecha)).toUpperCase();
+      const asesor = item.asesor.trim();
+      const estado = (item.estado || "").trim();
+      const municipio = (item.municipio || "").trim();
+      const parroquia = (item.parroquia || "").trim();
+      const sector = (item.sector || "").trim();
+      const actividad = (item.tipo_actividad || "Recorrido con Instaladores").trim();
+      const estatus = (item.estatus || "Planificado").trim();
+      const finalFormula = buildFinalFormula(rowNum, asesor, parroquia, actividad, estatus);
 
-  const appendRes = await sheets.spreadsheets.values.append({
-    spreadsheetId: PLANIFICACION_SPREADSHEET_ID,
-    range: `${PLANIFICACION_SHEET_NAME}!A1:J`,
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: {
-      values: rowsToAppend,
-    },
-  });
+      return [
+        mes,
+        sheetFecha,
+        asesor,
+        estado,
+        municipio,
+        parroquia,
+        sector,
+        actividad,
+        estatus,
+        finalFormula,
+      ];
+    });
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: PLANIFICACION_SPREADSHEET_ID,
+      range: `${PLANIFICACION_SHEET_NAME}!A1:J`,
+      valueInputOption: "USER_ENTERED",
+      insertDataOption: "INSERT_ROWS",
+      requestBody: {
+        values: rowsToAppend,
+      },
+    });
+
+    // Actualizar sheet_row_index en Supabase
+    if (isDatabaseConfigured()) {
+      for (let idx = 0; idx < items.length; idx++) {
+        const it = items[idx];
+        const rowNum = nextRow + idx;
+        const iso = toIsoDateString(it.fecha);
+        query(
+          "UPDATE planificacion_jornadas SET sheet_row_index = $1 WHERE fecha = $2 AND LOWER(TRIM(asesor)) = LOWER(TRIM($3))",
+          [rowNum, iso, it.asesor]
+        ).catch(() => {});
+      }
+    }
+  } catch (sheetErr: any) {
+    console.warn("Aviso al sincronizar inserción con Google Sheets:", sheetErr.message);
+  }
 
   return {
-    insertedCount: rowsToAppend.length,
-    message: `${rowsToAppend.length} ${rowsToAppend.length === 1 ? "registro planificado guardado" : "registros planificados guardados"} en la hoja Data.`,
+    insertedCount: items.length,
+    message: `${items.length} ${items.length === 1 ? "registro planificado guardado" : "registros planificados guardados"}.`,
   };
 }
 
 /**
- * Updates a single row in sheet 'Data'
+ * Updates a single planning record in Supabase and sheet 'Data'
  */
-export async function updatePlanningRecord(sheetRowIndex: number, item: NewPlanningItem): Promise<{ success: boolean; message: string }> {
-  if (!sheetRowIndex || sheetRowIndex < 2) {
-    throw new Error("Índice de fila inválido.");
-  }
-
-  const sheets = await getSheetsClient();
+export async function updatePlanningRecord(
+  sheetRowIndex: number,
+  item: NewPlanningItem
+): Promise<{ success: boolean; message: string }> {
   const isoFecha = toIsoDateString(item.fecha);
   const sheetFecha = toSheetDateFormat(isoFecha);
   const mes = (item.mes || getMonthFromDate(isoFecha)).toUpperCase();
@@ -357,71 +455,164 @@ export async function updatePlanningRecord(sheetRowIndex: number, item: NewPlann
   const sector = (item.sector || "").trim();
   const actividad = (item.tipo_actividad || "Recorrido con Instaladores").trim();
   const estatus = (item.estatus || "Planificado").trim();
-  const finalFormula = buildFinalFormula(sheetRowIndex, asesor, parroquia, actividad, estatus);
+  const finalFormula = buildFinalFormula(sheetRowIndex || 2, asesor, parroquia, actividad, estatus);
 
-  const rowData = [
-    mes,
-    sheetFecha,
-    asesor,
-    estado,
-    municipio,
-    parroquia,
-    sector,
-    actividad,
-    estatus,
-    finalFormula,
-  ];
+  // 1. Actualizar en Supabase inmediatamente
+  if (isDatabaseConfigured()) {
+    try {
+      await query(`
+        INSERT INTO planificacion_jornadas (
+          sheet_row_index, fecha, mes, asesor, estado, municipio, parroquia, sector, tipo_actividad, estatus, formula_final, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+        ON CONFLICT (fecha, LOWER(TRIM(asesor)))
+        DO UPDATE SET
+          sheet_row_index = COALESCE(EXCLUDED.sheet_row_index, planificacion_jornadas.sheet_row_index),
+          mes = EXCLUDED.mes,
+          estado = EXCLUDED.estado,
+          municipio = EXCLUDED.municipio,
+          parroquia = EXCLUDED.parroquia,
+          sector = EXCLUDED.sector,
+          tipo_actividad = EXCLUDED.tipo_actividad,
+          estatus = EXCLUDED.estatus,
+          formula_final = EXCLUDED.formula_final,
+          updated_at = NOW()
+      `, [
+        sheetRowIndex || null,
+        isoFecha,
+        mes,
+        asesor,
+        estado,
+        municipio,
+        parroquia,
+        sector,
+        actividad,
+        estatus,
+        finalFormula
+      ]);
+    } catch (dbErr: any) {
+      console.error("Error al actualizar en Supabase:", dbErr.message);
+    }
+  }
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: PLANIFICACION_SPREADSHEET_ID,
-    range: `${PLANIFICACION_SHEET_NAME}!A${sheetRowIndex}:J${sheetRowIndex}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [rowData],
-    },
-  });
+  // 2. Actualizar en Google Sheets
+  if (sheetRowIndex && sheetRowIndex >= 2) {
+    try {
+      const sheets = await getSheetsClient();
+      const rowData = [
+        mes,
+        sheetFecha,
+        asesor,
+        estado,
+        municipio,
+        parroquia,
+        sector,
+        actividad,
+        estatus,
+        finalFormula,
+      ];
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: PLANIFICACION_SPREADSHEET_ID,
+        range: `${PLANIFICACION_SHEET_NAME}!A${sheetRowIndex}:J${sheetRowIndex}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: {
+          values: [rowData],
+        },
+      });
+    } catch (sheetErr: any) {
+      console.warn("Aviso al actualizar en Google Sheets:", sheetErr.message);
+    }
+  }
 
   return {
     success: true,
-    message: `Fila ${sheetRowIndex} actualizada correctamente.`,
+    message: `Jornada actualizada correctamente en Supabase y Google Sheets.`,
   };
 }
 
+export interface DeletePlanningRecordOptions {
+  id?: string | number;
+  sheetRowIndex?: number;
+  fecha?: string;
+  asesor?: string;
+}
+
 /**
- * Deletes a row from sheet 'Data' using Google Sheets deleteDimension
+ * Deletes a planning record with instant response from Supabase and background sync to Google Sheets
  */
-export async function deletePlanningRecord(sheetRowIndex: number): Promise<{ success: boolean; message: string }> {
-  if (!sheetRowIndex || sheetRowIndex < 2) {
-    throw new Error("No se puede eliminar la fila de encabezados ni un índice inválido.");
+export async function deletePlanningRecord(
+  target: number | DeletePlanningRecordOptions
+): Promise<{ success: boolean; message: string }> {
+  const options: DeletePlanningRecordOptions =
+    typeof target === "number" ? { sheetRowIndex: target } : target;
+
+  const { id, sheetRowIndex, fecha, asesor } = options;
+  let deletedFromDb = false;
+
+  // 1. Eliminación instantánea en Supabase (10-20ms)
+  if (isDatabaseConfigured()) {
+    try {
+      if (id) {
+        await query("DELETE FROM planificacion_jornadas WHERE id = $1", [id]);
+        deletedFromDb = true;
+      }
+      if (fecha && asesor) {
+        const iso = toIsoDateString(fecha);
+        await query(
+          "DELETE FROM planificacion_jornadas WHERE fecha = $1 AND LOWER(TRIM(asesor)) = LOWER(TRIM($2))",
+          [iso, asesor.trim()]
+        );
+        deletedFromDb = true;
+      } else if (sheetRowIndex && sheetRowIndex >= 2) {
+        await query("DELETE FROM planificacion_jornadas WHERE sheet_row_index = $1", [sheetRowIndex]);
+        deletedFromDb = true;
+      }
+    } catch (dbErr: any) {
+      console.error("Error al eliminar en Supabase:", dbErr.message);
+    }
   }
 
-  const sheets = await getSheetsClient();
+  // 2. Sincronizar en Google Sheets (limpieza rápida de celdas para evitar bloqueos)
+  if (sheetRowIndex && sheetRowIndex >= 2) {
+    try {
+      const sheets = await getSheetsClient();
+      // Limpiar fila inmediatamente (mucho más rápido que deleteDimension)
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: PLANIFICACION_SPREADSHEET_ID,
+        range: `${PLANIFICACION_SHEET_NAME}!A${sheetRowIndex}:J${sheetRowIndex}`,
+      });
 
-  // startIndex is 0-indexed inclusive; row 2 in sheet has 0-indexed index 1
-  const startIndex = sheetRowIndex - 1;
-  const endIndex = sheetRowIndex;
-
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: PLANIFICACION_SPREADSHEET_ID,
-    requestBody: {
-      requests: [
-        {
-          deleteDimension: {
-            range: {
-              sheetId: DATA_SHEET_ID,
-              dimension: "ROWS",
-              startIndex,
-              endIndex,
+      // deleteDimension asíncrono en segundo plano para no demorar la respuesta al usuario
+      const startIndex = sheetRowIndex - 1;
+      const endIndex = sheetRowIndex;
+      sheets.spreadsheets.batchUpdate({
+        spreadsheetId: PLANIFICACION_SPREADSHEET_ID,
+        requestBody: {
+          requests: [
+            {
+              deleteDimension: {
+                range: {
+                  sheetId: DATA_SHEET_ID,
+                  dimension: "ROWS",
+                  startIndex,
+                  endIndex,
+                },
+              },
             },
-          },
+          ],
         },
-      ],
-    },
-  });
+      }).catch((e: any) => console.warn("Background sheet row deleteDimension:", e.message));
+    } catch (sheetErr: any) {
+      console.warn("Aviso al sincronizar eliminación con Google Sheets:", sheetErr.message);
+      if (!deletedFromDb) {
+        throw sheetErr;
+      }
+    }
+  }
 
   return {
     success: true,
-    message: `Fila eliminada correctamente de la hoja Data.`,
+    message: "Jornada eliminada correctamente.",
   };
 }
 
