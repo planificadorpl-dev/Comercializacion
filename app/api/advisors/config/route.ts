@@ -6,6 +6,7 @@ import {
   AdvisorOverridesMap,
   TechnicianOverridesMap,
 } from "@/lib/normalization";
+import { clearPlanningMetadataCache } from "@/lib/planificacion-service";
 
 const CONFIG_FILE_PATH = path.join(process.cwd(), "data", "advisor-config.json");
 
@@ -156,6 +157,29 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    // Sincronizar estado en public.asesores_config para que el planificador y reportes reflejen cambios al instante
+    try {
+      if (overrides && typeof overrides === "object") {
+        for (const [name, val] of Object.entries(overrides as Record<string, any>)) {
+          if (!name || !name.trim()) continue;
+          const isEx = val?.status === "ex" || val?.isExCollaborator === true;
+          await query(
+            `UPDATE public.asesores_config 
+             SET activo = $1, updated_at = NOW() 
+             WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($2))`,
+            [!isEx, name.trim()]
+          );
+        }
+      }
+    } catch (syncErr) {
+      console.warn("Could not sync asesores_config:", syncErr);
+    }
+
+    // Invalidar caché en memoria del servicio de planificación
+    try {
+      clearPlanningMetadataCache();
+    } catch (cacheErr) {}
 
     return NextResponse.json(
       {

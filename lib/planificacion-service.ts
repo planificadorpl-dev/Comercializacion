@@ -24,6 +24,10 @@ import {
 let cachedMetadata: { data: PlanningMetadata; timestamp: number } | null = null;
 const METADATA_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
+export function clearPlanningMetadataCache() {
+  cachedMetadata = null;
+}
+
 /**
  * Obtiene exclusivamente la lista de asesores comerciales ACTIVOS
  * (excluyendo inactivos, ex-colaboradores y etiquetas del sistema).
@@ -31,7 +35,25 @@ const METADATA_TTL_MS = 10 * 60 * 1000; // 10 minutes
 async function fetchActiveAdvisors(): Promise<string[]> {
   const exSet = new Set<string>();
 
-  // 1. Cargar overrides de ex-colaboradores desde advisor-config.json
+  // 1. Cargar overrides de ex-colaboradores prioritariamente desde PostgreSQL (personal_config)
+  if (isDatabaseConfigured()) {
+    try {
+      const pc = await queryRow<{ data: any }>(
+        "SELECT data FROM public.personal_config WHERE key = 'main_config' LIMIT 1"
+      );
+      if (pc?.data?.overrides) {
+        for (const [k, v] of Object.entries(pc.data.overrides as Record<string, any>)) {
+          if (v?.status === "ex" || v?.isExCollaborator === true) {
+            exSet.add(k.toLowerCase().trim());
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Could not read ex-collaborators from personal_config:", err);
+    }
+  }
+
+  // Respaldo secundario desde advisor-config.json local
   try {
     const fs = await import("fs/promises");
     const path = await import("path");
@@ -74,13 +96,13 @@ async function fetchActiveAdvisors(): Promise<string[]> {
     }
   }
 
-  // 3. Respaldo curado de asesores activos actuales
+  // 3. Respaldo curado de asesores activos actuales (excluyendo a Yeilis Puentes y otros ex-colaboradores)
   const defaultActive = [
     "Andrea Plaza", "Arianna Montaña", "Brainin Berrotera", "Cindy Infante",
     "Daiana Torres", "Danyelis Muñoz", "Diarnelis Mendoza", "Gabriela Marrero",
-    "Genesis Ochoa", "Lorena Esqueda", "Maria Azuaje", "Naomi Tovar",
+    "Genesis Ochoa", "Maria Azuaje", "Naomi Tovar",
     "Patricia Mendoza", "Stephany Manrique", "Yaisen Herrera", "Yamery Rodriguez",
-    "Yeilis Puentes", "Yesenia Teran", "Yilda Gonzalez", "Yuliana Carvajal"
+    "Yesenia Teran", "Yilda Gonzalez", "Yuliana Carvajal"
   ];
 
   return defaultActive.filter((n) => !exSet.has(n.toLowerCase().trim()));

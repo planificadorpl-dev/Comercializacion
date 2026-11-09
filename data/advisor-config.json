@@ -1,4 +1,20 @@
 {
+  "aliases": {
+    "Arianna": "Arianna Montaña",
+    "Stephanie": "Stephanie Contreras",
+    "Xaori Gomez": "Xahory Gómez",
+    "Lis Figueira": "Lisbray Suárez",
+    "Johanna Parra": "Johana Parra",
+    "Yeilis Puente": "Yeilis Puentes",
+    "Yeylis Puente": "Yeilis Puentes",
+    "Yeylis Puentes": "Yeilis Puentes",
+    "Dianelis Mendoza": "Diarnelis Mendoza",
+    "Yanery Rodriguez": "Yamery Rodríguez",
+    "Brainin Berrotera": "Branin Berroteran",
+    "Brainin Berroteran": "Branin Berroteran",
+    "Brayerlin Rodriguez": "Brayerlyn Rodríguez",
+    "Daleska Berroterán": "Endely Vegas"
+  },
   "overrides": {
     "Gina": {
       "type": "planificacion",
@@ -265,9 +281,9 @@
     },
     "Yeilis Puentes": {
       "type": "comercial",
-      "status": "fijo",
-      "updatedAt": "2026-10-15T19:38:45.473Z",
-      "isExCollaborator": false
+      "status": "ex",
+      "updatedAt": "2026-11-09T20:31:05.316Z",
+      "isExCollaborator": true
     },
     "Yesenia Terán": {
       "type": "comercial",
@@ -491,22 +507,6 @@
       "updatedAt": "2026-10-14T03:42:22.300Z"
     }
   },
-  "aliases": {
-    "Arianna": "Arianna Montaña",
-    "Stephanie": "Stephanie Contreras",
-    "Xaori Gomez": "Xahory Gómez",
-    "Lis Figueira": "Lisbray Suárez",
-    "Johanna Parra": "Johana Parra",
-    "Yeilis Puente": "Yeilis Puentes",
-    "Yeylis Puente": "Yeilis Puentes",
-    "Yeylis Puentes": "Yeilis Puentes",
-    "Dianelis Mendoza": "Diarnelis Mendoza",
-    "Yanery Rodriguez": "Yamery Rodríguez",
-    "Brainin Berrotera": "Branin Berroteran",
-    "Brainin Berroteran": "Branin Berroteran",
-    "Brayerlin Rodriguez": "Brayerlyn Rodríguez",
-    "Daleska Berroterán": "Endely Vegas"
-  },
-  "technicianOverrides": {},
-  "technicianAliases": {}
+  "technicianAliases": {},
+  "technicianOverrides": {}
 }
