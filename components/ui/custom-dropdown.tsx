@@ -113,8 +113,10 @@ export function CustomDropdown({
         onClick={() => !disabled && setOpen(!open)}
         className={cn(
           "w-full flex items-center justify-between gap-2 text-xs transition-colors cursor-pointer select-none group",
-          compact ? "py-1" : "min-h-[44px] py-2.5 px-1 border-b border-neutral-200 hover:border-neutral-400",
-          open ? "text-neutral-950 font-semibold" : "text-neutral-700 hover:text-neutral-950",
+          compact
+            ? "py-1.5 px-0.5 border-b border-neutral-200 hover:border-neutral-500 focus:border-neutral-900"
+            : "min-h-[44px] py-2.5 px-1 border-b border-neutral-200 hover:border-neutral-400",
+          open ? "text-neutral-950 font-semibold border-neutral-900" : "text-neutral-700 hover:text-neutral-950",
           !value && "text-neutral-400 font-normal",
           disabled && "opacity-50 cursor-not-allowed"
         )}

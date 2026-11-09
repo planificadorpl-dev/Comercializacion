@@ -167,6 +167,25 @@ export function PlanificadorDailySheet({
     return { parroquiasList: list, parroquiaMap: lookupMap };
   }, [metadata.geoHierarchy]);
 
+  // Catálogo unificado de sectores con su parroquia para cuando no se haya filtrado parroquia
+  const allSectorOptions = useMemo(() => {
+    const list: { value: string; label: string }[] = [];
+    const seen = new Set<string>();
+
+    for (const item of metadata.sectorsCatalog || []) {
+      const key = `${item.sector}__${item.parroquia}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push({
+          value: key,
+          label: `${item.sector} (${item.parroquia})`,
+        });
+      }
+    }
+
+    return list.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
+  }, [metadata.sectorsCatalog]);
+
   // ── 3. MAPA DE REGISTROS DE LA FECHA SELECCIONADA ─────────────────────────
   const dayRecordsMap = useMemo(() => {
     const map = new Map<string, PlanningSheetRecord>();
@@ -331,11 +350,26 @@ export function PlanificadorDailySheet({
     val: string
   ) => {
     const currentDraft = getAdvisorDraft(adv);
-    let updatedDraft = { ...currentDraft, [field]: val };
+    let updatedDraft = { ...currentDraft };
 
-    if (field === "parroquia") {
-      // Al cambiar parroquia, se resetea sector para que el usuario seleccione el correspondiente
-      updatedDraft.sector = "";
+    if (field === "sector") {
+      // Si el valor viene codificado como "sector__parroquia" (al elegir sector sin tener parroquia previa)
+      if (val.includes("__")) {
+        const [secName, parName] = val.split("__");
+        updatedDraft.sector = secName;
+        updatedDraft.parroquia = parName;
+      } else {
+        updatedDraft.sector = val;
+      }
+    } else if (field === "parroquia") {
+      updatedDraft.parroquia = val;
+      // Al cambiar parroquia, verificar si el sector actual pertenece a ella; si no, resetearlo
+      const sectorsInPar = parroquiaMap.get(val)?.sectores || [];
+      if (!sectorsInPar.includes(currentDraft.sector)) {
+        updatedDraft.sector = "";
+      }
+    } else {
+      updatedDraft.actividad = val;
     }
 
     setDrafts((prev) => ({
@@ -750,6 +784,17 @@ export function PlanificadorDailySheet({
         </div>
       )}
 
+      {/* ── ENCABEZADO DE COLUMNAS (DESKTOP) ────────────────────────────── */}
+      <div className="hidden md:flex items-center justify-between text-[11px] font-medium text-neutral-400 pb-2 border-b border-neutral-100 px-1">
+        <div className="min-w-[200px]">Asesor</div>
+        <div className="grid grid-cols-3 gap-3 flex-1 max-w-2xl text-left">
+          <span>Parroquia</span>
+          <span>Sector</span>
+          <span>Actividad</span>
+        </div>
+        <div className="min-w-[70px] text-right">Estado</div>
+      </div>
+
       {/* ── LISTA DE ASESORES EN PANTALLA (OPTIMIZADA PARA MÓVILES Y DESKTOP) ── */}
       <div className="divide-y divide-neutral-100">
         {displayAdvisors.length === 0 ? (
@@ -769,6 +814,11 @@ export function PlanificadorDailySheet({
             const availableSectores = draft.parroquia
               ? parroquiaMap.get(draft.parroquia)?.sectores || []
               : [];
+
+            // Si hay parroquia elegida, mostrar solo sus sectores; si no, mostrar catálogo completo con parroquia entre paréntesis
+            const sectorOptions = draft.parroquia
+              ? availableSectores.map((s) => ({ value: s, label: s }))
+              : allSectorOptions;
 
             const initials = adv
               .split(" ")
@@ -803,13 +853,15 @@ export function PlanificadorDailySheet({
                       <span className="text-xs font-medium text-neutral-900 block">
                         {adv}
                       </span>
-                      <span className="text-[11px] text-neutral-400 block">
+                      <span className="text-[11px] block">
                         {isPlanned ? (
                           <span className="text-neutral-600 font-medium">
                             Planificado
                           </span>
                         ) : (
-                          <span>Sin planificar</span>
+                          <span className="text-neutral-400">
+                            Sin planificar
+                          </span>
                         )}
                       </span>
                     </div>
@@ -838,10 +890,10 @@ export function PlanificadorDailySheet({
                 </div>
 
                 {/* 2. Selectores: Parroquia, Sector, Actividad */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 flex-1 max-w-2xl">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 max-w-2xl">
                   {/* Parroquia */}
                   <div>
-                    <label className="text-[10px] text-neutral-400 block mb-0.5 sm:hidden">
+                    <label className="text-[10px] text-neutral-400 block mb-0.5 md:hidden">
                       Parroquia
                     </label>
                     <CustomDropdown
@@ -858,29 +910,21 @@ export function PlanificadorDailySheet({
 
                   {/* Sector */}
                   <div>
-                    <label className="text-[10px] text-neutral-400 block mb-0.5 sm:hidden">
+                    <label className="text-[10px] text-neutral-400 block mb-0.5 md:hidden">
                       Sector
                     </label>
                     <CustomDropdown
                       value={draft.sector}
-                      options={availableSectores.map((s) => ({
-                        value: s,
-                        label: s,
-                      }))}
+                      options={sectorOptions}
                       onChange={(s) => handleFieldChange(adv, "sector", s)}
                       compact
-                      disabled={!draft.parroquia}
-                      placeholder={
-                        draft.parroquia
-                          ? "Seleccionar sector..."
-                          : "Elige primero parroquia..."
-                      }
+                      placeholder="Seleccionar sector..."
                     />
                   </div>
 
                   {/* Actividad */}
                   <div>
-                    <label className="text-[10px] text-neutral-400 block mb-0.5 sm:hidden">
+                    <label className="text-[10px] text-neutral-400 block mb-0.5 md:hidden">
                       Actividad
                     </label>
                     <CustomDropdown
@@ -901,7 +945,7 @@ export function PlanificadorDailySheet({
                   {isSavingThis ? (
                     <div
                       className="flex items-center gap-1.5 text-xs text-neutral-500 py-1"
-                      title="Guardando automáticamente en Google Sheets..."
+                      title="Guardando automáticamente en Google Sheets y Base de Datos..."
                     >
                       <Loader2 className="w-4 h-4 animate-spin text-neutral-400 stroke-[1.5]" />
                       <span className="text-[11px] font-mono">Guardando</span>
@@ -910,7 +954,7 @@ export function PlanificadorDailySheet({
                     <div className="flex items-center gap-2">
                       <div
                         className="flex items-center text-neutral-900 py-1"
-                        title="Guardado exitosamente en Google Sheets"
+                        title="Guardado exitosamente"
                       >
                         <Check className="w-4 h-4 text-neutral-900 stroke-[2] animate-in zoom-in-75 duration-150" />
                       </div>
@@ -919,7 +963,7 @@ export function PlanificadorDailySheet({
                           type="button"
                           onClick={() => setRecordToDelete(existingRec)}
                           className="text-neutral-300 hover:text-neutral-900 transition-colors p-1 cursor-pointer"
-                          title="Eliminar jornada de la hoja Data"
+                          title="Eliminar jornada"
                         >
                           <X className="w-3.5 h-3.5 stroke-[1.5]" />
                         </button>
