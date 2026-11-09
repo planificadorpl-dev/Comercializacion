@@ -287,49 +287,18 @@ export function PlanificadorDailySheet({
   );
   const dateInputRef = useRef<HTMLInputElement>(null);
 
-  // Sincronizar fecha inicial si cambia desde el exterior
+  // Sincronizar fecha ancla cuando cambia desde el exterior (ej. selector de mes en el encabezado)
   useEffect(() => {
     if (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)) {
-      setSelectedDate(initialDate);
+      setSelectedDate((prev) => {
+        if (prev === initialDate) return prev;
+        setDrafts({});
+        setSavingStatus({});
+        setFeedbackMessage(null);
+        return initialDate;
+      });
     }
   }, [initialDate]);
-
-  // Sincronizar fecha ancla cuando el usuario cambia el selector de mes en el encabezado
-  useEffect(() => {
-    if (!selectedMonth) return;
-    const SPANISH_MONTHS = [
-      "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
-      "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
-    ];
-    const monthIdx = SPANISH_MONTHS.indexOf(selectedMonth.toUpperCase());
-    if (monthIdx < 0) return;
-
-    // Verificar el mes de la fecha actualmente seleccionada
-    const parts = selectedDate.split("-").map(Number);
-    if (parts.length === 3) {
-      const currentMonthIdx = parts[1] - 1;
-      if (currentMonthIdx === monthIdx) return; // Ya estamos visualizando un día de ese mes
-    }
-
-    const now = new Date();
-    const currentYear = now.getFullYear();
-
-    // Si el mes seleccionado coincide con el mes de hoy, anclar a hoy
-    if (now.getMonth() === monthIdx) {
-      setSelectedDate(todayIso);
-    } else {
-      // Si es otro mes, saltar al día 1 de ese mes
-      const targetIso = `${currentYear}-${String(monthIdx + 1).padStart(2, "0")}-01`;
-      setSelectedDate(targetIso);
-    }
-  }, [selectedMonth, todayIso]);
-
-  // Notificar al componente superior cuando cambia la fecha para sincronizar el mes en el header
-  useEffect(() => {
-    if (onDateChange) {
-      onDateChange(selectedDate);
-    }
-  }, [selectedDate, onDateChange]);
 
   // Filtros de búsqueda en la lista de asesores
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -491,10 +460,14 @@ export function PlanificadorDailySheet({
       const y = current.getFullYear();
       const m = String(current.getMonth() + 1).padStart(2, "0");
       const d = String(current.getDate()).padStart(2, "0");
-      setSelectedDate(`${y}-${m}-${d}`);
+      const newIso = `${y}-${m}-${d}`;
+      setSelectedDate(newIso);
       setDrafts({});
       setSavingStatus({});
       setFeedbackMessage(null);
+      if (onDateChange) {
+        onDateChange(newIso);
+      }
     } catch {
       // Fallback
     }
@@ -1043,6 +1016,9 @@ export function PlanificadorDailySheet({
                 setDrafts({});
                 setSavingStatus({});
                 setFeedbackMessage(null);
+                if (onDateChange) {
+                  onDateChange(todayIso);
+                }
               }}
               className="text-neutral-500 hover:text-neutral-900 transition-colors px-1.5 py-0.5 text-xs font-medium cursor-pointer"
               title="Volver al día de hoy"
@@ -1087,10 +1063,14 @@ export function PlanificadorDailySheet({
               value={selectedDate}
               onChange={(e) => {
                 if (e.target.value) {
-                  setSelectedDate(e.target.value);
+                  const val = e.target.value;
+                  setSelectedDate(val);
                   setDrafts({});
                   setSavingStatus({});
                   setFeedbackMessage(null);
+                  if (onDateChange) {
+                    onDateChange(val);
+                  }
                 }
               }}
               className="sr-only"

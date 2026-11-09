@@ -169,14 +169,31 @@ export default function PlanificadorPage() {
     showToast(`Asignando a ${advisor} para el ${isoDate}.`);
   };
 
-  // Synchronize month when date changes in daily sheet
-  const handleDailyDateChange = useCallback((isoDate: string) => {
-    setInitialDailyDate(isoDate);
-    const derivedMonth = getMonthFromDate(isoDate);
-    if (derivedMonth && derivedMonth !== selectedMonth) {
-      setSelectedMonth(derivedMonth);
+  // User selected a month from PlanificadorHeader dropdown
+  const handleMonthChange = useCallback((newMonth: string) => {
+    setSelectedMonth(newMonth);
+
+    // Calculate the target anchor date for that month
+    const monthIdx = SPANISH_MONTHS.indexOf(newMonth.toUpperCase());
+    if (monthIdx >= 0) {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const isCurrentMonth = now.getMonth() === monthIdx;
+      const targetIso = isCurrentMonth
+        ? now.toISOString().split("T")[0]
+        : `${currentYear}-${String(monthIdx + 1).padStart(2, "0")}-01`;
+
+      setInitialDailyDate(targetIso);
     }
-  }, [selectedMonth]);
+  }, []);
+
+  // User manually navigated dates via arrows or calendar in PlanificadorDailySheet
+  const handleDailyDateChange = useCallback((isoDate: string) => {
+    const derivedMonth = getMonthFromDate(isoDate);
+    if (derivedMonth) {
+      setSelectedMonth((prev) => (prev === derivedMonth ? prev : derivedMonth));
+    }
+  }, []);
 
   // Matrix View: Replicate day
   const handleReplicateDay = async (
@@ -263,7 +280,7 @@ export default function PlanificadorPage() {
           {/* Header */}
           <PlanificadorHeader
             selectedMonth={selectedMonth}
-            onMonthChange={setSelectedMonth}
+            onMonthChange={handleMonthChange}
             onRefresh={() => loadPlanningData(true)}
             isRefreshing={isRefreshing}
             totalRecordsCount={records.length}

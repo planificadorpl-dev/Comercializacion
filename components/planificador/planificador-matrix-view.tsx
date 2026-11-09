@@ -56,27 +56,27 @@ export function PlanificadorMatrixView({
     const monthIdx = SPANISH_MONTHS.indexOf(selectedMonth.toUpperCase());
     if (monthIdx < 0) return;
 
-    // Verificar si la semana actual ya coincide con ese mes
-    const curMonthIdx = currentWeekRefDate.getMonth();
-    if (curMonthIdx === monthIdx) return;
+    setCurrentWeekRefDate((cur) => {
+      if (cur.getMonth() === monthIdx) return cur;
 
-    const now = new Date();
-    const currentYear = now.getFullYear();
+      const now = new Date();
+      const currentYear = now.getFullYear();
 
-    if (now.getMonth() === monthIdx) {
-      // Mes actual: anclar a lunes de esta semana
-      const d = new Date();
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      setCurrentWeekRefDate(new Date(d.setDate(diff)));
-    } else {
-      // Otro mes: anclar al primer lunes de ese mes
-      const firstOfMonth = new Date(currentYear, monthIdx, 1);
-      const day = firstOfMonth.getDay();
-      const diff = firstOfMonth.getDate() - day + (day === 0 ? -6 : 1);
-      firstOfMonth.setDate(diff);
-      setCurrentWeekRefDate(firstOfMonth);
-    }
+      if (now.getMonth() === monthIdx) {
+        // Mes actual: anclar a lunes de esta semana
+        const d = new Date();
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(d.setDate(diff));
+      } else {
+        // Otro mes: anclar al primer lunes de ese mes
+        const firstOfMonth = new Date(currentYear, monthIdx, 1);
+        const day = firstOfMonth.getDay();
+        const diff = firstOfMonth.getDate() - day + (day === 0 ? -6 : 1);
+        firstOfMonth.setDate(diff);
+        return firstOfMonth;
+      }
+    });
   }, [selectedMonth]);
 
   const [advisorSearch, setAdvisorSearch] = useState("");
@@ -116,33 +116,21 @@ export function PlanificadorMatrixView({
     return days;
   }, [currentWeekRefDate]);
 
-  // Navigate weeks
+  // Navigate weeks cleanly without feedback loops
   const prevWeek = () => {
-    const d = new Date(currentWeekRefDate);
-    d.setDate(d.getDate() - 7);
-    setCurrentWeekRefDate(d);
-    if (onMonthChange) {
-      const SPANISH_MONTHS = [
-        "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
-        "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
-      ];
-      const m = d.getMonth();
-      if (SPANISH_MONTHS[m]) onMonthChange(SPANISH_MONTHS[m]);
-    }
+    setCurrentWeekRefDate((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() - 7);
+      return d;
+    });
   };
 
   const nextWeek = () => {
-    const d = new Date(currentWeekRefDate);
-    d.setDate(d.getDate() + 7);
-    setCurrentWeekRefDate(d);
-    if (onMonthChange) {
-      const SPANISH_MONTHS = [
-        "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
-        "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
-      ];
-      const m = d.getMonth();
-      if (SPANISH_MONTHS[m]) onMonthChange(SPANISH_MONTHS[m]);
-    }
+    setCurrentWeekRefDate((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + 7);
+      return d;
+    });
   };
 
   const currentMonthName = useMemo(() => {
