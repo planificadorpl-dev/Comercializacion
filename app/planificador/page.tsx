@@ -8,10 +8,14 @@ import {
 } from "@/components/providers/sidebar-provider";
 import { PlanificadorHeader } from "@/components/planificador/planificador-header";
 import { PlanificadorDailySheet } from "@/components/planificador/planificador-daily-sheet";
+import { PlanificadorMatrixView } from "@/components/planificador/planificador-matrix-view";
+import { PlanificadorEditDialog } from "@/components/planificador/planificador-edit-dialog";
 import {
   PlanningSheetRecord,
   PlanningMetadata,
+  NewPlanningItem,
   SPANISH_MONTHS,
+  getMonthFromDate,
 } from "@/lib/planificacion-types";
 import { clearDashboardDataCache } from "@/lib/dashboard-data";
 import { Loader2 } from "lucide-react";
@@ -24,10 +28,16 @@ export default function PlanificadorPage() {
   }, []);
 
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthInitial);
+  const [activeView, setActiveView] = useState<"diaria" | "semanal">("diaria");
+  const [initialDailyDate, setInitialDailyDate] = useState<string | undefined>(undefined);
+
   const [metadata, setMetadata] = useState<PlanningMetadata | null>(null);
   const [records, setRecords] = useState<PlanningSheetRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  // Edit dialog state for matrix view
+  const [editingRecord, setEditingRecord] = useState<PlanningSheetRecord | null>(null);
 
   // Subtle toast indicator
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -80,6 +90,114 @@ export default function PlanificadorPage() {
     loadPlanningData(true);
   };
 
+  // Matrix View: Edit record handler
+  const handleEditRecord = (rec: PlanningSheetRecord) => {
+    setEditingRecord(rec);
+  };
+
+  // Matrix View: Save edited record
+  const handleSaveEditedRecord = async (
+    sheetRowIndex: number,
+    updatedItem: NewPlanningItem
+  ): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/planificacion", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sheetRowIndex, item: updatedItem }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast(`Jornada de ${updatedItem.asesor} actualizada en la hoja Data.`);
+        loadPlanningData(true);
+        setEditingRecord(null);
+        return true;
+      } else {
+        showToast(json.error || "No se pudo actualizar la jornada.");
+        return false;
+      }
+    } catch {
+      showToast("Error de conexión al actualizar la jornada.");
+      return false;
+    }
+  };
+
+  // Matrix View: Delete record
+  const handleDeleteRecord = async (record: PlanningSheetRecord): Promise<boolean> => {
+    try {
+      const params = new URLSearchParams();
+      if (record.id) params.set("id", String(record.id));
+      if (record.sheetRowIndex) params.set("sheetRowIndex", String(record.sheetRowIndex));
+      if (record.isoFecha) params.set("fecha", record.isoFecha);
+      if (record.asesor) params.set("asesor", record.asesor);
+
+      const res = await fetch(`/api/planificacion?${params.toString()}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast(`Jornada de ${record.asesor} eliminada de la hoja Data.`);
+        loadPlanningData(true);
+        return true;
+      } else {
+        showToast(json.error || "No se pudo eliminar la jornada.");
+        return false;
+      }
+    } catch {
+      showToast("Error de red al eliminar la jornada.");
+      return false;
+    }
+  };
+
+  // Matrix View: Quick Add button click -> switch to daily view on that date
+  const handleQuickAdd = (advisor: string, isoDate: string) => {
+    setInitialDailyDate(isoDate);
+    setActiveView("diaria");
+    showToast(`Asignando a ${advisor} para el ${isoDate}.`);
+  };
+
+  // Matrix View: Replicate day
+  const handleReplicateDay = async (
+    sourceIsoDate: string,
+    targetIsoDate: string
+  ): Promise<boolean> => {
+    const sourceRecords = records.filter((r) => r.isoFecha === sourceIsoDate);
+    if (sourceRecords.length === 0) return false;
+
+    const targetMonth = getMonthFromDate(targetIsoDate) || selectedMonth;
+    const itemsToCreate: NewPlanningItem[] = sourceRecords.map((r) => ({
+      fecha: targetIsoDate,
+      mes: targetMonth,
+      asesor: r.asesor,
+      estado: r.estado,
+      municipio: r.municipio,
+      parroquia: r.parroquia,
+      sector: r.sector,
+      tipo_actividad: r.tipo_actividad,
+      estatus: "Planificado",
+    }));
+
+    try {
+      const res = await fetch("/api/planificacion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: itemsToCreate }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast(`${itemsToCreate.length} jornadas replicadas para el ${targetIsoDate}.`);
+        loadPlanningData(true);
+        return true;
+      } else {
+        showToast(json.error || "No se pudo replicar la jornada.");
+        return false;
+      }
+    } catch {
+      showToast("Error de conexión al replicar jornadas.");
+      return false;
+    }
+  };
+
   return (
     <div className="flex min-h-screen h-[100dvh] bg-[#FBFBFB] text-neutral-900 font-sans antialiased overflow-hidden selection:bg-neutral-900 selection:text-white">
       {/* Sidebar with activeSection planificador */}
@@ -117,6 +235,8 @@ export default function PlanificadorPage() {
             onRefresh={() => loadPlanningData(true)}
             isRefreshing={isRefreshing}
             totalRecordsCount={records.length}
+            activeView={activeView}
+            onViewChange={setActiveView}
           />
 
           {isLoading ? (
@@ -127,12 +247,24 @@ export default function PlanificadorPage() {
               </span>
             </div>
           ) : metadata ? (
-            <PlanificadorDailySheet
-              metadata={metadata}
-              existingRecords={records}
-              onSuccess={handleSuccess}
-              defaultMonth={selectedMonth}
-            />
+            activeView === "diaria" ? (
+              <PlanificadorDailySheet
+                metadata={metadata}
+                existingRecords={records}
+                onSuccess={handleSuccess}
+                defaultMonth={selectedMonth}
+                initialDate={initialDailyDate}
+              />
+            ) : (
+              <PlanificadorMatrixView
+                records={records}
+                metadata={metadata}
+                onEditRecord={handleEditRecord}
+                onDeleteRecord={handleDeleteRecord}
+                onQuickAdd={handleQuickAdd}
+                onReplicateDay={handleReplicateDay}
+              />
+            )
           ) : (
             <div className="py-12 text-center text-xs text-neutral-400">
               No se pudo inicializar la conexión con Google Sheets.
@@ -140,6 +272,17 @@ export default function PlanificadorPage() {
           )}
         </main>
       </div>
+
+      {/* Edit modal when editing from matrix view */}
+      {metadata && (
+        <PlanificadorEditDialog
+          record={editingRecord}
+          metadata={metadata}
+          isOpen={Boolean(editingRecord)}
+          onClose={() => setEditingRecord(null)}
+          onSave={handleSaveEditedRecord}
+        />
+      )}
     </div>
   );
 }

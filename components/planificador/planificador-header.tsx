@@ -12,6 +12,8 @@ interface PlanificadorHeaderProps {
   onRefresh: () => void;
   isRefreshing: boolean;
   totalRecordsCount: number;
+  activeView: "diaria" | "semanal";
+  onViewChange: (view: "diaria" | "semanal") => void;
 }
 
 export function PlanificadorHeader({
@@ -20,6 +22,8 @@ export function PlanificadorHeader({
   onRefresh,
   isRefreshing,
   totalRecordsCount,
+  activeView,
+  onViewChange,
 }: PlanificadorHeaderProps) {
   const monthOptions = SPANISH_MONTHS.map((m) => ({
     value: m,
@@ -27,7 +31,7 @@ export function PlanificadorHeader({
   }));
 
   return (
-    <div className="space-y-2 pb-3 border-b border-neutral-100">
+    <div className="space-y-3 pb-3 border-b border-neutral-100">
       {/* Top row: Title and utilities */}
       <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3">
         <div>
@@ -78,6 +82,34 @@ export function PlanificadorHeader({
             <ArrowRight className="w-3 h-3 stroke-[1.25]" />
           </Link>
         </div>
+      </div>
+
+      {/* View switcher row */}
+      <div className="flex items-center gap-5 text-xs pt-1">
+        <button
+          type="button"
+          onClick={() => onViewChange("diaria")}
+          className={cn(
+            "cursor-pointer transition-colors pb-1",
+            activeView === "diaria"
+              ? "text-neutral-900 font-semibold border-b border-neutral-900"
+              : "text-neutral-400 hover:text-neutral-700 font-normal"
+          )}
+        >
+          Vista diaria
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange("semanal")}
+          className={cn(
+            "cursor-pointer transition-colors pb-1",
+            activeView === "semanal"
+              ? "text-neutral-900 font-semibold border-b border-neutral-900"
+              : "text-neutral-400 hover:text-neutral-700 font-normal"
+          )}
+        >
+          Vista semanal
+        </button>
       </div>
     </div>
   );

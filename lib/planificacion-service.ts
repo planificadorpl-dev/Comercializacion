@@ -552,6 +552,125 @@ export async function updatePlanningRecord(
   };
 }
 
+export interface BatchPlanningUpdateItem {
+  sheetRowIndex: number;
+  item: NewPlanningItem;
+}
+
+/**
+ * Updates multiple planning records in a single batch in Supabase and Google Sheets (single HTTP call)
+ */
+export async function batchUpdatePlanningRecords(
+  updates: BatchPlanningUpdateItem[]
+): Promise<{ success: boolean; updatedCount: number; message: string }> {
+  if (!updates || updates.length === 0) {
+    return { success: true, updatedCount: 0, message: "No hay registros para actualizar." };
+  }
+
+  // 1. Actualizar en Supabase de forma rápida
+  if (isDatabaseConfigured()) {
+    try {
+      for (const { sheetRowIndex, item } of updates) {
+        const isoFecha = toIsoDateString(item.fecha);
+        const mes = (item.mes || getMonthFromDate(isoFecha)).toUpperCase();
+        const asesor = item.asesor.trim();
+        const estado = (item.estado || "").trim();
+        const municipio = (item.municipio || "").trim();
+        const parroquia = (item.parroquia || "").trim();
+        const sector = (item.sector || "").trim();
+        const actividad = (item.tipo_actividad || "Recorrido con Instaladores").trim();
+        const estatus = (item.estatus || "Planificado").trim();
+        const finalFormula = buildFinalFormula(sheetRowIndex || 2, asesor, parroquia, actividad, estatus);
+
+        await query(`
+          INSERT INTO planificacion_jornadas (
+            sheet_row_index, fecha, mes, asesor, estado, municipio, parroquia, sector, tipo_actividad, estatus, formula_final, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+          ON CONFLICT (fecha, LOWER(TRIM(asesor)))
+          DO UPDATE SET
+            sheet_row_index = COALESCE(EXCLUDED.sheet_row_index, planificacion_jornadas.sheet_row_index),
+            mes = EXCLUDED.mes,
+            estado = EXCLUDED.estado,
+            municipio = EXCLUDED.municipio,
+            parroquia = EXCLUDED.parroquia,
+            sector = EXCLUDED.sector,
+            tipo_actividad = EXCLUDED.tipo_actividad,
+            estatus = EXCLUDED.estatus,
+            formula_final = EXCLUDED.formula_final,
+            updated_at = NOW()
+        `, [
+          sheetRowIndex || null,
+          isoFecha,
+          mes,
+          asesor,
+          estado,
+          municipio,
+          parroquia,
+          sector,
+          actividad,
+          estatus,
+          finalFormula,
+        ]);
+      }
+    } catch (dbErr: any) {
+      console.error("Error al actualizar lote en Supabase:", dbErr.message);
+    }
+  }
+
+  // 2. Actualizar en Google Sheets mediante batchUpdate (1 sola petición HTTP)
+  try {
+    const validUpdates = updates.filter((u) => u.sheetRowIndex && u.sheetRowIndex >= 2);
+    if (validUpdates.length > 0) {
+      const sheets = await getSheetsClient();
+      const batchData = validUpdates.map(({ sheetRowIndex, item }) => {
+        const isoFecha = toIsoDateString(item.fecha);
+        const sheetFecha = toSheetDateFormat(isoFecha);
+        const mes = (item.mes || getMonthFromDate(isoFecha)).toUpperCase();
+        const asesor = item.asesor.trim();
+        const estado = (item.estado || "").trim();
+        const municipio = (item.municipio || "").trim();
+        const parroquia = (item.parroquia || "").trim();
+        const sector = (item.sector || "").trim();
+        const actividad = (item.tipo_actividad || "Recorrido con Instaladores").trim();
+        const estatus = (item.estatus || "Planificado").trim();
+        const finalFormula = buildFinalFormula(sheetRowIndex, asesor, parroquia, actividad, estatus);
+
+        return {
+          range: `${PLANIFICACION_SHEET_NAME}!A${sheetRowIndex}:J${sheetRowIndex}`,
+          values: [[
+            mes,
+            sheetFecha,
+            asesor,
+            estado,
+            municipio,
+            parroquia,
+            sector,
+            actividad,
+            estatus,
+            finalFormula,
+          ]],
+        };
+      });
+
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: PLANIFICACION_SPREADSHEET_ID,
+        requestBody: {
+          valueInputOption: "USER_ENTERED",
+          data: batchData,
+        },
+      });
+    }
+  } catch (sheetErr: any) {
+    console.warn("Aviso al actualizar lote en Google Sheets:", sheetErr.message);
+  }
+
+  return {
+    success: true,
+    updatedCount: updates.length,
+    message: `${updates.length} jornadas actualizadas correctamente.`,
+  };
+}
+
 export interface DeletePlanningRecordOptions {
   id?: string | number;
   sheetRowIndex?: number;

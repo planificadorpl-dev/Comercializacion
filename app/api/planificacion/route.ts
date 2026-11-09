@@ -4,6 +4,7 @@ import {
   getPlanningSheetRecords,
   appendPlanningRecords,
   updatePlanningRecord,
+  batchUpdatePlanningRecords,
   deletePlanningRecord,
   NewPlanningItem,
 } from "@/lib/planificacion-service";
@@ -117,6 +118,28 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
+
+    // Check for batch updates
+    const updates = Array.isArray(body)
+      ? body
+      : body.updates && Array.isArray(body.updates)
+      ? body.updates
+      : body.items && Array.isArray(body.items)
+      ? body.items
+      : null;
+
+    if (updates && updates.length > 0) {
+      const result = await batchUpdatePlanningRecords(updates);
+      try {
+        clearSheetsCache();
+      } catch (_) {}
+      return NextResponse.json({
+        success: true,
+        updatedCount: result.updatedCount,
+        message: result.message,
+      });
+    }
+
     const { sheetRowIndex, item } = body;
 
     if (!sheetRowIndex || !item) {

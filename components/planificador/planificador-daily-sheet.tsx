@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, memo } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -27,6 +27,7 @@ interface PlanificadorDailySheetProps {
   existingRecords: PlanningSheetRecord[];
   onSuccess: (count: number) => void;
   defaultMonth: string;
+  initialDate?: string;
 }
 
 interface ParroquiaItem {
@@ -46,18 +47,246 @@ function formatButtonDate(isoStr: string, todayIso: string): string {
   return isoStr;
 }
 
+interface AdvisorDailyRowProps {
+  adv: string;
+  initials: string;
+  isPlanned: boolean;
+  isSelected: boolean;
+  showBulkTool: boolean;
+  draft: { parroquia: string; sector: string; actividad: string };
+  status: "idle" | "saving" | "saved" | "error";
+  existingRec?: PlanningSheetRecord;
+  parroquiasOptions: { value: string; label: string }[];
+  sectorOptions: { value: string; label: string }[];
+  activitiesOptions: { value: string; label: string }[];
+  onToggleSelect: (adv: string) => void;
+  onFieldChange: (adv: string, field: "parroquia" | "sector" | "actividad", val: string) => void;
+  onRequestDelete: (rec: PlanningSheetRecord) => void;
+}
+
+const AdvisorDailyRow = memo(function AdvisorDailyRow({
+  adv,
+  initials,
+  isPlanned,
+  isSelected,
+  showBulkTool,
+  draft,
+  status,
+  existingRec,
+  parroquiasOptions,
+  sectorOptions,
+  activitiesOptions,
+  onToggleSelect,
+  onFieldChange,
+  onRequestDelete,
+}: AdvisorDailyRowProps) {
+  const isSavingThis = status === "saving";
+
+  return (
+    <div
+      onClick={() => {
+        if (showBulkTool) {
+          onToggleSelect(adv);
+        }
+      }}
+      className={cn(
+        "py-3 px-1 transition-colors group flex flex-col md:flex-row md:items-center justify-between gap-3",
+        isSelected
+          ? "bg-neutral-50/80"
+          : isPlanned
+          ? "hover:bg-neutral-50/40"
+          : "hover:bg-neutral-50/20"
+      )}
+    >
+      {/* 1. Nombre del asesor y estado */}
+      <div className="flex items-center justify-between md:justify-start gap-3 min-w-[200px]">
+        <div className="flex items-center gap-2.5">
+          {showBulkTool && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect(adv);
+              }}
+              className="p-0.5 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer shrink-0"
+              title={isSelected ? "Deseleccionar asesor" : "Seleccionar asesor"}
+            >
+              <span
+                className={cn(
+                  "w-4 h-4 rounded-full flex items-center justify-center transition-colors",
+                  isSelected
+                    ? "bg-neutral-900 text-white"
+                    : "border border-neutral-300 hover:border-neutral-700 bg-transparent"
+                )}
+              >
+                {isSelected && <Check className="w-2.5 h-2.5 stroke-[2.5]" />}
+              </span>
+            </button>
+          )}
+
+          <span
+            className={cn(
+              "w-6 h-6 rounded-full flex items-center justify-center text-[11px] shrink-0 font-medium transition-colors",
+              isPlanned
+                ? "bg-neutral-900 text-white"
+                : "bg-neutral-100 text-neutral-500"
+            )}
+          >
+            {initials}
+          </span>
+
+          <div>
+            <span
+              className={cn(
+                "text-xs block transition-colors",
+                isSelected
+                  ? "font-semibold text-neutral-900"
+                  : "font-medium text-neutral-900"
+              )}
+            >
+              {adv}
+            </span>
+            <span className="text-[11px] block">
+              {isPlanned ? (
+                <span className="text-neutral-600 font-medium">Planificado</span>
+              ) : (
+                <span className="text-neutral-400">Sin planificar</span>
+              )}
+            </span>
+          </div>
+        </div>
+
+        {/* En móvil: indicador de estado o eliminación */}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center gap-2 md:hidden"
+        >
+          {isSavingThis ? (
+            <Loader2 className="w-4 h-4 animate-spin text-neutral-400 stroke-[1.5]" />
+          ) : isPlanned || status === "saved" ? (
+            <div className="flex items-center gap-2">
+              <Check className="w-4 h-4 text-neutral-900 stroke-[2] animate-in zoom-in-75 duration-150" />
+              {existingRec && (
+                <button
+                  type="button"
+                  onClick={() => onRequestDelete(existingRec)}
+                  className="text-neutral-400 hover:text-neutral-900 transition-colors p-1 cursor-pointer"
+                  title="Eliminar jornada"
+                >
+                  <X className="w-3.5 h-3.5 stroke-[1.5]" />
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* 2. Selectores: Parroquia, Sector, Actividad */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 max-w-2xl"
+      >
+        <div>
+          <label className="text-[10px] text-neutral-400 block mb-0.5 md:hidden">
+            Parroquia
+          </label>
+          <CustomDropdown
+            value={draft.parroquia}
+            options={parroquiasOptions}
+            onChange={(p) => onFieldChange(adv, "parroquia", p)}
+            compact
+            placeholder="Seleccionar parroquia..."
+          />
+        </div>
+
+        <div>
+          <label className="text-[10px] text-neutral-400 block mb-0.5 md:hidden">
+            Sector
+          </label>
+          <CustomDropdown
+            value={draft.sector}
+            options={sectorOptions}
+            onChange={(s) => onFieldChange(adv, "sector", s)}
+            compact
+            placeholder={
+              draft.parroquia ? "Seleccionar sector..." : "Elige parroquia primero..."
+            }
+          />
+        </div>
+
+        <div>
+          <label className="text-[10px] text-neutral-400 block mb-0.5 md:hidden">
+            Actividad
+          </label>
+          <CustomDropdown
+            value={draft.actividad}
+            options={activitiesOptions}
+            onChange={(a) => onFieldChange(adv, "actividad", a)}
+            compact
+            placeholder="Seleccionar actividad..."
+          />
+        </div>
+      </div>
+
+      {/* 3. Indicador de guardado automático (Cargando / Check / Eliminar con hover sutil) */}
+      <div className="hidden md:flex items-center justify-end gap-2.5 shrink-0 min-w-[70px]">
+        {isSavingThis ? (
+          <div
+            className="flex items-center gap-1.5 text-xs text-neutral-500 py-1"
+            title="Guardando automáticamente en Google Sheets y Base de Datos..."
+          >
+            <Loader2 className="w-4 h-4 animate-spin text-neutral-400 stroke-[1.5]" />
+            <span className="text-[11px] font-mono">Guardando</span>
+          </div>
+        ) : isPlanned || status === "saved" ? (
+          <div className="flex items-center gap-2">
+            <div
+              className="flex items-center text-neutral-900 py-1"
+              title="Guardado exitosamente"
+            >
+              <Check className="w-4 h-4 text-neutral-900 stroke-[2] animate-in zoom-in-75 duration-150" />
+            </div>
+            {existingRec && (
+              <button
+                type="button"
+                onClick={() => onRequestDelete(existingRec)}
+                className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-neutral-400 hover:text-neutral-900 p-1 cursor-pointer"
+                title="Eliminar jornada"
+              >
+                <X className="w-3.5 h-3.5 stroke-[1.5]" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <span className="text-[11px] text-neutral-300 py-1">Pendiente</span>
+        )}
+      </div>
+    </div>
+  );
+});
+
 export function PlanificadorDailySheet({
   metadata,
   existingRecords,
   onSuccess,
   defaultMonth,
+  initialDate,
 }: PlanificadorDailySheetProps) {
   // Fecha de hoy en formato ISO (YYYY-MM-DD)
   const todayIso = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   // ── 1. DÍA DE LA PLANIFICACIÓN (FECHA ANCLA) ──────────────────────────────
-  const [selectedDate, setSelectedDate] = useState<string>(todayIso);
+  const [selectedDate, setSelectedDate] = useState<string>(
+    initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) ? initialDate : todayIso
+  );
   const dateInputRef = useRef<HTMLInputElement>(null);
+
+  // Sincronizar fecha inicial si cambia desde el exterior
+  useEffect(() => {
+    if (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)) {
+      setSelectedDate(initialDate);
+    }
+  }, [initialDate]);
 
   // Filtros de búsqueda en la lista de asesores
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -187,6 +416,17 @@ export function PlanificadorDailySheet({
 
     return list.sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }));
   }, [metadata.sectorsCatalog]);
+
+  // Opciones precomputadas estables para evitar re-renders en AdvisorDailyRow
+  const parroquiasOptions = useMemo(
+    () => parroquiasList.map((p) => ({ value: p.parroquia, label: p.parroquia })),
+    [parroquiasList]
+  );
+
+  const activitiesOptions = useMemo(
+    () => metadata.activities.map((a) => ({ value: a, label: a })),
+    [metadata.activities]
+  );
 
   // ── 3. MAPA DE REGISTROS DE LA FECHA SELECCIONADA ─────────────────────────
   const dayRecordsMap = useMemo(() => {
@@ -553,16 +793,16 @@ export function PlanificadorDailySheet({
         );
       }
 
-      // Actualizar registros existentes
-      for (const { sheetRowIndex, item } of itemsToUpdate) {
+      // Actualizar registros existentes en un solo lote eficiente (Batch PUT)
+      if (itemsToUpdate.length > 0) {
         promises.push(
           fetch("/api/planificacion", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sheetRowIndex, item }),
+            body: JSON.stringify({ updates: itemsToUpdate }),
           }).then(async (res) => {
             const json = await res.json();
-            if (!json.success) throw new Error(json.error || "Error al actualizar jornada");
+            if (!json.success) throw new Error(json.error || "Error al actualizar jornadas");
             return json;
           })
         );
@@ -686,15 +926,16 @@ export function PlanificadorDailySheet({
         );
       }
 
-      for (const { sheetRowIndex, item } of itemsToUpdate) {
+      // Actualizar registros existentes en un solo lote eficiente (Batch PUT)
+      if (itemsToUpdate.length > 0) {
         promises.push(
           fetch("/api/planificacion", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sheetRowIndex, item }),
+            body: JSON.stringify({ updates: itemsToUpdate }),
           }).then(async (res) => {
             const json = await res.json();
-            if (!json.success) throw new Error(json.error || "Error al actualizar jornada");
+            if (!json.success) throw new Error(json.error || "Error al actualizar jornadas");
             return json;
           })
         );
@@ -1169,14 +1410,11 @@ export function PlanificadorDailySheet({
             const isSelected = selectedAdvisors.has(advKey);
             const draft = getAdvisorDraft(adv);
             const status = savingStatus[advKey] || (isPlanned ? "saved" : "idle");
-            const isSavingThis = status === "saving";
 
-            // Sectores disponibles para la parroquia seleccionada en este asesor
             const availableSectores = draft.parroquia
               ? parroquiaMap.get(draft.parroquia)?.sectores || []
               : [];
 
-            // Si hay parroquia elegida, mostrar solo sus sectores; si no, mostrar catálogo completo con parroquia entre paréntesis
             const sectorOptions = draft.parroquia
               ? availableSectores.map((s) => ({ value: s, label: s }))
               : allSectorOptions;
@@ -1189,200 +1427,23 @@ export function PlanificadorDailySheet({
               .toUpperCase();
 
             return (
-              <div
+              <AdvisorDailyRow
                 key={adv}
-                onClick={() => {
-                  if (showBulkTool) {
-                    toggleAdvisorSelection(adv);
-                  }
-                }}
-                className={cn(
-                  "py-3 px-1 transition-colors group flex flex-col md:flex-row md:items-center justify-between gap-3",
-                  isSelected
-                    ? "bg-neutral-50/80"
-                    : isPlanned
-                    ? "hover:bg-neutral-50/40"
-                    : "hover:bg-neutral-50/20"
-                )}
-              >
-                {/* 1. Nombre del asesor y estado */}
-                <div className="flex items-center justify-between md:justify-start gap-3 min-w-[200px]">
-                  <div className="flex items-center gap-2.5">
-                    {/* Indicador de selección cuando la herramienta rápida está activa */}
-                    {showBulkTool && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleAdvisorSelection(adv);
-                        }}
-                        className="p-0.5 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer shrink-0"
-                        title={isSelected ? "Deseleccionar asesor" : "Seleccionar asesor"}
-                      >
-                        <span
-                          className={cn(
-                            "w-4 h-4 rounded-full flex items-center justify-center transition-colors",
-                            isSelected
-                              ? "bg-neutral-900 text-white"
-                              : "border border-neutral-300 hover:border-neutral-700 bg-transparent"
-                          )}
-                        >
-                          {isSelected && <Check className="w-2.5 h-2.5 stroke-[2.5]" />}
-                        </span>
-                      </button>
-                    )}
-
-                    <span
-                      className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center text-[11px] shrink-0 font-medium transition-colors",
-                        isPlanned
-                          ? "bg-neutral-900 text-white"
-                          : "bg-neutral-100 text-neutral-500"
-                      )}
-                    >
-                      {initials}
-                    </span>
-
-                    <div>
-                      <span
-                        className={cn(
-                          "text-xs block transition-colors",
-                          isSelected
-                            ? "font-semibold text-neutral-900"
-                            : "font-medium text-neutral-900"
-                        )}
-                      >
-                        {adv}
-                      </span>
-                      <span className="text-[11px] block">
-                        {isPlanned ? (
-                          <span className="text-neutral-600 font-medium">
-                            Planificado
-                          </span>
-                        ) : (
-                          <span className="text-neutral-400">
-                            Sin planificar
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* En móvil: indicador de estado o eliminación */}
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-2 md:hidden"
-                  >
-                    {isSavingThis ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-neutral-400 stroke-[1.5]" />
-                    ) : isPlanned || status === "saved" ? (
-                      <div className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-neutral-900 stroke-[2] animate-in zoom-in-75 duration-150" />
-                        {existingRec && (
-                          <button
-                            type="button"
-                            onClick={() => setRecordToDelete(existingRec)}
-                            className="text-neutral-400 hover:text-neutral-900 transition-colors p-1 cursor-pointer"
-                            title="Eliminar jornada"
-                          >
-                            <X className="w-3.5 h-3.5 stroke-[1.5]" />
-                          </button>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-
-                {/* 2. Selectores: Parroquia, Sector, Actividad */}
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 max-w-2xl"
-                >
-                  {/* Parroquia */}
-                  <div>
-                    <label className="text-[10px] text-neutral-400 block mb-0.5 md:hidden">
-                      Parroquia
-                    </label>
-                    <CustomDropdown
-                      value={draft.parroquia}
-                      options={parroquiasList.map((p) => ({
-                        value: p.parroquia,
-                        label: p.parroquia,
-                      }))}
-                      onChange={(p) => handleFieldChange(adv, "parroquia", p)}
-                      compact
-                      placeholder="Seleccionar parroquia..."
-                    />
-                  </div>
-
-                  {/* Sector */}
-                  <div>
-                    <label className="text-[10px] text-neutral-400 block mb-0.5 md:hidden">
-                      Sector
-                    </label>
-                    <CustomDropdown
-                      value={draft.sector}
-                      options={sectorOptions}
-                      onChange={(s) => handleFieldChange(adv, "sector", s)}
-                      compact
-                      placeholder="Seleccionar sector..."
-                    />
-                  </div>
-
-                  {/* Actividad */}
-                  <div>
-                    <label className="text-[10px] text-neutral-400 block mb-0.5 md:hidden">
-                      Actividad
-                    </label>
-                    <CustomDropdown
-                      value={draft.actividad}
-                      options={metadata.activities.map((a) => ({
-                        value: a,
-                        label: a,
-                      }))}
-                      onChange={(a) => handleFieldChange(adv, "actividad", a)}
-                      compact
-                      placeholder="Seleccionar actividad..."
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Indicador de guardado automático (Cargando / Check / Eliminar) */}
-                <div className="hidden md:flex items-center justify-end gap-2.5 shrink-0 min-w-[70px]">
-                  {isSavingThis ? (
-                    <div
-                      className="flex items-center gap-1.5 text-xs text-neutral-500 py-1"
-                      title="Guardando automáticamente en Google Sheets y Base de Datos..."
-                    >
-                      <Loader2 className="w-4 h-4 animate-spin text-neutral-400 stroke-[1.5]" />
-                      <span className="text-[11px] font-mono">Guardando</span>
-                    </div>
-                  ) : isPlanned || status === "saved" ? (
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="flex items-center text-neutral-900 py-1"
-                        title="Guardado exitosamente"
-                      >
-                        <Check className="w-4 h-4 text-neutral-900 stroke-[2] animate-in zoom-in-75 duration-150" />
-                      </div>
-                      {existingRec && (
-                        <button
-                          type="button"
-                          onClick={() => setRecordToDelete(existingRec)}
-                          className="text-neutral-300 hover:text-neutral-900 transition-colors p-1 cursor-pointer"
-                          title="Eliminar jornada"
-                        >
-                          <X className="w-3.5 h-3.5 stroke-[1.5]" />
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-[11px] text-neutral-300 py-1">
-                      Pendiente
-                    </span>
-                  )}
-                </div>
-              </div>
+                adv={adv}
+                initials={initials}
+                isPlanned={isPlanned}
+                isSelected={isSelected}
+                showBulkTool={showBulkTool}
+                draft={draft}
+                status={status}
+                existingRec={existingRec}
+                parroquiasOptions={parroquiasOptions}
+                sectorOptions={sectorOptions}
+                activitiesOptions={activitiesOptions}
+                onToggleSelect={toggleAdvisorSelection}
+                onFieldChange={handleFieldChange}
+                onRequestDelete={setRecordToDelete}
+              />
             );
           })
         )}
