@@ -8,7 +8,7 @@ import {
   NewPlanningItem,
   getMonthFromDate,
   toIsoDateString,
-} from "@/lib/planificacion-service";
+} from "@/lib/planificacion-types";
 import { CustomDropdown } from "@/components/ui/custom-dropdown";
 
 interface PlanificadorEditDialogProps {

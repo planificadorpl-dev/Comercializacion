@@ -22,7 +22,7 @@ import {
   SPANISH_MONTHS,
   getMonthFromDate,
   toIsoDateString,
-} from "@/lib/planificacion-service";
+} from "@/lib/planificacion-types";
 import { clearDashboardDataCache } from "@/lib/dashboard-data";
 import { Loader2 } from "lucide-react";
 

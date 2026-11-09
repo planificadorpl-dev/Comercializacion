@@ -36,7 +36,7 @@ import {
   PlanningMetadata,
   NewPlanningItem,
   getMonthFromDate,
-} from "@/lib/planificacion-service";
+} from "@/lib/planificacion-types";
 
 type ViewMode = "mensual" | "diaria" | "crear";
 

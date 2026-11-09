@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { PlanningSheetRecord } from "@/lib/planificacion-service";
+import { PlanningSheetRecord } from "@/lib/planificacion-types";
 import { formatNumber } from "@/lib/utils";
 
 interface PlanificadorMetricsBarProps {

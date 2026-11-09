@@ -10,7 +10,7 @@ import {
   toIsoDateString,
   toSheetDateFormat,
   getMonthFromDate,
-} from "@/lib/planificacion-service";
+} from "@/lib/planificacion-types";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { CustomDropdown } from "@/components/ui/custom-dropdown";
 

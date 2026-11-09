@@ -11,7 +11,7 @@ import {
   getMonthFromDate,
   toIsoDateString,
   toSheetDateFormat,
-} from "@/lib/planificacion-service";
+} from "@/lib/planificacion-types";
 
 interface PlanificadorCreateFormProps {
   metadata: PlanningMetadata;

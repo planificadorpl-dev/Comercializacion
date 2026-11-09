@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { Search, X, PenLine, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PlanningSheetRecord, PlanningMetadata } from "@/lib/planificacion-service";
+import { PlanningSheetRecord, PlanningMetadata } from "@/lib/planificacion-types";
 import { CustomDropdown } from "@/components/ui/custom-dropdown";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 

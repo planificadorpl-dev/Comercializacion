@@ -4,7 +4,7 @@ import Link from "next/link";
 import { RotateCw, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CustomDropdown } from "@/components/ui/custom-dropdown";
-import { SPANISH_MONTHS } from "@/lib/planificacion-service";
+import { SPANISH_MONTHS } from "@/lib/planificacion-types";
 
 export type PlanificadorTab = "crear" | "matriz" | "tabla";
 
