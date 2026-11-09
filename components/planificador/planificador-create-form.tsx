@@ -16,6 +16,7 @@ import {
   PenLine,
   Sparkles,
   AlertCircle,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CustomDropdown } from "@/components/ui/custom-dropdown";
@@ -144,7 +145,36 @@ export function PlanificadorCreateForm({
   // Primary active advisor (if single mode)
   const currentAdvisor = selectedAdvisors.length > 0 ? selectedAdvisors[0] : "";
 
-  // ── ITINERARIO DEL ASESOR SELECCIONADO ─────────────────────────────────────
+  // ── JORNADAS PLANIFICADAS DEL DÍA SELECCIONADO (LÍNEA POR LÍNEA) ───────────
+  const dayRecords = useMemo(() => {
+    if (!selectedDate) return [];
+    return existingRecords
+      .filter((r) => r.isoFecha === selectedDate)
+      .sort((a, b) => (a.asesor || "").localeCompare(b.asesor || "", "es", { sensitivity: "base" }));
+  }, [selectedDate, existingRecords]);
+
+  // Asesores ya asignados en el día seleccionado
+  const assignedAdvisorsSetToday = useMemo(() => {
+    const set = new Set<string>();
+    dayRecords.forEach((r) => {
+      if (r.asesor) set.add(r.asesor.trim().toLowerCase());
+    });
+    return set;
+  }, [dayRecords]);
+
+  // Asesores pendientes por asignar en el día seleccionado
+  const pendingAdvisorsToday = useMemo(() => {
+    return filteredAdvisors.filter(
+      (adv) => !assignedAdvisorsSetToday.has(adv.trim().toLowerCase())
+    );
+  }, [filteredAdvisors, assignedAdvisorsSetToday]);
+
+  // Modo de vista inferior: "day" (predeterminado), "month", "advisor"
+  const [bottomViewMode, setBottomViewMode] = useState<"day" | "month" | "advisor">("day");
+  // Filtro de lista de asesores: "all" o "pending"
+  const [advisorListFilter, setAdvisorListFilter] = useState<"all" | "pending">("all");
+
+  // Itinerario individual del asesor (disponible si se desea consultar)
   const advisorItinerary = useMemo(() => {
     if (!currentAdvisor) return [];
     const norm = currentAdvisor.trim().toLowerCase();
@@ -153,17 +183,17 @@ export function PlanificadorCreateForm({
       .sort((a, b) => (a.isoFecha || a.fecha).localeCompare(b.isoFecha || b.fecha));
   }, [currentAdvisor, existingRecords]);
 
-  // ── DETECTAR SI EL DÍA SELECCIONADO YA TIENE PLANIFICACIÓN ─────────────────
+  // ── DETECTAR SI EL ASESOR SELECCIONADO YA TIENE JORNADA ESTE DÍA ───────────
   const existingRecordOnSelectedDate = useMemo<PlanningSheetRecord | null>(() => {
     if (!currentAdvisor || !selectedDate || dateMode !== "single") return null;
     const norm = currentAdvisor.trim().toLowerCase();
-    const match = existingRecords.find(
-      (r) => r.isoFecha === selectedDate && r.asesor && r.asesor.trim().toLowerCase() === norm
+    const match = dayRecords.find(
+      (r) => r.asesor && r.asesor.trim().toLowerCase() === norm
     );
     return match || null;
-  }, [currentAdvisor, selectedDate, dateMode, existingRecords]);
+  }, [currentAdvisor, selectedDate, dateMode, dayRecords]);
 
-  // When an existing record is detected, load its values into the form fields (unless explicitly adding second)
+  // Cuando se detecta un registro existente para este asesor hoy, cargar sus datos
   useEffect(() => {
     if (existingRecordOnSelectedDate && !allowSecondActivityOnDay) {
       if (existingRecordOnSelectedDate.sector) setSelectedSector(existingRecordOnSelectedDate.sector);
@@ -175,31 +205,28 @@ export function PlanificadorCreateForm({
     }
   }, [existingRecordOnSelectedDate, allowSecondActivityOnDay]);
 
-  // ── AUTO-SELECCIONAR PRÓXIMA FECHA SIN PLANIFICAR AL ELEGIR ASESOR ────────
-  const applyNextUnplannedDateForAdvisor = useCallback((adv: string) => {
-    const nextDate = calculateNextUnplannedDate(adv, existingRecords, defaultMonth);
-    setSelectedDate(nextDate);
-    setEndDate(nextDate);
-    setDateMode("single");
-    setAllowSecondActivityOnDay(false);
-  }, [existingRecords, defaultMonth]);
-
-  // Handle toggling advisor
+  // Handle toggling advisor - ¡MANTIENE SIEMPRE LA FECHA QUE EL SUPERVISOR ESTÁ PLANIFICANDO!
   const toggleAdvisor = (adv: string) => {
     if (selectionMode === "single") {
       setSelectedAdvisors([adv]);
-      applyNextUnplannedDateForAdvisor(adv);
-      if (viewMode === "wizard") {
-        setCurrentStep(2);
+      setAllowSecondActivityOnDay(false);
+
+      // Si el asesor ya tiene una jornada este día, cargarla para editar
+      const existingToday = dayRecords.find(
+        (r) => r.asesor && r.asesor.trim().toLowerCase() === adv.trim().toLowerCase()
+      );
+      if (existingToday) {
+        if (existingToday.sector) setSelectedSector(existingToday.sector);
+        if (existingToday.parroquia) setSelectedParroquia(existingToday.parroquia);
+        if (existingToday.municipio) setSelectedMunicipio(existingToday.municipio);
+        if (existingToday.estado) setSelectedEstado(existingToday.estado);
+        if (existingToday.tipo_actividad) setSelectedActivity(existingToday.tipo_actividad);
+        if (existingToday.estatus) setSelectedStatus(existingToday.estatus);
       }
     } else {
-      setSelectedAdvisors((prev) => {
-        const next = prev.includes(adv) ? prev.filter((a) => a !== adv) : [...prev, adv];
-        if (next.length === 1) {
-          applyNextUnplannedDateForAdvisor(next[0]);
-        }
-        return next;
-      });
+      setSelectedAdvisors((prev) =>
+        prev.includes(adv) ? prev.filter((a) => a !== adv) : [...prev, adv]
+      );
     }
   };
 
@@ -207,17 +234,32 @@ export function PlanificadorCreateForm({
     setSelectedAdvisors(Array.from(new Set([...selectedAdvisors, ...filteredAdvisors])));
   };
 
+  const selectAllPendingAdvisorsToday = () => {
+    setSelectedAdvisors(Array.from(new Set([...selectedAdvisors, ...pendingAdvisorsToday])));
+  };
+
   const clearAdvisorSelection = () => {
     setSelectedAdvisors([]);
-    setSelectedDate(new Date().toISOString().split("T")[0]);
+    setAllowSecondActivityOnDay(false);
   };
 
   // ── DATE SHORTCUTS & TARGET DATES ─────────────────────────────────────────
+  const advanceDay = (days: number) => {
+    if (!selectedDate) return;
+    const parts = selectedDate.split("-").map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2] + days);
+    const iso = d.toISOString().split("T")[0];
+    setSelectedDate(iso);
+    setEndDate(iso);
+    setAllowSecondActivityOnDay(false);
+  };
+
   const setQuickDate = (offsetDays: number) => {
     const d = new Date();
     d.setDate(d.getDate() + offsetDays);
     const iso = d.toISOString().split("T")[0];
     setSelectedDate(iso);
+    setEndDate(iso);
     setDateMode("single");
     setAllowSecondActivityOnDay(false);
   };
@@ -399,13 +441,13 @@ export function PlanificadorCreateForm({
         const json = await res.json();
         if (json.success) {
           setFeedbackMessage(
-            `Jornada actualizada exitosamente en la fila ${existingRecordOnSelectedDate.sheetRowIndex} de Sheet Data.`
+            `Jornada de ${currentAdvisor} actualizada en Sheet Data para el ${toSheetDateFormat(selectedDate)}.`
           );
           onSuccess(1);
-          // Advance to next unplanned date
-          if (currentAdvisor) {
-            applyNextUnplannedDateForAdvisor(currentAdvisor);
-          }
+          // MANTENER SELECCIÓN: fecha, sector y actividad permanecen.
+          setSelectedAdvisors([]);
+          setAllowSecondActivityOnDay(false);
+          if (viewMode === "wizard") setCurrentStep(1);
         } else {
           setErrorMessage(json.error || "No se pudo actualizar la jornada.");
         }
@@ -441,15 +483,17 @@ export function PlanificadorCreateForm({
 
       if (json.success) {
         setFeedbackMessage(
-          `Planificación guardada exitosamente: ${items.length} ${
-            items.length === 1 ? "jornada registrada" : "jornadas registradas"
-          } en la hoja Data.`
+          `Jornada de ${items.map((i) => i.asesor).join(", ")} registrada para el ${toSheetDateFormat(selectedDate)}.`
         );
         onSuccess(items.length);
 
-        // Advance to next unplanned date automatically for the next entry!
-        if (currentAdvisor) {
-          applyNextUnplannedDateForAdvisor(currentAdvisor);
+        // MANTENER SELECCIÓN ("quiero mantener esta seleccion"):
+        // Fecha, sector y actividad permanecen seleccionados.
+        // Solo limpiamos el asesor para que el supervisor toque inmediatamente al siguiente:
+        setSelectedAdvisors([]);
+        setAllowSecondActivityOnDay(false);
+        if (viewMode === "wizard") {
+          setCurrentStep(1);
         }
       } else {
         setErrorMessage(json.error || "No se pudo guardar la planificación en Google Sheets.");
@@ -479,9 +523,6 @@ export function PlanificadorCreateForm({
         );
         onSuccess(1);
         setRecordToDelete(null);
-        if (currentAdvisor) {
-          applyNextUnplannedDateForAdvisor(currentAdvisor);
-        }
       } else {
         setErrorMessage(json.error || "No se pudo eliminar el registro.");
       }
@@ -537,22 +578,16 @@ export function PlanificadorCreateForm({
         <div className="py-2 animate-in fade-in duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-neutral-800 border-b border-neutral-100">
           <span>{feedbackMessage}</span>
           <div className="flex items-center gap-3 shrink-0">
-            {currentAdvisor && (
-              <button
-                type="button"
-                onClick={() => applyNextUnplannedDateForAdvisor(currentAdvisor)}
-                className="text-neutral-900 font-medium hover:underline cursor-pointer"
-              >
-                Planificar siguiente fecha libre
-              </button>
-            )}
+            <span className="text-neutral-500 font-medium">
+              {formatNaturalDate(selectedDate)}
+            </span>
             <span className="text-neutral-300">·</span>
             <button
               type="button"
               onClick={clearAdvisorSelection}
               className="text-neutral-500 hover:text-neutral-900 cursor-pointer"
             >
-              Nuevo asesor
+              Limpiar asesor
             </button>
           </div>
         </div>
@@ -631,14 +666,56 @@ export function PlanificadorCreateForm({
               <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-medium text-neutral-900">
-                    ¿A quién vas a planificar?
+                    1. Asignar asesores para el {formatNaturalDate(selectedDate)}
                   </h3>
                   <p className="text-xs text-neutral-400 mt-0.5">
-                    Toca un asesor activo para seleccionarlo y avanzar a la próxima fecha libre
+                    {assignedAdvisorsSetToday.size} de {metadata.advisors.length} asesores asignados hoy · {pendingAdvisorsToday.length} disponibles
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3 text-xs">
+                  {/* Navegación rápida de día */}
+                  <div className="flex items-center gap-1 text-neutral-400">
+                    <button
+                      type="button"
+                      onClick={() => advanceDay(-1)}
+                      className="hover:text-neutral-900 cursor-pointer p-0.5"
+                      title="Día anterior"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5 stroke-[1.5]" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(0)}
+                      className="hover:text-neutral-900 cursor-pointer text-[11px] px-1 font-medium"
+                    >
+                      Hoy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => advanceDay(1)}
+                      className="hover:text-neutral-900 cursor-pointer p-0.5"
+                      title="Día siguiente"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5 stroke-[1.5]" />
+                    </button>
+                  </div>
+
+                  <span className="text-neutral-200">·</span>
+
+                  {/* Filtro: Todos vs Pendientes */}
+                  <button
+                    type="button"
+                    onClick={() => setAdvisorListFilter((f) => (f === "all" ? "pending" : "all"))}
+                    className="text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+                  >
+                    {advisorListFilter === "all"
+                      ? `Solo pendientes (${pendingAdvisorsToday.length})`
+                      : `Ver todos (${metadata.advisors.length})`}
+                  </button>
+
+                  <span className="text-neutral-200">·</span>
+
                   <button
                     type="button"
                     onClick={() =>
@@ -655,10 +732,10 @@ export function PlanificadorCreateForm({
                       <span className="text-neutral-200">·</span>
                       <button
                         type="button"
-                        onClick={selectAllFilteredAdvisors}
+                        onClick={selectAllPendingAdvisorsToday}
                         className="text-neutral-500 hover:text-neutral-900 cursor-pointer"
                       >
-                        Todos
+                        Pendientes
                       </button>
                     </>
                   )}
@@ -687,14 +764,21 @@ export function PlanificadorCreateForm({
               </div>
 
               {/* Active Advisors List - Touch target minimum 48px */}
-              <div className="divide-y divide-neutral-100 max-h-[50vh] overflow-y-auto">
-                {filteredAdvisors.length === 0 ? (
+              <div className="divide-y divide-neutral-100 max-h-[45vh] overflow-y-auto">
+                {(advisorListFilter === "pending" ? pendingAdvisorsToday : filteredAdvisors).length === 0 ? (
                   <div className="py-8 text-center text-xs text-neutral-400">
-                    No se encontraron asesores activos con &quot;{advisorSearch}&quot;
+                    {advisorListFilter === "pending"
+                      ? "Todos los asesores ya tienen jornada planificada para este día."
+                      : `No se encontraron asesores activos con "${advisorSearch}"`}
                   </div>
                 ) : (
-                  filteredAdvisors.map((adv) => {
+                  (advisorListFilter === "pending" ? pendingAdvisorsToday : filteredAdvisors).map((adv) => {
                     const isSelected = selectedAdvisors.includes(adv);
+                    const isAssigned = assignedAdvisorsSetToday.has(adv.trim().toLowerCase());
+                    const assignedItem = isAssigned
+                      ? dayRecords.find((r) => r.asesor?.trim().toLowerCase() === adv.trim().toLowerCase())
+                      : null;
+
                     const initials = adv
                       .split(" ")
                       .map((p) => p[0])
@@ -702,21 +786,18 @@ export function PlanificadorCreateForm({
                       .join("")
                       .toUpperCase();
 
-                    // Check how many days are planned for this advisor in existing records
-                    const plannedCount = existingRecords.filter(
-                      (r) => r.asesor && r.asesor.trim().toLowerCase() === adv.trim().toLowerCase()
-                    ).length;
-
                     return (
                       <button
                         key={adv}
                         type="button"
                         onClick={() => toggleAdvisor(adv)}
                         className={cn(
-                          "w-full py-3 px-1 flex items-center justify-between text-left transition-colors cursor-pointer group",
+                          "w-full py-2.5 px-1 flex items-center justify-between text-left transition-colors cursor-pointer group",
                           isSelected
                             ? "text-neutral-950 font-medium"
-                            : "text-neutral-600 hover:text-neutral-900"
+                            : isAssigned
+                            ? "text-neutral-600 hover:text-neutral-900"
+                            : "text-neutral-800 hover:text-neutral-950"
                         )}
                       >
                         <div className="flex items-center gap-3">
@@ -725,6 +806,8 @@ export function PlanificadorCreateForm({
                               "w-7 h-7 rounded-full flex items-center justify-center text-xs shrink-0 transition-colors",
                               isSelected
                                 ? "bg-neutral-900 text-white font-medium"
+                                : isAssigned
+                                ? "bg-neutral-200 text-neutral-800"
                                 : "bg-neutral-100 text-neutral-500 group-hover:bg-neutral-200"
                             )}
                           >
@@ -733,14 +816,23 @@ export function PlanificadorCreateForm({
                           <div>
                             <span className="text-sm block">{adv}</span>
                             <span className="text-[11px] text-neutral-400">
-                              {plannedCount}{" "}
-                              {plannedCount === 1 ? "jornada registrada" : "jornadas registradas"}
+                              {isAssigned ? (
+                                <span className="text-neutral-600 font-medium">
+                                  ✓ Asignado hoy: {assignedItem?.sector} ({assignedItem?.tipo_actividad})
+                                </span>
+                              ) : (
+                                <span>○ Disponible hoy</span>
+                              )}
                             </span>
                           </div>
                         </div>
 
                         {isSelected ? (
                           <Check className="w-4 h-4 text-neutral-900 stroke-[1.75]" />
+                        ) : isAssigned ? (
+                          <span className="text-[11px] text-neutral-400 group-hover:text-neutral-700">
+                            Editar →
+                          </span>
                         ) : (
                           <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 transition-colors stroke-[1.25]" />
                         )}
@@ -750,21 +842,57 @@ export function PlanificadorCreateForm({
                 )}
               </div>
 
-              {/* Bottom Action */}
+              {/* Bottom Quick Action: ONE TAP ADD IF SECTOR IS SET, OR ADVANCE */}
               {selectedAdvisors.length > 0 && (
-                <div className="pt-2 flex items-center justify-between">
-                  <span className="text-xs text-neutral-500">
-                    {selectedAdvisors.length}{" "}
-                    {selectedAdvisors.length === 1 ? "asesor elegido" : "asesores elegidos"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentStep(2)}
-                    className="text-xs text-neutral-900 font-medium hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Continuar a Fecha</span>
-                    <ChevronRight className="w-3.5 h-3.5 stroke-[1.5]" />
-                  </button>
+                <div className="pt-3 border-t border-neutral-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-150">
+                  <div className="text-xs text-neutral-600">
+                    <span className="font-medium text-neutral-900">
+                      {selectedAdvisors.length === 1 ? selectedAdvisors[0] : `${selectedAdvisors.length} asesores`}
+                    </span>
+                    {selectedSector && (
+                      <span className="text-neutral-500 ml-1.5">
+                        → {selectedSector} ({selectedActivity})
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    {selectedSector ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSubmit()}
+                        disabled={isSubmitting}
+                        className="text-xs font-semibold text-neutral-900 hover:text-neutral-600 transition-colors cursor-pointer flex items-center gap-1.5"
+                      >
+                        {isSubmitting ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin stroke-[1.25]" />
+                        ) : (
+                          <Plus className="w-3.5 h-3.5 stroke-[1.5]" />
+                        )}
+                        <span>
+                          {isEditingExistingDay ? "Actualizar jornada" : `+ Añadir a ${toSheetDateFormat(selectedDate)}`}
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setCurrentStep(3)}
+                        className="text-xs text-neutral-900 font-medium hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>Elegir Sector →</span>
+                      </button>
+                    )}
+
+                    {selectedSector && (
+                      <button
+                        type="button"
+                        onClick={() => setCurrentStep(3)}
+                        className="text-xs text-neutral-400 hover:text-neutral-700 cursor-pointer"
+                      >
+                        Cambiar sector
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -785,15 +913,27 @@ export function PlanificadorCreateForm({
                   </p>
                 </div>
 
-                {currentAdvisor && (
+                <div className="flex items-center gap-1.5 text-xs text-neutral-400">
                   <button
                     type="button"
-                    onClick={() => applyNextUnplannedDateForAdvisor(currentAdvisor)}
-                    className="text-xs text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+                    onClick={() => advanceDay(-1)}
+                    className="hover:text-neutral-900 cursor-pointer p-0.5"
+                    title="Día anterior"
                   >
-                    Ir a próxima fecha sin planificar
+                    <ChevronLeft className="w-3.5 h-3.5 stroke-[1.5]" />
                   </button>
-                )}
+                  <span className="text-[11px] text-neutral-500 font-medium">
+                    {formatNaturalDate(selectedDate)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => advanceDay(1)}
+                    className="hover:text-neutral-900 cursor-pointer p-0.5"
+                    title="Día siguiente"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5 stroke-[1.5]" />
+                  </button>
+                </div>
               </div>
 
               {/* Quick Tap Presets */}
@@ -1420,25 +1560,35 @@ export function PlanificadorCreateForm({
             <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto pt-1">
               {filteredAdvisors.map((adv) => {
                 const isSelected = selectedAdvisors.includes(adv);
+                const isAssigned = assignedAdvisorsSetToday.has(adv.trim().toLowerCase());
                 return (
                   <button
                     key={adv}
                     type="button"
                     onClick={() => toggleAdvisor(adv)}
                     className={cn(
-                      "text-xs py-1 transition-colors cursor-pointer flex items-center gap-1.5",
+                      "text-xs py-1 px-1.5 transition-colors cursor-pointer flex items-center gap-1.5",
                       isSelected
                         ? "text-neutral-950 font-medium"
+                        : isAssigned
+                        ? "text-neutral-700 font-medium"
                         : "text-neutral-400 hover:text-neutral-700 font-normal"
                     )}
                   >
                     <span
                       className={cn(
                         "w-1.5 h-1.5 rounded-full shrink-0",
-                        isSelected ? "bg-neutral-900" : "bg-neutral-300"
+                        isSelected
+                          ? "bg-neutral-900"
+                          : isAssigned
+                          ? "bg-neutral-600"
+                          : "bg-neutral-300"
                       )}
                     />
                     <span>{adv}</span>
+                    {isAssigned && (
+                      <span className="text-[10px] text-neutral-400">✓</span>
+                    )}
                   </button>
                 );
               })}
@@ -1465,18 +1615,32 @@ export function PlanificadorCreateForm({
               </div>
 
               <div className="flex items-center gap-3 text-xs">
-                {currentAdvisor && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => applyNextUnplannedDateForAdvisor(currentAdvisor)}
-                      className="text-neutral-500 hover:text-neutral-900 cursor-pointer"
-                    >
-                      Próxima fecha libre
-                    </button>
-                    <span className="text-neutral-200">·</span>
-                  </>
-                )}
+                <div className="flex items-center gap-1.5 text-neutral-400">
+                  <button
+                    type="button"
+                    onClick={() => advanceDay(-1)}
+                    className="hover:text-neutral-900 cursor-pointer p-0.5"
+                    title="Día anterior"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5 stroke-[1.5]" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickDate(0)}
+                    className="hover:text-neutral-900 cursor-pointer text-[11px] px-1 font-medium"
+                  >
+                    Hoy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => advanceDay(1)}
+                    className="hover:text-neutral-900 cursor-pointer p-0.5"
+                    title="Día siguiente"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5 stroke-[1.5]" />
+                  </button>
+                </div>
+                <span className="text-neutral-200">·</span>
                 <button
                   type="button"
                   onClick={() => setDateMode("single")}
@@ -1760,106 +1924,165 @@ export function PlanificadorCreateForm({
       )}
 
       {/* ─────────────────────────────────────────────────────────────────── */}
-      {/* SECCIÓN INFERIOR: ITINERARIO DEL ASESOR SELECCIONADO                 */}
-      {/* "ir viendo abajo lo que voy agregando o ya esta agregado para modificar" */}
+      {/* SECCIÓN INFERIOR: JORNADAS EN TIEMPO REAL LÍNEA POR LÍNEA            */}
+      {/* "mientras los vaya añadiendo que se vaya llenando linea por linea abajo" */}
       {/* ─────────────────────────────────────────────────────────────────── */}
-      {currentAdvisor && (
-        <div className="pt-8 border-t border-neutral-100 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
-            <div>
-              <h4 className="text-sm font-medium text-neutral-900">
-                Itinerario de {currentAdvisor} ({advisorItinerary.length}{" "}
-                {advisorItinerary.length === 1 ? "jornada registrada" : "jornadas registradas"})
-              </h4>
-              <p className="text-xs text-neutral-400 mt-0.5">
-                Toca cualquier fila para cargarla en el editor y modificarla, o elimínala con la cruz
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => applyNextUnplannedDateForAdvisor(currentAdvisor)}
-              className="text-xs text-neutral-600 hover:text-neutral-900 transition-colors font-medium cursor-pointer"
-            >
-              + Planificar próxima fecha libre
-            </button>
+      <div className="pt-8 border-t border-neutral-100 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
+          <div>
+            <h4 className="text-sm font-medium text-neutral-900">
+              {bottomViewMode === "day"
+                ? `Jornadas planificadas del ${formatNaturalDate(selectedDate)} (${dayRecords.length} ${
+                    dayRecords.length === 1 ? "jornada registrada" : "jornadas registradas"
+                  })`
+                : bottomViewMode === "month"
+                ? `Todas las jornadas registradas en Sheet Data (${existingRecords.length})`
+                : `Itinerario de ${currentAdvisor} (${advisorItinerary.length} jornadas)`}
+            </h4>
+            <p className="text-xs text-neutral-400 mt-0.5">
+              {bottomViewMode === "day"
+                ? "Se llena línea por línea a medida que agregas cada asesor. Toca el lápiz para editar o la cruz para eliminar."
+                : "Registros sincronizados directamente con la hoja Data de Google Sheets."}
+            </p>
           </div>
 
-          {advisorItinerary.length === 0 ? (
-            <div className="py-6 text-xs text-neutral-400 text-center border-b border-neutral-100">
-              {currentAdvisor} aún no tiene jornadas registradas en la hoja Data.
-            </div>
-          ) : (
-            <div className="divide-y divide-neutral-100 border-t border-neutral-100">
-              {advisorItinerary.map((r) => {
-                const isCurrentActiveDate = r.isoFecha === selectedDate;
+          <div className="flex items-center gap-3 text-xs">
+            <button
+              type="button"
+              onClick={() => setBottomViewMode("day")}
+              className={cn(
+                "transition-colors cursor-pointer py-1",
+                bottomViewMode === "day"
+                  ? "text-neutral-900 font-medium underline underline-offset-4"
+                  : "text-neutral-400 hover:text-neutral-700"
+              )}
+            >
+              Día actual ({dayRecords.length})
+            </button>
+            <span className="text-neutral-200">·</span>
+            <button
+              type="button"
+              onClick={() => setBottomViewMode("month")}
+              className={cn(
+                "transition-colors cursor-pointer py-1",
+                bottomViewMode === "month"
+                  ? "text-neutral-900 font-medium underline underline-offset-4"
+                  : "text-neutral-400 hover:text-neutral-700"
+              )}
+            >
+              Mes completo ({existingRecords.length})
+            </button>
+            {currentAdvisor && (
+              <>
+                <span className="text-neutral-200">·</span>
+                <button
+                  type="button"
+                  onClick={() => setBottomViewMode("advisor")}
+                  className={cn(
+                    "transition-colors cursor-pointer py-1",
+                    bottomViewMode === "advisor"
+                      ? "text-neutral-900 font-medium underline underline-offset-4"
+                      : "text-neutral-400 hover:text-neutral-700"
+                  )}
+                >
+                  Solo {currentAdvisor} ({advisorItinerary.length})
+                </button>
+              </>
+            )}
+          </div>
+        </div>
 
-                return (
-                  <div
-                    key={r.sheetRowIndex}
-                    className={cn(
-                      "py-3 px-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors group",
-                      isCurrentActiveDate
-                        ? "bg-neutral-50/80 -mx-2 px-3 rounded-none"
-                        : "hover:bg-neutral-50/40"
-                    )}
-                  >
-                    <div className="flex items-start sm:items-center gap-3">
-                      <span className="text-xs font-mono font-medium text-neutral-900 shrink-0 w-24">
+        {((bottomViewMode === "day" ? dayRecords : bottomViewMode === "advisor" ? advisorItinerary : existingRecords).length === 0) ? (
+          <div className="py-8 text-xs text-neutral-400 text-center border-b border-neutral-100">
+            {bottomViewMode === "day"
+              ? `Aún no hay jornadas registradas para el ${formatNaturalDate(selectedDate)}. Selecciona un asesor arriba y pulsa Añadir para comenzar a llenar las filas de este día.`
+              : bottomViewMode === "advisor"
+              ? `${currentAdvisor} no tiene jornadas registradas en la hoja Data.`
+              : "No se encontraron registros en la hoja Data."}
+          </div>
+        ) : (
+          <div className="divide-y divide-neutral-100 border-t border-neutral-100">
+            {(bottomViewMode === "day" ? dayRecords : bottomViewMode === "advisor" ? advisorItinerary : existingRecords).map((r, idx) => {
+              const isCurrentActive =
+                r.isoFecha === selectedDate &&
+                currentAdvisor &&
+                r.asesor?.trim().toLowerCase() === currentAdvisor.trim().toLowerCase();
+
+              return (
+                <div
+                  key={`${r.sheetRowIndex}-${r.asesor}-${idx}`}
+                  className={cn(
+                    "py-3 px-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors group",
+                    isCurrentActive
+                      ? "bg-neutral-50/80 -mx-2 px-3 rounded-none"
+                      : "hover:bg-neutral-50/40"
+                  )}
+                >
+                  <div className="flex items-start sm:items-center gap-3">
+                    <span className="text-xs font-mono text-neutral-400 shrink-0 w-6">
+                      #{idx + 1}
+                    </span>
+
+                    {bottomViewMode !== "day" && (
+                      <span className="text-xs font-mono font-medium text-neutral-700 shrink-0 w-24">
                         {r.fecha || toSheetDateFormat(r.isoFecha)}
                       </span>
+                    )}
 
-                      <div className="text-xs">
-                        <span className="font-medium text-neutral-900">
-                          {r.sector || "Sin sector"}
-                        </span>
-                        {r.parroquia && (
-                          <span className="text-neutral-400 ml-1.5">
-                            ({r.parroquia})
-                          </span>
-                        )}
-                        <span className="text-neutral-300 mx-1.5">·</span>
-                        <span className="text-neutral-600">{r.tipo_actividad}</span>
-                        <span className="text-neutral-400 ml-1.5 text-[11px]">
-                          [{r.estatus || "Planificado"}]
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-xs shrink-0 self-end sm:self-center">
-                      {isCurrentActiveDate && (
-                        <span className="text-[11px] text-neutral-500 font-medium">
-                          Activo en editor
+                    <div className="text-xs">
+                      <span className="font-medium text-neutral-900">
+                        {r.asesor}
+                      </span>
+                      <span className="text-neutral-300 mx-1.5">·</span>
+                      <span className="text-neutral-700 font-medium">
+                        {r.sector || "Sin sector"}
+                      </span>
+                      {r.parroquia && (
+                        <span className="text-neutral-400 ml-1.5">
+                          ({r.parroquia})
                         </span>
                       )}
-
-                      {/* Edit Button - PenLine stroke-[1.25] */}
-                      <button
-                        type="button"
-                        onClick={() => handleSelectItineraryRowForEdit(r)}
-                        className="text-neutral-400 hover:text-neutral-900 transition-colors p-1 cursor-pointer"
-                        title="Cargar en editor para modificar"
-                      >
-                        <PenLine className="w-3.5 h-3.5 stroke-[1.25]" />
-                      </button>
-
-                      {/* Delete Button - X stroke-[1.5], strictly no trash cans */}
-                      <button
-                        type="button"
-                        onClick={() => setRecordToDelete(r)}
-                        className="text-neutral-400 hover:text-neutral-900 transition-colors p-1 cursor-pointer"
-                        title="Eliminar esta jornada"
-                      >
-                        <X className="w-3.5 h-3.5 stroke-[1.5]" />
-                      </button>
+                      <span className="text-neutral-300 mx-1.5">·</span>
+                      <span className="text-neutral-600">{r.tipo_actividad}</span>
+                      <span className="text-neutral-400 ml-1.5 text-[11px]">
+                        [{r.estatus || "Planificado"}]
+                      </span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+
+                  <div className="flex items-center gap-4 text-xs shrink-0 self-end sm:self-center">
+                    {isCurrentActive && (
+                      <span className="text-[11px] text-neutral-500 font-medium">
+                        Activo en editor
+                      </span>
+                    )}
+
+                    {/* Edit Button - PenLine stroke-[1.25] */}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectItineraryRowForEdit(r)}
+                      className="text-neutral-400 hover:text-neutral-900 transition-colors p-1 cursor-pointer"
+                      title="Cargar en editor para modificar"
+                    >
+                      <PenLine className="w-3.5 h-3.5 stroke-[1.25]" />
+                    </button>
+
+                    {/* Delete Button - X stroke-[1.5], strictly no trash cans */}
+                    <button
+                      type="button"
+                      onClick={() => setRecordToDelete(r)}
+                      className="text-neutral-400 hover:text-neutral-900 transition-colors p-1 cursor-pointer"
+                      title="Eliminar esta jornada"
+                    >
+                      <X className="w-3.5 h-3.5 stroke-[1.5]" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
