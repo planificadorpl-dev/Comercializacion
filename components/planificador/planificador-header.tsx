@@ -12,6 +12,7 @@ interface PlanificadorHeaderProps {
   onRefresh: () => void;
   isRefreshing: boolean;
   totalRecordsCount: number;
+  monthRecordsCount?: number;
   activeView: "diaria" | "semanal";
   onViewChange: (view: "diaria" | "semanal") => void;
 }
@@ -22,6 +23,7 @@ export function PlanificadorHeader({
   onRefresh,
   isRefreshing,
   totalRecordsCount,
+  monthRecordsCount,
   activeView,
   onViewChange,
 }: PlanificadorHeaderProps) {
@@ -29,6 +31,8 @@ export function PlanificadorHeader({
     value: m,
     label: m.charAt(0) + m.slice(1).toLowerCase(),
   }));
+
+  const monthLabel = selectedMonth.charAt(0) + selectedMonth.slice(1).toLowerCase();
 
   return (
     <div className="space-y-3 pb-3 border-b border-neutral-100">
@@ -39,7 +43,13 @@ export function PlanificadorHeader({
             Planificador de Asesores
           </h1>
           <p className="text-xs text-neutral-500 mt-0.5">
-            Asignación de parroquia, sector y actividad sincronizada directamente con la hoja Data ({totalRecordsCount} registros)
+            Asignación de parroquia, sector y actividad ·{" "}
+            <span className="text-neutral-900 font-medium">
+              {monthRecordsCount ?? totalRecordsCount}
+            </span>{" "}
+            {monthRecordsCount === 1 ? "jornada planificada" : "jornadas planificadas"} en{" "}
+            <span className="text-neutral-900 font-medium">{monthLabel}</span> ({totalRecordsCount}{" "}
+            en total)
           </p>
         </div>
 

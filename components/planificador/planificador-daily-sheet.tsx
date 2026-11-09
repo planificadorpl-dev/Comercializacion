@@ -28,6 +28,9 @@ interface PlanificadorDailySheetProps {
   onSuccess: (count: number) => void;
   defaultMonth: string;
   initialDate?: string;
+  selectedMonth?: string;
+  onDateChange?: (isoDate: string) => void;
+  onDeleteSuccess?: (record: PlanningSheetRecord) => void;
 }
 
 interface ParroquiaItem {
@@ -271,6 +274,9 @@ export function PlanificadorDailySheet({
   onSuccess,
   defaultMonth,
   initialDate,
+  selectedMonth,
+  onDateChange,
+  onDeleteSuccess,
 }: PlanificadorDailySheetProps) {
   // Fecha de hoy en formato ISO (YYYY-MM-DD)
   const todayIso = useMemo(() => new Date().toISOString().split("T")[0], []);
@@ -287,6 +293,43 @@ export function PlanificadorDailySheet({
       setSelectedDate(initialDate);
     }
   }, [initialDate]);
+
+  // Sincronizar fecha ancla cuando el usuario cambia el selector de mes en el encabezado
+  useEffect(() => {
+    if (!selectedMonth) return;
+    const SPANISH_MONTHS = [
+      "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
+      "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
+    ];
+    const monthIdx = SPANISH_MONTHS.indexOf(selectedMonth.toUpperCase());
+    if (monthIdx < 0) return;
+
+    // Verificar el mes de la fecha actualmente seleccionada
+    const parts = selectedDate.split("-").map(Number);
+    if (parts.length === 3) {
+      const currentMonthIdx = parts[1] - 1;
+      if (currentMonthIdx === monthIdx) return; // Ya estamos visualizando un día de ese mes
+    }
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    // Si el mes seleccionado coincide con el mes de hoy, anclar a hoy
+    if (now.getMonth() === monthIdx) {
+      setSelectedDate(todayIso);
+    } else {
+      // Si es otro mes, saltar al día 1 de ese mes
+      const targetIso = `${currentYear}-${String(monthIdx + 1).padStart(2, "0")}-01`;
+      setSelectedDate(targetIso);
+    }
+  }, [selectedMonth, todayIso]);
+
+  // Notificar al componente superior cuando cambia la fecha para sincronizar el mes en el header
+  useEffect(() => {
+    if (onDateChange) {
+      onDateChange(selectedDate);
+    }
+  }, [selectedDate, onDateChange]);
 
   // Filtros de búsqueda en la lista de asesores
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -630,15 +673,17 @@ export function PlanificadorDailySheet({
     }
   };
 
-  // ── 7. ELIMINAR JORNADA CON CONFIRMACIÓN ──────────────────────────────────
+  // ── 7. ELIMINAR JORNADA CON CONFIRMACIÓN (RESPUESTA INSTANTÁNEA OPTIMISTA) ───
   const handleConfirmDelete = async () => {
     if (!recordToDelete) return;
-    setIsDeleting(true);
+    const targetRecord = recordToDelete;
+    const advKey = targetRecord.asesor.trim().toLowerCase();
+    const deletedAdvisor = targetRecord.asesor;
 
-    const advKey = recordToDelete.asesor.trim().toLowerCase();
-    const deletedAdvisor = recordToDelete.asesor;
+    // 1. Cerrar el modal inmediatamente para que no haya retraso visual
+    setRecordToDelete(null);
 
-    // Reset optimista inmediato para respuesta instantánea
+    // 2. Reset optimista inmediato del borrador y estado de guardado
     setDrafts((prev) => ({
       ...prev,
       [deletedAdvisor]: {
@@ -653,33 +698,35 @@ export function PlanificadorDailySheet({
       return next;
     });
 
+    // 3. Notificar inmediatamente al componente superior para actualizar registros en memoria (0 ms)
+    if (onDeleteSuccess) {
+      onDeleteSuccess(targetRecord);
+    }
+
+    setFeedbackMessage(`Jornada de ${deletedAdvisor} eliminada correctamente.`);
+
+    // 4. Sincronizar en segundo plano con Supabase y Google Sheets
     try {
       const params = new URLSearchParams();
-      if (recordToDelete.id) params.set("id", String(recordToDelete.id));
-      if (recordToDelete.sheetRowIndex) {
-        params.set("sheetRowIndex", String(recordToDelete.sheetRowIndex));
+      if (targetRecord.id) params.set("id", String(targetRecord.id));
+      if (targetRecord.sheetRowIndex) {
+        params.set("sheetRowIndex", String(targetRecord.sheetRowIndex));
       }
-      if (recordToDelete.isoFecha) params.set("fecha", recordToDelete.isoFecha);
-      if (recordToDelete.asesor) params.set("asesor", recordToDelete.asesor);
+      if (targetRecord.isoFecha) params.set("fecha", targetRecord.isoFecha);
+      if (targetRecord.asesor) params.set("asesor", targetRecord.asesor);
 
       const res = await fetch(`/api/planificacion?${params.toString()}`, {
         method: "DELETE",
       });
       const json = await res.json();
 
-      if (json.success) {
+      if (!json.success) {
         setFeedbackMessage(
-          `Jornada de ${deletedAdvisor} eliminada correctamente.`
+          json.error || `Aviso: No se pudo confirmar la eliminación en Google Sheets.`
         );
-        onSuccess(1);
-        setRecordToDelete(null);
-      } else {
-        setFeedbackMessage(json.error || "No se pudo eliminar el registro.");
       }
     } catch {
-      setFeedbackMessage("Error de conexión al eliminar la jornada.");
-    } finally {
-      setIsDeleting(false);
+      setFeedbackMessage("Aviso: Error de conexión al sincronizar eliminación con Google Sheets.");
     }
   };
 

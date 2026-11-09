@@ -90,6 +90,24 @@ export default function PlanificadorPage() {
     loadPlanningData(true);
   };
 
+  // Immediate optimistic delete in local memory (0 ms)
+  const handleDeleteSuccess = useCallback((deletedRecord: PlanningSheetRecord) => {
+    setRecords((prev) =>
+      prev.filter((r) => {
+        if (deletedRecord.id && r.id === deletedRecord.id) return false;
+        if (
+          deletedRecord.isoFecha &&
+          deletedRecord.asesor &&
+          r.isoFecha === deletedRecord.isoFecha &&
+          r.asesor.trim().toLowerCase() === deletedRecord.asesor.trim().toLowerCase()
+        ) {
+          return false;
+        }
+        return true;
+      })
+    );
+  }, []);
+
   // Matrix View: Edit record handler
   const handleEditRecord = (rec: PlanningSheetRecord) => {
     setEditingRecord(rec);
@@ -122,8 +140,11 @@ export default function PlanificadorPage() {
     }
   };
 
-  // Matrix View: Delete record
+  // Matrix View: Delete record (optimistic instant update)
   const handleDeleteRecord = async (record: PlanningSheetRecord): Promise<boolean> => {
+    handleDeleteSuccess(record);
+    showToast(`Jornada de ${record.asesor} eliminada de la hoja Data.`);
+
     try {
       const params = new URLSearchParams();
       if (record.id) params.set("id", String(record.id));
@@ -135,16 +156,8 @@ export default function PlanificadorPage() {
         method: "DELETE",
       });
       const json = await res.json();
-      if (json.success) {
-        showToast(`Jornada de ${record.asesor} eliminada de la hoja Data.`);
-        loadPlanningData(true);
-        return true;
-      } else {
-        showToast(json.error || "No se pudo eliminar la jornada.");
-        return false;
-      }
+      return json.success;
     } catch {
-      showToast("Error de red al eliminar la jornada.");
       return false;
     }
   };
@@ -155,6 +168,15 @@ export default function PlanificadorPage() {
     setActiveView("diaria");
     showToast(`Asignando a ${advisor} para el ${isoDate}.`);
   };
+
+  // Synchronize month when date changes in daily sheet
+  const handleDailyDateChange = useCallback((isoDate: string) => {
+    setInitialDailyDate(isoDate);
+    const derivedMonth = getMonthFromDate(isoDate);
+    if (derivedMonth && derivedMonth !== selectedMonth) {
+      setSelectedMonth(derivedMonth);
+    }
+  }, [selectedMonth]);
 
   // Matrix View: Replicate day
   const handleReplicateDay = async (
@@ -198,6 +220,16 @@ export default function PlanificadorPage() {
     }
   };
 
+  // Count planned records in the selected month
+  const monthRecordsCount = useMemo(() => {
+    if (!selectedMonth) return records.length;
+    const targetMonth = selectedMonth.toUpperCase();
+    return records.filter((r) => {
+      const m = (r.mes || getMonthFromDate(r.isoFecha || r.fecha) || "").toUpperCase();
+      return m === targetMonth;
+    }).length;
+  }, [records, selectedMonth]);
+
   return (
     <div className="flex min-h-screen h-[100dvh] bg-[#FBFBFB] text-neutral-900 font-sans antialiased overflow-hidden selection:bg-neutral-900 selection:text-white">
       {/* Sidebar with activeSection planificador */}
@@ -235,6 +267,7 @@ export default function PlanificadorPage() {
             onRefresh={() => loadPlanningData(true)}
             isRefreshing={isRefreshing}
             totalRecordsCount={records.length}
+            monthRecordsCount={monthRecordsCount}
             activeView={activeView}
             onViewChange={setActiveView}
           />
@@ -254,11 +287,16 @@ export default function PlanificadorPage() {
                 onSuccess={handleSuccess}
                 defaultMonth={selectedMonth}
                 initialDate={initialDailyDate}
+                selectedMonth={selectedMonth}
+                onDateChange={handleDailyDateChange}
+                onDeleteSuccess={handleDeleteSuccess}
               />
             ) : (
               <PlanificadorMatrixView
                 records={records}
                 metadata={metadata}
+                selectedMonth={selectedMonth}
+                onMonthChange={setSelectedMonth}
                 onEditRecord={handleEditRecord}
                 onDeleteRecord={handleDeleteRecord}
                 onQuickAdd={handleQuickAdd}

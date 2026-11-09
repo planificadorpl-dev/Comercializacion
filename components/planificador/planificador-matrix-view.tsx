@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Plus, PenLine, X, Search, Copy, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -17,6 +17,8 @@ import { CustomDropdown } from "@/components/ui/custom-dropdown";
 interface PlanificadorMatrixViewProps {
   records: PlanningSheetRecord[];
   metadata: PlanningMetadata;
+  selectedMonth?: string;
+  onMonthChange?: (month: string) => void;
   onEditRecord: (record: PlanningSheetRecord) => void;
   onDeleteRecord: (record: PlanningSheetRecord) => Promise<boolean>;
   onQuickAdd: (advisor: string, isoDate: string) => void;
@@ -28,6 +30,8 @@ const DAYS_NAMES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sába
 export function PlanificadorMatrixView({
   records,
   metadata,
+  selectedMonth,
+  onMonthChange,
   onEditRecord,
   onDeleteRecord,
   onQuickAdd,
@@ -41,6 +45,39 @@ export function PlanificadorMatrixView({
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     return new Date(d.setDate(diff));
   });
+
+  // Sincronizar semana de referencia cuando cambia selectedMonth desde el encabezado
+  useEffect(() => {
+    if (!selectedMonth) return;
+    const SPANISH_MONTHS = [
+      "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
+      "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
+    ];
+    const monthIdx = SPANISH_MONTHS.indexOf(selectedMonth.toUpperCase());
+    if (monthIdx < 0) return;
+
+    // Verificar si la semana actual ya coincide con ese mes
+    const curMonthIdx = currentWeekRefDate.getMonth();
+    if (curMonthIdx === monthIdx) return;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    if (now.getMonth() === monthIdx) {
+      // Mes actual: anclar a lunes de esta semana
+      const d = new Date();
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      setCurrentWeekRefDate(new Date(d.setDate(diff)));
+    } else {
+      // Otro mes: anclar al primer lunes de ese mes
+      const firstOfMonth = new Date(currentYear, monthIdx, 1);
+      const day = firstOfMonth.getDay();
+      const diff = firstOfMonth.getDate() - day + (day === 0 ? -6 : 1);
+      firstOfMonth.setDate(diff);
+      setCurrentWeekRefDate(firstOfMonth);
+    }
+  }, [selectedMonth]);
 
   const [advisorSearch, setAdvisorSearch] = useState("");
   const [deletingRecord, setDeletingRecord] = useState<PlanningSheetRecord | null>(null);
@@ -84,12 +121,28 @@ export function PlanificadorMatrixView({
     const d = new Date(currentWeekRefDate);
     d.setDate(d.getDate() - 7);
     setCurrentWeekRefDate(d);
+    if (onMonthChange) {
+      const SPANISH_MONTHS = [
+        "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
+        "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
+      ];
+      const m = d.getMonth();
+      if (SPANISH_MONTHS[m]) onMonthChange(SPANISH_MONTHS[m]);
+    }
   };
 
   const nextWeek = () => {
     const d = new Date(currentWeekRefDate);
     d.setDate(d.getDate() + 7);
     setCurrentWeekRefDate(d);
+    if (onMonthChange) {
+      const SPANISH_MONTHS = [
+        "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
+        "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
+      ];
+      const m = d.getMonth();
+      if (SPANISH_MONTHS[m]) onMonthChange(SPANISH_MONTHS[m]);
+    }
   };
 
   const currentMonthName = useMemo(() => {
@@ -119,13 +172,9 @@ export function PlanificadorMatrixView({
 
   const confirmDelete = async () => {
     if (!deletingRecord) return;
-    setIsDeleting(true);
-    try {
-      await onDeleteRecord(deletingRecord);
-    } finally {
-      setIsDeleting(false);
-      setDeletingRecord(null);
-    }
+    const target = deletingRecord;
+    setDeletingRecord(null); // Cerrar modal inmediatamente (0 ms)
+    onDeleteRecord(target).catch(() => {});
   };
 
   const handleStartReplication = () => {
