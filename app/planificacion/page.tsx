@@ -27,18 +27,8 @@ import { PlanificacionMetrics } from "@/components/planificacion/planificacion-m
 import { PlanificacionMonthlyView } from "@/components/planificacion/planificacion-monthly-view";
 import { PlanificacionDailyView } from "@/components/planificacion/planificacion-daily-view";
 import { PlanificacionFilterCommandBar } from "@/components/planificacion/planificacion-filter-command-bar";
-import { PlanificadorCreateForm } from "@/components/planificador/planificador-create-form";
-import { PlanificadorMatrixView } from "@/components/planificador/planificador-matrix-view";
-import { PlanificadorTableView } from "@/components/planificador/planificador-table-view";
-import { PlanificadorEditDialog } from "@/components/planificador/planificador-edit-dialog";
-import {
-  PlanningSheetRecord,
-  PlanningMetadata,
-  NewPlanningItem,
-  getMonthFromDate,
-} from "@/lib/planificacion-types";
 
-type ViewMode = "mensual" | "diaria" | "crear";
+type ViewMode = "mensual" | "diaria";
 
 const normKey = (str: string | null | undefined): string =>
   (str || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
@@ -127,103 +117,6 @@ export default function PlanificacionPage() {
 
   // Fecha de referencia: por defecto 2026-11-02 (o fecha actual)
   const [referenceDate, setReferenceDate] = useState<Date>(() => new Date(2026, 10, 2));
-
-  // Planificador integrado state
-  const [planificadorSubTab, setPlanificadorSubTab] = useState<"crear" | "matriz" | "tabla">("crear");
-  const [planificadorMetadata, setPlanificadorMetadata] = useState<PlanningMetadata | null>(null);
-  const [planificadorRecords, setPlanificadorRecords] = useState<PlanningSheetRecord[]>([]);
-  const [editingSheetRecord, setEditingSheetRecord] = useState<PlanningSheetRecord | null>(null);
-  const [planificadorLoading, setPlanificadorLoading] = useState(false);
-
-  const loadPlanificadorData = useCallback(async (force = false) => {
-    try {
-      setPlanificadorLoading(true);
-      const refreshParam = force ? "?refresh=true" : "";
-      const res = await fetch(`/api/planificacion${refreshParam}`, {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-      });
-      const json = await res.json();
-      if (json.success) {
-        if (json.metadata) setPlanificadorMetadata(json.metadata);
-        if (Array.isArray(json.records)) setPlanificadorRecords(json.records);
-      }
-    } catch (err) {
-      console.warn("Could not load planificador data:", err);
-    } finally {
-      setPlanificadorLoading(false);
-    }
-  }, []);
-
-  const handleSaveEditSheetRecord = async (
-    sheetRowIndex: number,
-    updatedItem: NewPlanningItem
-  ): Promise<boolean> => {
-    try {
-      const res = await fetch("/api/planificacion", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sheetRowIndex, item: updatedItem }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        loadPlanificadorData(true);
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  };
-
-  const handleDeleteSheetRecord = async (rec: PlanningSheetRecord): Promise<boolean> => {
-    try {
-      const res = await fetch(`/api/planificacion?sheetRowIndex=${rec.sheetRowIndex}`, {
-        method: "DELETE",
-      });
-      const json = await res.json();
-      if (json.success) {
-        loadPlanificadorData(true);
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  };
-
-  const handleReplicateDay = async (sourceIso: string, targetIso: string): Promise<boolean> => {
-    const sourceRecords = planificadorRecords.filter((r) => r.isoFecha === sourceIso);
-    if (sourceRecords.length === 0) return false;
-    const targetMonth = getMonthFromDate(targetIso);
-    const newItems: NewPlanningItem[] = sourceRecords.map((r) => ({
-      fecha: targetIso,
-      mes: targetMonth,
-      asesor: r.asesor,
-      estado: r.estado,
-      municipio: r.municipio,
-      parroquia: r.parroquia,
-      sector: r.sector,
-      tipo_actividad: r.tipo_actividad,
-      estatus: "Planificado",
-    }));
-
-    try {
-      const res = await fetch("/api/planificacion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: newItems }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        loadPlanificadorData(true);
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  };
 
   // Carga concurrente de planificación y operaciones para renderizado instantáneo
   const loadData = useCallback(async (force = false) => {
@@ -717,24 +610,7 @@ export default function PlanificacionPage() {
                 )}
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode("crear");
-                  loadPlanificadorData();
-                }}
-                className={cn(
-                  "text-xs transition-colors cursor-pointer py-1 relative",
-                  viewMode === "crear"
-                    ? "text-neutral-900 font-semibold"
-                    : "text-neutral-400 hover:text-neutral-700 font-normal"
-                )}
-              >
-                Crear planificación (Sheet Data)
-                {viewMode === "crear" && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
-                )}
-              </button>
+
               {selectedAdvisor && (
                 <div className="flex items-center gap-1.5 ml-2">
                   <span className="text-xs text-neutral-400">· Asesor:</span>
@@ -822,103 +698,6 @@ export default function PlanificacionPage() {
             </div>
           </div>
 
-          {viewMode === "crear" ? (
-            <div className="space-y-6 pt-2">
-              {/* Sub-tabs navigation */}
-              <div className="flex items-center gap-6 border-b border-neutral-100 pb-2">
-                <button
-                  type="button"
-                  onClick={() => setPlanificadorSubTab("crear")}
-                  className={cn(
-                    "text-xs transition-colors cursor-pointer py-1 relative",
-                    planificadorSubTab === "crear"
-                      ? "text-neutral-900 font-medium"
-                      : "text-neutral-400 hover:text-neutral-700 font-normal"
-                  )}
-                >
-                  Asignación rápida / por lotes
-                  {planificadorSubTab === "crear" && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPlanificadorSubTab("matriz")}
-                  className={cn(
-                    "text-xs transition-colors cursor-pointer py-1 relative",
-                    planificadorSubTab === "matriz"
-                      ? "text-neutral-900 font-medium"
-                      : "text-neutral-400 hover:text-neutral-700 font-normal"
-                  )}
-                >
-                  Matriz semanal
-                  {planificadorSubTab === "matriz" && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPlanificadorSubTab("tabla")}
-                  className={cn(
-                    "text-xs transition-colors cursor-pointer py-1 relative",
-                    planificadorSubTab === "tabla"
-                      ? "text-neutral-900 font-medium"
-                      : "text-neutral-400 hover:text-neutral-700 font-normal"
-                  )}
-                >
-                  Registros en Sheet Data ({planificadorRecords.length})
-                  {planificadorSubTab === "tabla" && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
-                  )}
-                </button>
-              </div>
-
-              {planificadorLoading && !planificadorMetadata ? (
-                <div className="py-20 text-center text-xs text-neutral-400 font-mono">
-                  Cargando herramientas del planificador desde Google Sheets...
-                </div>
-              ) : planificadorMetadata ? (
-                <>
-                  {planificadorSubTab === "crear" && (
-                    <PlanificadorCreateForm
-                      metadata={planificadorMetadata}
-                      existingRecords={planificadorRecords}
-                      onSuccess={(count) => {
-                        loadPlanificadorData(true);
-                        loadData(true);
-                      }}
-                      defaultMonth={currentSelectedMonth.toUpperCase()}
-                    />
-                  )}
-
-                  {planificadorSubTab === "matriz" && (
-                    <PlanificadorMatrixView
-                      records={planificadorRecords}
-                      metadata={planificadorMetadata}
-                      onEditRecord={(r) => setEditingSheetRecord(r)}
-                      onDeleteRecord={handleDeleteSheetRecord}
-                      onQuickAdd={(adv, d) => {
-                        setPlanificadorSubTab("crear");
-                      }}
-                      onReplicateDay={handleReplicateDay}
-                    />
-                  )}
-
-                  {planificadorSubTab === "tabla" && (
-                    <PlanificadorTableView
-                      records={planificadorRecords}
-                      metadata={planificadorMetadata}
-                      selectedMonth={currentSelectedMonth.toUpperCase()}
-                      onEditRecord={(r) => setEditingSheetRecord(r)}
-                      onDeleteRecord={handleDeleteSheetRecord}
-                    />
-                  )}
-                </>
-              ) : null}
-            </div>
-          ) : (
             <>
               {/* Fila 2: Selector de Meses y Buscador Avanzado de Filtros */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1005,20 +784,8 @@ export default function PlanificacionPage() {
                 />
               )}
             </>
-          )}
         </main>
       </div>
-
-      {/* Edit Record Modal Dialog */}
-      {planificadorMetadata && (
-        <PlanificadorEditDialog
-          record={editingSheetRecord}
-          metadata={planificadorMetadata}
-          isOpen={Boolean(editingSheetRecord)}
-          onClose={() => setEditingSheetRecord(null)}
-          onSave={handleSaveEditSheetRecord}
-        />
-      )}
     </div>
   );
 }
