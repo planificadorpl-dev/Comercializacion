@@ -65,18 +65,20 @@ export function PlanificadorDailySheet({
 
   // Estado de autoguardado por asesor: advKey -> "idle" | "saving" | "saved" | "error"
   const [savingStatus, setSavingStatus] = useState<Record<string, "idle" | "saving" | "saved" | "error">>({});
-  const [isSavingAll, setIsSavingAll] = useState<boolean>(false);
 
   // Eliminación de jornada
   const [recordToDelete, setRecordToDelete] = useState<PlanningSheetRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
-  // Herramienta de asignación en bloque
+  // Herramienta de asignación rápida (separada: Dirección vs Actividad)
   const [showBulkTool, setShowBulkTool] = useState<boolean>(false);
+  const [bulkMode, setBulkMode] = useState<"direccion" | "actividad">("direccion");
   const [bulkParroquia, setBulkParroquia] = useState<string>("Carrizal");
   const [bulkSector, setBulkSector] = useState<string>("Casco Central");
   const [bulkActivity, setBulkActivity] = useState<string>("Recorrido con Instaladores");
+  const [selectedAdvisors, setSelectedAdvisors] = useState<Set<string>>(new Set());
+  const [isApplyingBulk, setIsApplyingBulk] = useState<boolean>(false);
 
   // Borradores locales para cada asesor: Record<asesor, { parroquia, sector, actividad }>
   const [drafts, setDrafts] = useState<
@@ -441,79 +443,286 @@ export function PlanificadorDailySheet({
     }
   };
 
-  // ── 8. HERRAMIENTA MASIVA PARA PENDIENTES ─────────────────────────────────
-  const applyBulkToPendingDrafts = () => {
-    const updated: Record<string, { parroquia: string; sector: string; actividad: string }> = {
-      ...drafts,
-    };
-    for (const adv of metadata.advisors) {
-      if (!dayRecordsMap.has(adv.trim().toLowerCase())) {
-        updated[adv] = {
-          parroquia: bulkParroquia,
-          sector: bulkSector,
-          actividad: bulkActivity,
-        };
+  // ── 8. SELECCIÓN Y ASIGNACIÓN RÁPIDA (DIRECCIÓN / ACTIVIDAD) ───────────────
+  const toggleAdvisorSelection = (adv: string) => {
+    const key = adv.trim().toLowerCase();
+    setSelectedAdvisors((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
       }
-    }
-    setDrafts(updated);
-    setFeedbackMessage(
-      `Se aplicó ${bulkSector} (${bulkParroquia}) a los ${pendingCount} asesores pendientes.`
-    );
+      return next;
+    });
   };
 
-  const handleSaveAllPending = async () => {
-    const pendingAdvisors = metadata.advisors.filter(
-      (adv) => !dayRecordsMap.has(adv.trim().toLowerCase())
+  const selectAllAdvisors = () => {
+    const allKeys = new Set(metadata.advisors.map((a) => a.trim().toLowerCase()));
+    setSelectedAdvisors(allKeys);
+  };
+
+  const selectPendingAdvisors = () => {
+    const pendingKeys = new Set(
+      metadata.advisors
+        .filter((a) => !dayRecordsMap.has(a.trim().toLowerCase()))
+        .map((a) => a.trim().toLowerCase())
     );
-    if (pendingAdvisors.length === 0) return;
+    setSelectedAdvisors(pendingKeys);
+  };
 
-    setIsSavingAll(true);
-    setFeedbackMessage(null);
+  const clearSelectedAdvisors = () => {
+    setSelectedAdvisors(new Set());
+  };
 
-    const items: NewPlanningItem[] = [];
-    for (const adv of pendingAdvisors) {
-      const draft = getAdvisorDraft(adv);
-      const geo = parroquiaMap.get(draft.parroquia);
-      if (draft.sector && draft.parroquia) {
-        items.push({
+  // Asignar Dirección (Parroquia y Sector) a los asesores seleccionados
+  const applyBulkDireccion = async () => {
+    if (selectedAdvisors.size === 0 || !bulkParroquia || !bulkSector) return;
+    setIsApplyingBulk(true);
+
+    const targetAdvisors = metadata.advisors.filter((adv) =>
+      selectedAdvisors.has(adv.trim().toLowerCase())
+    );
+
+    const updatedDrafts = { ...drafts };
+    const itemsToCreate: NewPlanningItem[] = [];
+    const itemsToUpdate: { sheetRowIndex: number; item: NewPlanningItem; advKey: string }[] = [];
+    const targetKeys = targetAdvisors.map((a) => a.trim().toLowerCase());
+
+    const geo = parroquiaMap.get(bulkParroquia);
+
+    for (const adv of targetAdvisors) {
+      const advKey = adv.trim().toLowerCase();
+      const current = getAdvisorDraft(adv);
+      const updated = {
+        ...current,
+        parroquia: bulkParroquia,
+        sector: bulkSector,
+        actividad: current.actividad || "Recorrido con Instaladores",
+      };
+      updatedDrafts[adv] = updated;
+
+      const existingRec = dayRecordsMap.get(advKey);
+      const planningItem: NewPlanningItem = {
+        fecha: selectedDate,
+        mes: getMonthFromDate(selectedDate) || defaultMonth,
+        asesor: adv,
+        estado: geo?.estado || "Miranda",
+        municipio: geo?.municipio || "Carrizal",
+        parroquia: bulkParroquia,
+        sector: bulkSector,
+        tipo_actividad: updated.actividad,
+        estatus: "Planificado",
+      };
+
+      if (existingRec && existingRec.sheetRowIndex) {
+        itemsToUpdate.push({
+          sheetRowIndex: existingRec.sheetRowIndex,
+          item: planningItem,
+          advKey,
+        });
+      } else {
+        itemsToCreate.push(planningItem);
+      }
+    }
+
+    setDrafts(updatedDrafts);
+
+    // Marcar visualmente "saving" por cada asesor
+    setSavingStatus((prev) => {
+      const next = { ...prev };
+      targetKeys.forEach((k) => (next[k] = "saving"));
+      return next;
+    });
+
+    try {
+      const promises: Promise<any>[] = [];
+
+      // Crear nuevos registros en un solo lote eficiente
+      if (itemsToCreate.length > 0) {
+        promises.push(
+          fetch("/api/planificacion", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ items: itemsToCreate }),
+          }).then(async (res) => {
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || "Error al crear jornadas");
+            return json;
+          })
+        );
+      }
+
+      // Actualizar registros existentes
+      for (const { sheetRowIndex, item } of itemsToUpdate) {
+        promises.push(
+          fetch("/api/planificacion", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sheetRowIndex, item }),
+          }).then(async (res) => {
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || "Error al actualizar jornada");
+            return json;
+          })
+        );
+      }
+
+      await Promise.all(promises);
+
+      // Marcar como guardados con checkmark
+      setSavingStatus((prev) => {
+        const next = { ...prev };
+        targetKeys.forEach((k) => (next[k] = "saved"));
+        return next;
+      });
+
+      onSuccess(targetAdvisors.length);
+      setFeedbackMessage(
+        `Dirección (${bulkSector}, ${bulkParroquia}) guardada para ${targetAdvisors.length} asesores.`
+      );
+      clearSelectedAdvisors();
+    } catch (err: any) {
+      console.error("Error al aplicar dirección rápida:", err);
+      setSavingStatus((prev) => {
+        const next = { ...prev };
+        targetKeys.forEach((k) => (next[k] = "error"));
+        return next;
+      });
+      setFeedbackMessage(err.message || "Error al guardar la asignación rápida.");
+    } finally {
+      setIsApplyingBulk(false);
+    }
+  };
+
+  // Asignar Actividad a los asesores seleccionados
+  const applyBulkActividad = async () => {
+    if (selectedAdvisors.size === 0 || !bulkActivity) return;
+    setIsApplyingBulk(true);
+
+    const targetAdvisors = metadata.advisors.filter((adv) =>
+      selectedAdvisors.has(adv.trim().toLowerCase())
+    );
+
+    const updatedDrafts = { ...drafts };
+    const itemsToCreate: NewPlanningItem[] = [];
+    const itemsToUpdate: { sheetRowIndex: number; item: NewPlanningItem; advKey: string }[] = [];
+    const targetKeys = targetAdvisors.map((a) => a.trim().toLowerCase());
+
+    for (const adv of targetAdvisors) {
+      const advKey = adv.trim().toLowerCase();
+      const current = getAdvisorDraft(adv);
+      const updated = {
+        ...current,
+        actividad: bulkActivity,
+      };
+      updatedDrafts[adv] = updated;
+
+      // Solo se persiste en base de datos si ya tiene parroquia y sector asignados
+      if (updated.parroquia && updated.sector) {
+        const existingRec = dayRecordsMap.get(advKey);
+        const geo = parroquiaMap.get(updated.parroquia);
+
+        const planningItem: NewPlanningItem = {
           fecha: selectedDate,
           mes: getMonthFromDate(selectedDate) || defaultMonth,
           asesor: adv,
           estado: geo?.estado || "Miranda",
           municipio: geo?.municipio || "Carrizal",
-          parroquia: draft.parroquia,
-          sector: draft.sector,
-          tipo_actividad: draft.actividad,
+          parroquia: updated.parroquia,
+          sector: updated.sector,
+          tipo_actividad: bulkActivity,
           estatus: "Planificado",
-        });
+        };
+
+        if (existingRec && existingRec.sheetRowIndex) {
+          itemsToUpdate.push({
+            sheetRowIndex: existingRec.sheetRowIndex,
+            item: planningItem,
+            advKey,
+          });
+        } else {
+          itemsToCreate.push(planningItem);
+        }
       }
     }
 
-    if (items.length === 0) {
-      setFeedbackMessage("Ningún asesor pendiente tiene parroquia y sector asignados.");
-      setIsSavingAll(false);
+    setDrafts(updatedDrafts);
+
+    if (itemsToCreate.length === 0 && itemsToUpdate.length === 0) {
+      setFeedbackMessage(
+        `Actividad (${bulkActivity}) asignada a ${targetAdvisors.length} asesores (pendiente asignarles dirección para guardar).`
+      );
+      setIsApplyingBulk(false);
+      clearSelectedAdvisors();
       return;
     }
 
+    const keysToSave = [
+      ...itemsToCreate.map((x) => x.asesor.trim().toLowerCase()),
+      ...itemsToUpdate.map((x) => x.advKey),
+    ];
+
+    setSavingStatus((prev) => {
+      const next = { ...prev };
+      keysToSave.forEach((k) => (next[k] = "saving"));
+      return next;
+    });
+
     try {
-      const res = await fetch("/api/planificacion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setFeedbackMessage(
-          `Se guardaron ${items.length} jornadas en la hoja Data para el ${toSheetDateFormat(selectedDate)}.`
+      const promises: Promise<any>[] = [];
+
+      if (itemsToCreate.length > 0) {
+        promises.push(
+          fetch("/api/planificacion", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ items: itemsToCreate }),
+          }).then(async (res) => {
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || "Error al crear jornadas");
+            return json;
+          })
         );
-        onSuccess(items.length);
-      } else {
-        setFeedbackMessage(json.error || "Error al guardar las jornadas masivas.");
       }
-    } catch {
-      setFeedbackMessage("Error de conexión al guardar jornadas.");
+
+      for (const { sheetRowIndex, item } of itemsToUpdate) {
+        promises.push(
+          fetch("/api/planificacion", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sheetRowIndex, item }),
+          }).then(async (res) => {
+            const json = await res.json();
+            if (!json.success) throw new Error(json.error || "Error al actualizar jornada");
+            return json;
+          })
+        );
+      }
+
+      await Promise.all(promises);
+
+      setSavingStatus((prev) => {
+        const next = { ...prev };
+        keysToSave.forEach((k) => (next[k] = "saved"));
+        return next;
+      });
+
+      onSuccess(keysToSave.length);
+      setFeedbackMessage(
+        `Actividad (${bulkActivity}) guardada para ${keysToSave.length} asesores.`
+      );
+      clearSelectedAdvisors();
+    } catch (err: any) {
+      console.error("Error al aplicar actividad rápida:", err);
+      setSavingStatus((prev) => {
+        const next = { ...prev };
+        keysToSave.forEach((k) => (next[k] = "error"));
+        return next;
+      });
+      setFeedbackMessage(err.message || "Error al guardar la actividad.");
     } finally {
-      setIsSavingAll(false);
+      setIsApplyingBulk(false);
     }
   };
 
@@ -696,97 +905,248 @@ export function PlanificadorDailySheet({
           {/* Toggle de herramienta en bloque */}
           <button
             type="button"
-            onClick={() => setShowBulkTool(!showBulkTool)}
-            className="text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer flex items-center gap-1"
+            onClick={() => {
+              setShowBulkTool(!showBulkTool);
+              if (showBulkTool) {
+                clearSelectedAdvisors();
+              }
+            }}
+            className={cn(
+              "transition-colors cursor-pointer flex items-center gap-1",
+              showBulkTool
+                ? "text-neutral-900 font-semibold"
+                : "text-neutral-500 hover:text-neutral-900"
+            )}
           >
             <Copy className="w-3 h-3 stroke-[1.25]" />
-            <span>{showBulkTool ? "Ocultar carga rápida" : "Asignación rápida"}</span>
+            <span>{showBulkTool ? "Ocultar asignación rápida" : "Asignación rápida"}</span>
           </button>
         </div>
       </div>
 
-      {/* ── PANEL DESPLEGABLE DE ASIGNACIÓN RÁPIDA EN BLOQUE ───────────────── */}
+      {/* ── PANEL DESPLEGABLE DE ASIGNACIÓN RÁPIDA (DIRECCIÓN / ACTIVIDAD) ── */}
       {showBulkTool && (
         <div className="space-y-3 py-3 px-1 border-b border-neutral-100 animate-in fade-in duration-150">
-          <div className="flex items-baseline justify-between">
-            <span className="text-xs font-medium text-neutral-900">
-              Copiar zona y actividad a todos los pendientes ({pendingCount})
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="text-[11px] text-neutral-400 block mb-1">
-                Parroquia
-              </label>
-              <CustomDropdown
-                value={bulkParroquia}
-                options={parroquiasList.map((p) => ({
-                  value: p.parroquia,
-                  label: p.parroquia,
-                }))}
-                onChange={(p) => {
-                  setBulkParroquia(p);
-                  const firstSector = parroquiaMap.get(p)?.sectores[0] || "";
-                  setBulkSector(firstSector);
-                }}
-                compact
-              />
+          {/* Fila superior: Selector de Modo (Dirección vs Actividad) y Selección de Asesores */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-neutral-100">
+            {/* Selector de modo */}
+            <div className="flex items-center gap-4 text-xs">
+              <button
+                type="button"
+                onClick={() => setBulkMode("direccion")}
+                className={cn(
+                  "cursor-pointer transition-colors pb-0.5",
+                  bulkMode === "direccion"
+                    ? "text-neutral-900 font-semibold border-b border-neutral-900"
+                    : "text-neutral-400 hover:text-neutral-700"
+                )}
+              >
+                Asignar dirección
+              </button>
+              <button
+                type="button"
+                onClick={() => setBulkMode("actividad")}
+                className={cn(
+                  "cursor-pointer transition-colors pb-0.5",
+                  bulkMode === "actividad"
+                    ? "text-neutral-900 font-semibold border-b border-neutral-900"
+                    : "text-neutral-400 hover:text-neutral-700"
+                )}
+              >
+                Asignar actividad
+              </button>
             </div>
 
-            <div>
-              <label className="text-[11px] text-neutral-400 block mb-1">
-                Sector
-              </label>
-              <CustomDropdown
-                value={bulkSector}
-                options={(parroquiaMap.get(bulkParroquia)?.sectores || []).map((s) => ({
-                  value: s,
-                  label: s,
-                }))}
-                onChange={setBulkSector}
-                compact
-              />
-            </div>
-
-            <div>
-              <label className="text-[11px] text-neutral-400 block mb-1">
-                Actividad
-              </label>
-              <CustomDropdown
-                value={bulkActivity}
-                options={metadata.activities.map((a) => ({ value: a, label: a }))}
-                onChange={setBulkActivity}
-                compact
-              />
+            {/* Atajos de selección */}
+            <div className="flex items-center gap-2.5 text-xs text-neutral-500 flex-wrap">
+              <span
+                className={cn(
+                  selectedAdvisors.size > 0
+                    ? "text-neutral-900 font-medium"
+                    : "text-neutral-400"
+                )}
+              >
+                {selectedAdvisors.size === 0
+                  ? "Clic en asesores abajo para seleccionar"
+                  : `${selectedAdvisors.size} ${
+                      selectedAdvisors.size === 1 ? "seleccionado" : "seleccionados"
+                    }`}
+              </span>
+              <span className="text-neutral-200">·</span>
+              <button
+                type="button"
+                onClick={selectPendingAdvisors}
+                className="hover:text-neutral-900 transition-colors cursor-pointer text-[11px]"
+                title="Seleccionar todos los asesores pendientes"
+              >
+                Pendientes ({pendingCount})
+              </button>
+              <button
+                type="button"
+                onClick={selectAllAdvisors}
+                className="hover:text-neutral-900 transition-colors cursor-pointer text-[11px]"
+                title="Seleccionar todos los asesores"
+              >
+                Todos ({totalCount})
+              </button>
+              {selectedAdvisors.size > 0 && (
+                <>
+                  <span className="text-neutral-200">·</span>
+                  <button
+                    type="button"
+                    onClick={clearSelectedAdvisors}
+                    className="hover:text-neutral-900 transition-colors cursor-pointer text-[11px]"
+                  >
+                    Limpiar
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-4 pt-1">
-            <button
-              type="button"
-              onClick={applyBulkToPendingDrafts}
-              className="text-xs font-medium text-neutral-900 hover:text-neutral-600 transition-colors cursor-pointer"
-            >
-              1. Aplicar a campos de pendientes
-            </button>
-            <span className="text-neutral-200">·</span>
-            <button
-              type="button"
-              onClick={handleSaveAllPending}
-              disabled={isSavingAll || pendingCount === 0}
-              className="text-xs font-semibold text-neutral-900 hover:text-neutral-600 disabled:opacity-40 transition-colors cursor-pointer flex items-center gap-1.5"
-            >
-              {isSavingAll && <Loader2 className="w-3.5 h-3.5 animate-spin stroke-[1.25]" />}
-              <span>2. Guardar todos en Sheet Data</span>
-            </button>
-          </div>
+          {/* Formulario según el modo seleccionado */}
+          {bulkMode === "direccion" ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 items-end">
+              <div>
+                <label className="text-[11px] text-neutral-400 block mb-0.5">
+                  Parroquia
+                </label>
+                <CustomDropdown
+                  value={bulkParroquia}
+                  options={parroquiasList.map((p) => ({
+                    value: p.parroquia,
+                    label: p.parroquia,
+                  }))}
+                  onChange={(p) => {
+                    setBulkParroquia(p);
+                    const firstSector = parroquiaMap.get(p)?.sectores[0] || "";
+                    setBulkSector(firstSector);
+                  }}
+                  compact
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-neutral-400 block mb-0.5">
+                  Sector
+                </label>
+                <CustomDropdown
+                  value={bulkSector}
+                  options={(parroquiaMap.get(bulkParroquia)?.sectores || []).map((s) => ({
+                    value: s,
+                    label: s,
+                  }))}
+                  onChange={setBulkSector}
+                  compact
+                />
+              </div>
+
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={applyBulkDireccion}
+                  disabled={
+                    selectedAdvisors.size === 0 ||
+                    !bulkParroquia ||
+                    !bulkSector ||
+                    isApplyingBulk
+                  }
+                  className="text-xs font-semibold text-neutral-900 hover:text-neutral-600 disabled:opacity-35 transition-colors cursor-pointer flex items-center gap-1.5 py-1.5"
+                >
+                  {isApplyingBulk ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin stroke-[1.25]" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5 stroke-[2]" />
+                  )}
+                  <span>
+                    {selectedAdvisors.size === 0
+                      ? "Selecciona asesores abajo"
+                      : `Aplicar dirección a los ${selectedAdvisors.size} seleccionados`}
+                  </span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 items-end">
+              <div className="sm:col-span-1 md:col-span-2">
+                <label className="text-[11px] text-neutral-400 block mb-0.5">
+                  Actividad
+                </label>
+                <CustomDropdown
+                  value={bulkActivity}
+                  options={metadata.activities.map((a) => ({
+                    value: a,
+                    label: a,
+                  }))}
+                  onChange={setBulkActivity}
+                  compact
+                />
+              </div>
+
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={applyBulkActividad}
+                  disabled={
+                    selectedAdvisors.size === 0 ||
+                    !bulkActivity ||
+                    isApplyingBulk
+                  }
+                  className="text-xs font-semibold text-neutral-900 hover:text-neutral-600 disabled:opacity-35 transition-colors cursor-pointer flex items-center gap-1.5 py-1.5"
+                >
+                  {isApplyingBulk ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin stroke-[1.25]" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5 stroke-[2]" />
+                  )}
+                  <span>
+                    {selectedAdvisors.size === 0
+                      ? "Selecciona asesores abajo"
+                      : `Aplicar actividad a los ${selectedAdvisors.size} seleccionados`}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ── ENCABEZADO DE COLUMNAS (DESKTOP) ────────────────────────────── */}
       <div className="hidden md:flex items-center justify-between text-[11px] font-medium text-neutral-400 pb-2 border-b border-neutral-100 px-1">
-        <div className="min-w-[200px]">Asesor</div>
+        <div className="min-w-[200px] flex items-center gap-2">
+          {showBulkTool && (
+            <button
+              type="button"
+              onClick={
+                selectedAdvisors.size === metadata.advisors.length
+                  ? clearSelectedAdvisors
+                  : selectAllAdvisors
+              }
+              className="p-0.5 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer"
+              title={
+                selectedAdvisors.size === metadata.advisors.length
+                  ? "Deseleccionar todos"
+                  : "Seleccionar todos"
+              }
+            >
+              <span
+                className={cn(
+                  "w-4 h-4 rounded-full flex items-center justify-center transition-colors",
+                  selectedAdvisors.size === metadata.advisors.length &&
+                    metadata.advisors.length > 0
+                    ? "bg-neutral-900 text-white"
+                    : "border border-neutral-300 hover:border-neutral-700 bg-transparent"
+                )}
+              >
+                {selectedAdvisors.size === metadata.advisors.length &&
+                  metadata.advisors.length > 0 && (
+                    <Check className="w-2.5 h-2.5 stroke-[2.5]" />
+                  )}
+              </span>
+            </button>
+          )}
+          <span>Asesor</span>
+        </div>
         <div className="grid grid-cols-3 gap-3 flex-1 max-w-2xl text-left">
           <span>Parroquia</span>
           <span>Sector</span>
@@ -806,6 +1166,7 @@ export function PlanificadorDailySheet({
             const advKey = adv.trim().toLowerCase();
             const existingRec = dayRecordsMap.get(advKey);
             const isPlanned = Boolean(existingRec);
+            const isSelected = selectedAdvisors.has(advKey);
             const draft = getAdvisorDraft(adv);
             const status = savingStatus[advKey] || (isPlanned ? "saved" : "idle");
             const isSavingThis = status === "saving";
@@ -830,17 +1191,50 @@ export function PlanificadorDailySheet({
             return (
               <div
                 key={adv}
+                onClick={() => {
+                  if (showBulkTool) {
+                    toggleAdvisorSelection(adv);
+                  }
+                }}
                 className={cn(
                   "py-3 px-1 transition-colors group flex flex-col md:flex-row md:items-center justify-between gap-3",
-                  isPlanned ? "hover:bg-neutral-50/40" : "hover:bg-neutral-50/20"
+                  isSelected
+                    ? "bg-neutral-50/80"
+                    : isPlanned
+                    ? "hover:bg-neutral-50/40"
+                    : "hover:bg-neutral-50/20"
                 )}
               >
                 {/* 1. Nombre del asesor y estado */}
                 <div className="flex items-center justify-between md:justify-start gap-3 min-w-[200px]">
                   <div className="flex items-center gap-2.5">
+                    {/* Indicador de selección cuando la herramienta rápida está activa */}
+                    {showBulkTool && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleAdvisorSelection(adv);
+                        }}
+                        className="p-0.5 text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer shrink-0"
+                        title={isSelected ? "Deseleccionar asesor" : "Seleccionar asesor"}
+                      >
+                        <span
+                          className={cn(
+                            "w-4 h-4 rounded-full flex items-center justify-center transition-colors",
+                            isSelected
+                              ? "bg-neutral-900 text-white"
+                              : "border border-neutral-300 hover:border-neutral-700 bg-transparent"
+                          )}
+                        >
+                          {isSelected && <Check className="w-2.5 h-2.5 stroke-[2.5]" />}
+                        </span>
+                      </button>
+                    )}
+
                     <span
                       className={cn(
-                        "w-6 h-6 rounded-full flex items-center justify-center text-[11px] shrink-0 font-medium",
+                        "w-6 h-6 rounded-full flex items-center justify-center text-[11px] shrink-0 font-medium transition-colors",
                         isPlanned
                           ? "bg-neutral-900 text-white"
                           : "bg-neutral-100 text-neutral-500"
@@ -850,7 +1244,14 @@ export function PlanificadorDailySheet({
                     </span>
 
                     <div>
-                      <span className="text-xs font-medium text-neutral-900 block">
+                      <span
+                        className={cn(
+                          "text-xs block transition-colors",
+                          isSelected
+                            ? "font-semibold text-neutral-900"
+                            : "font-medium text-neutral-900"
+                        )}
+                      >
                         {adv}
                       </span>
                       <span className="text-[11px] block">
@@ -868,7 +1269,10 @@ export function PlanificadorDailySheet({
                   </div>
 
                   {/* En móvil: indicador de estado o eliminación */}
-                  <div className="flex items-center gap-2 md:hidden">
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2 md:hidden"
+                  >
                     {isSavingThis ? (
                       <Loader2 className="w-4 h-4 animate-spin text-neutral-400 stroke-[1.5]" />
                     ) : isPlanned || status === "saved" ? (
@@ -890,7 +1294,10 @@ export function PlanificadorDailySheet({
                 </div>
 
                 {/* 2. Selectores: Parroquia, Sector, Actividad */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 max-w-2xl">
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 max-w-2xl"
+                >
                   {/* Parroquia */}
                   <div>
                     <label className="text-[10px] text-neutral-400 block mb-0.5 md:hidden">
