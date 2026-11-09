@@ -70,6 +70,17 @@ export const DEFAULT_SYSTEM_MODULES: SystemModule[] = [
     updatedAt: new Date().toISOString(),
   },
   {
+    id: "match-actividades",
+    name: "Match de Actividades",
+    route: "/evaluaciones/match",
+    short: "MA",
+    description: "Conciliación y cruce de reportes de actividades diarias de asesores vs. evaluaciones en campo del impulsador.",
+    category: "Supervisión y Estrategia",
+    targetRoles: ["supervisor", "impulsador"],
+    enabledForUsers: true,
+    updatedAt: new Date().toISOString(),
+  },
+  {
     id: "actividades",
     name: "Registro de Actividades",
     route: "/actividades",

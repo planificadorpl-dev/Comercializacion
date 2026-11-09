@@ -1,36 +1,9 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
-import { createClient } from "@/lib/supabase/server";
+import { readAllActividades } from "@/lib/actividades-store";
 
 export async function GET() {
   try {
-    let activities: any[] = [];
-
-    // 1. Try Native PostgreSQL First
-    try {
-      const rows = await query<any>(
-        "SELECT * FROM public.actividades ORDER BY fecha DESC, hora DESC"
-      );
-      if (Array.isArray(rows) && rows.length > 0) {
-        activities = rows;
-      }
-    } catch (pgErr) {}
-
-    // 2. Supabase fallback
-    if (activities.length === 0) {
-      try {
-        const supabase = await createClient();
-        const { data, error } = await supabase
-          .from("actividades")
-          .select("*")
-          .order("fecha", { ascending: false })
-          .order("hora", { ascending: false });
-
-        if (!error && data) {
-          activities = data;
-        }
-      } catch (supErr) {}
-    }
+    const activities = await readAllActividades();
 
     if (!activities || activities.length === 0) {
       return NextResponse.json([]);
@@ -60,18 +33,29 @@ export async function GET() {
             llamadasAgenda: 0,
           },
           details: [],
+          reporteWhatsapp: act.reporte_wa || null,
+          checklist: act.checklist || null,
+          checklistCumplimientoPct: act.checklist_cumplimiento_pct || 0,
+          checklistCumplidos: act.checklist_cumplidos || 0,
+          checklistTotal: act.checklist_total || 30,
         };
       }
 
       jornadasMap[key].activitiesCount++;
-      jornadasMap[key].totals.solicitudes += act.solicitudes || 0;
-      jornadasMap[key].totals.captados += act.clientes_captados || 0;
-      jornadasMap[key].totals.volantes += act.volantes || 0;
-      jornadasMap[key].totals.llamadasInfo += act.llamadas_info || 0;
-      jornadasMap[key].totals.llamadasAgenda += act.llamadas_agenda || 0;
+      jornadasMap[key].totals.solicitudes += Number(act.solicitudes || 0);
+      jornadasMap[key].totals.captados += Number(act.clientes_captados || 0);
+      jornadasMap[key].totals.volantes += Number(act.volantes || 0);
+      jornadasMap[key].totals.llamadasInfo += Number(act.llamadas_info || 0);
+      jornadasMap[key].totals.llamadasAgenda += Number(act.llamadas_agenda || 0);
 
       if (!jornadasMap[key].reporteWhatsapp && act.reporte_wa) {
         jornadasMap[key].reporteWhatsapp = act.reporte_wa;
+      }
+      if (!jornadasMap[key].checklist && act.checklist) {
+        jornadasMap[key].checklist = act.checklist;
+        jornadasMap[key].checklistCumplimientoPct = act.checklist_cumplimiento_pct || 0;
+        jornadasMap[key].checklistCumplidos = act.checklist_cumplidos || 0;
+        jornadasMap[key].checklistTotal = act.checklist_total || 30;
       }
 
       let locLabel = "";
@@ -84,6 +68,13 @@ export async function GET() {
         time: act.hora || "",
         type: act.tipo || "Actividad",
         location: locLabel,
+        solicitudes: Number(act.solicitudes || 0),
+        captados: Number(act.clientes_captados || 0),
+        volantes: Number(act.volantes || 0),
+        llamadasInfo: Number(act.llamadas_info || 0),
+        llamadasAgenda: Number(act.llamadas_agenda || 0),
+        condominio: act.condominio || null,
+        notes: act.notas || null,
       });
     });
 

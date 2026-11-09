@@ -81,6 +81,22 @@
     "updatedBy": "sistema"
   },
   {
+    "id": "match-actividades",
+    "name": "Match de Actividades",
+    "route": "/evaluaciones/match",
+    "short": "MA",
+    "description": "Conciliación y cruce de reportes de actividades diarias de asesores vs. evaluaciones en campo del impulsador.",
+    "category": "Supervisión y Estrategia",
+    "targetRoles": [
+      "admin",
+      "supervisor",
+      "impulsador"
+    ],
+    "enabledForUsers": true,
+    "updatedAt": "2026-11-09T20:00:00.000Z",
+    "updatedBy": "sistema"
+  },
+  {
     "id": "actividades",
     "name": "Registro de Actividades",
     "route": "/actividades",

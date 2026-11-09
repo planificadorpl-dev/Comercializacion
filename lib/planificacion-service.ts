@@ -1,7 +1,7 @@
 import { getSheetsClient } from "@/app/lib/googleAuth";
 import { geoHierarchy } from "@/lib/geo_hierarchy";
 import { normGeoKey } from "@/lib/geo_normalization";
-import { query, isDatabaseConfigured } from "@/lib/db";
+import { query, queryRow, isDatabaseConfigured } from "@/lib/db";
 export * from "./planificacion-types";
 import {
   PLANIFICACION_SPREADSHEET_ID,

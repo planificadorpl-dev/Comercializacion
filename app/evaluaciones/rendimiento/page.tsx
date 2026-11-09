@@ -99,6 +99,13 @@ function RendimientoContent() {
           >
             <span>Rendimiento por asesor</span>
           </span>
+
+          <Link
+            href="/evaluaciones/match"
+            className="min-h-[44px] py-2.5 font-medium transition-colors border-b-2 -mb-2 cursor-pointer flex items-center gap-2 border-transparent text-neutral-400 hover:text-neutral-700"
+          >
+            <span>Match de actividades</span>
+          </Link>
         </div>
 
         {loading ? (

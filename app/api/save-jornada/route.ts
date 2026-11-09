@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
 import { getSheetsClient } from "@/app/lib/googleAuth";
+import { appendActividadesLocal } from "@/lib/actividades-store";
 
 export async function POST(req: Request) {
   try {
@@ -139,6 +140,43 @@ export async function POST(req: Request) {
       }
     } catch (e: any) {
       supErrorMsg = e.message;
+    }
+
+    // ── 3.1. Local JSON Mirror Persistence ──────────────────────────────────
+    try {
+      const localRows = jornada.activitiesDetail.map((act: any) => {
+        const u = act.ubicaciones || {};
+        const rawTime = act.time || act.hora || "08:00";
+        const cleanTime = rawTime.includes(" ") ? rawTime.split(" ")[0] : rawTime;
+        return {
+          fecha: fechaFormatted,
+          hora: cleanTime,
+          asesor: jornada.asesor,
+          tipo: act.activityType || act.tipo || "Actividad",
+          solicitudes: parseInt(act.solicitudes || 0, 10),
+          clientes_captados: parseInt(act.clientesCaptados || act.clientes_captados || 0, 10),
+          volantes: parseInt(act.volantes || 0, 10),
+          llamadas_info: parseInt(act.llamadasInfo || act.llamadas_info || 0, 10),
+          llamadas_agenda: parseInt(act.llamadasAgenda || act.llamadas_agenda || 0, 10),
+          estado: u.estado || act.estado || null,
+          municipio: u.municipio || act.municipio || null,
+          parroquia: u.parroquia || act.parroquia || null,
+          sector: u.sector || act.sector || null,
+          condominio: act.condominio || null,
+          notas: act.notes || act.notas || null,
+          reporte_wa: jornada.reporteWhatsapp || null,
+          uid: act.uid || null,
+          checklist: jornada.checklist || null,
+          checklist_cumplimiento_pct: scores?.cumplimientoPct ?? 0,
+          checklist_cumplidos: scores?.totalCumplidos ?? 0,
+          checklist_total: scores?.totalItems ?? 30,
+          checklist_factor_scores: scores?.factorScores || null,
+          created_at: new Date().toISOString(),
+        };
+      });
+      await appendActividadesLocal(localRows);
+    } catch (localErr: any) {
+      console.warn("Aviso local actividades mirror:", localErr.message);
     }
 
     // ── 4. Google Sheets (Opcional, si hay internet y credenciales) ───────────
