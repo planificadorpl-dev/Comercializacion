@@ -1,5 +1,6 @@
 import { getSheetsClient } from "@/app/lib/googleAuth";
 import { geoHierarchy } from "@/lib/geo_hierarchy";
+import { normGeoKey } from "@/lib/geo_normalization";
 import { query, isDatabaseConfigured } from "@/lib/db";
 export * from "./planificacion-types";
 import {
@@ -123,11 +124,36 @@ export async function getPlanningMetadata(forceRefresh = false): Promise<Plannin
       if (act) activitiesSet.add(act);
 
       if (estado && municipio && parroquia && sector) {
-        if (!geoMap[estado]) geoMap[estado] = {};
-        if (!geoMap[estado][municipio]) geoMap[estado][municipio] = {};
-        if (!geoMap[estado][municipio][parroquia]) geoMap[estado][municipio][parroquia] = [];
-        if (!geoMap[estado][municipio][parroquia].includes(sector)) {
-          geoMap[estado][municipio][parroquia].push(sector);
+        // Buscar o crear estado insensible a tildes/mayúsculas
+        const estadoKey = normGeoKey(estado);
+        const canonicalEstado =
+          Object.keys(geoMap).find((e) => normGeoKey(e) === estadoKey) || estado;
+        if (!geoMap[canonicalEstado]) geoMap[canonicalEstado] = {};
+
+        // Buscar o crear municipio
+        const munKey = normGeoKey(municipio);
+        const canonicalMun =
+          Object.keys(geoMap[canonicalEstado]).find((m) => normGeoKey(m) === munKey) ||
+          municipio;
+        if (!geoMap[canonicalEstado][canonicalMun]) {
+          geoMap[canonicalEstado][canonicalMun] = {};
+        }
+
+        // Buscar o crear parroquia
+        const parKey = normGeoKey(parroquia);
+        const existingPar = Object.keys(geoMap[canonicalEstado][canonicalMun]).find(
+          (p) => normGeoKey(p) === parKey
+        );
+        const canonicalPar = existingPar || parroquia;
+        if (!geoMap[canonicalEstado][canonicalMun][canonicalPar]) {
+          geoMap[canonicalEstado][canonicalMun][canonicalPar] = [];
+        }
+
+        // Insertar sector si no existe (insensible a tildes/mayúsculas)
+        const sectorsArr = geoMap[canonicalEstado][canonicalMun][canonicalPar];
+        const secKey = normGeoKey(sector);
+        if (!sectorsArr.some((s) => normGeoKey(s) === secKey)) {
+          sectorsArr.push(sector);
         }
       }
     }

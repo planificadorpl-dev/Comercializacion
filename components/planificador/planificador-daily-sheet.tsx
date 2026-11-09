@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CustomDropdown } from "@/components/ui/custom-dropdown";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { normGeoKey } from "@/lib/geo_normalization";
 import {
   PlanningMetadata,
   PlanningSheetRecord,
@@ -84,27 +85,86 @@ export function PlanificadorDailySheet({
 
   // ── 2. CATÁLOGO DE PARROQUIAS Y SECTORES DESDE METADATA ───────────────────
   const { parroquiasList, parroquiaMap } = useMemo(() => {
-    const list: ParroquiaItem[] = [];
-    const map = new Map<string, ParroquiaItem>();
+    // Mapa canonical por clave normalizada (sin tildes, mayúsculas) para eliminar duplicados
+    const canonicalMap = new Map<string, ParroquiaItem>();
 
     const hierarchy = metadata.geoHierarchy || {};
     for (const [estado, municipios] of Object.entries(hierarchy)) {
       for (const [municipio, parroquias] of Object.entries(municipios)) {
-        for (const [parroquia, sectores] of Object.entries(parroquias)) {
-          const item: ParroquiaItem = {
-            parroquia,
-            municipio,
-            estado,
-            sectores: Array.isArray(sectores) ? sectores : [],
-          };
-          list.push(item);
-          map.set(parroquia, item);
+        for (const [parroquia, rawSectores] of Object.entries(parroquias)) {
+          const trimmedPar = parroquia.trim();
+          if (!trimmedPar) continue;
+
+          const key = normGeoKey(trimmedPar);
+          const existing = canonicalMap.get(key);
+
+          // Determinar la mejor versión del nombre (preferir tildes y Title Case)
+          let bestParroquiaName = trimmedPar;
+          if (existing) {
+            const existingHasAccents = /[áéíóúÁÉÍÓÚñÑ]/.test(existing.parroquia);
+            const currentHasAccents = /[áéíóúÁÉÍÓÚñÑ]/.test(trimmedPar);
+            if (existingHasAccents && !currentHasAccents) {
+              bestParroquiaName = existing.parroquia;
+            } else if (!existingHasAccents && currentHasAccents) {
+              bestParroquiaName = trimmedPar;
+            } else {
+              const existingUpperCount = (existing.parroquia.match(/[A-Z]/g) || []).length;
+              const currentUpperCount = (trimmedPar.match(/[A-Z]/g) || []).length;
+              bestParroquiaName =
+                currentUpperCount >= existingUpperCount ? trimmedPar : existing.parroquia;
+            }
+          }
+
+          // Unificar sectores sin duplicados
+          const sectorMap = new Map<string, string>();
+          if (existing) {
+            for (const s of existing.sectores) {
+              const sKey = normGeoKey(s);
+              if (sKey && !sectorMap.has(sKey)) sectorMap.set(sKey, s.trim());
+            }
+          }
+          if (Array.isArray(rawSectores)) {
+            for (const s of rawSectores) {
+              const sTrim = String(s).trim();
+              const sKey = normGeoKey(sTrim);
+              if (sKey) {
+                const currentSec = sectorMap.get(sKey);
+                if (!currentSec) {
+                  sectorMap.set(sKey, sTrim);
+                } else if (/[áéíóúÁÉÍÓÚñÑ]/.test(sTrim) && !/[áéíóúÁÉÍÓÚñÑ]/.test(currentSec)) {
+                  sectorMap.set(sKey, sTrim);
+                }
+              }
+            }
+          }
+
+          const uniqueSectores = Array.from(sectorMap.values()).sort((a, b) =>
+            a.localeCompare(b, "es", { sensitivity: "base" })
+          );
+
+          canonicalMap.set(key, {
+            parroquia: bestParroquiaName,
+            municipio: existing?.municipio || municipio,
+            estado: existing?.estado || estado,
+            sectores: uniqueSectores,
+          });
         }
       }
     }
 
-    list.sort((a, b) => a.parroquia.localeCompare(b.parroquia, "es"));
-    return { parroquiasList: list, parroquiaMap: map };
+    const list = Array.from(canonicalMap.values()).sort((a, b) =>
+      a.parroquia.localeCompare(b.parroquia, "es", { sensitivity: "base" })
+    );
+
+    // Mapeo accesible por nombre exacto, minúsculas y clave normalizada
+    const lookupMap = new Map<string, ParroquiaItem>();
+    for (const item of list) {
+      lookupMap.set(item.parroquia, item);
+      lookupMap.set(item.parroquia.toLowerCase(), item);
+      lookupMap.set(normGeoKey(item.parroquia), item);
+    }
+
+    return { parroquiasList: list, parroquiaMap: lookupMap };
   }, [metadata.geoHierarchy]);
 
   // ── 3. MAPA DE REGISTROS DE LA FECHA SELECCIONADA ─────────────────────────
@@ -187,8 +247,9 @@ export function PlanificadorDailySheet({
 
       const record = dayRecordsMap.get(adv.trim().toLowerCase());
       if (record) {
+        const canonicalItem = record.parroquia ? parroquiaMap.get(record.parroquia) : null;
         return {
-          parroquia: record.parroquia || "",
+          parroquia: canonicalItem?.parroquia || record.parroquia || "",
           sector: record.sector || "",
           actividad: record.tipo_actividad || "Recorrido con Instaladores",
         };
@@ -200,7 +261,7 @@ export function PlanificadorDailySheet({
         actividad: "Recorrido con Instaladores",
       };
     },
-    [drafts, dayRecordsMap]
+    [drafts, dayRecordsMap, parroquiaMap]
   );
 
   // ── 6. AUTOGUARDADO AUTOMÁTICO AL COMPLETAR TODOS LOS CAMPOS ──────────────
