@@ -407,11 +407,27 @@ export default function PlanificacionPage() {
     const sectorsSet = new Set<string>();
     const activityMap = new Map<string, number>();
 
+    let todayIso = "";
+    try {
+      todayIso = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Caracas" }).format(new Date());
+    } catch {
+      todayIso = new Date().toISOString().slice(0, 10);
+    }
+
+    let realizedCount = 0;
     scopeRecords.forEach((r) => {
       if (r.asesor && r.asesor !== "Sin Asesor") advisorsSet.add(r.asesor);
       if (r.sector && r.sector !== "N/A") sectorsSet.add(r.sector);
       const act = r.tipo_actividad || r.plan || "Recorrido";
       activityMap.set(act, (activityMap.get(act) || 0) + 1);
+
+      const iso = toStandardIsoDate(r.fecha);
+      const actLower = (r.tipo_actividad || r.plan || "").toLowerCase();
+      const isNotInasistencia = !actLower.includes("inasistencia") && !actLower.includes("permiso");
+      const hasSector = Boolean(r.sector && r.sector !== "N/A" && r.sector.trim() !== "");
+      if (iso && iso <= todayIso && isNotInasistencia && hasSector) {
+        realizedCount += 1;
+      }
     });
 
     let predName = "";
@@ -442,6 +458,7 @@ export default function PlanificacionPage() {
       totalAdvisors: advisorsSet.size,
       totalSectors: sectorsSet.size,
       totalJornadas: scopeRecords.length,
+      realizedJornadas: realizedCount,
       predominantActivity: predCount > 0 ? { name: predName, count: predCount, pct: predPct } : undefined,
       periodLabel: activeLabel,
     };
@@ -703,6 +720,7 @@ export default function PlanificacionPage() {
             totalAdvisors={activeMetrics.totalAdvisors}
             totalSectors={activeMetrics.totalSectors}
             totalJornadas={activeMetrics.totalJornadas}
+            realizedJornadas={activeMetrics.realizedJornadas}
             totalSolicitudes={filteredSolicitudes.length}
             totalInstallations={filteredInstallations.length}
             predominantActivity={activeMetrics.predominantActivity}

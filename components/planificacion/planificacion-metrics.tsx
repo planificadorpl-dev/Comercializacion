@@ -6,6 +6,7 @@ interface PlanificacionMetricsProps {
   totalAdvisors: number;
   totalSectors: number;
   totalJornadas: number;
+  realizedJornadas?: number;
   totalSolicitudes?: number;
   totalInstallations?: number;
   predominantActivity?: { name: string; count: number; pct: number };
@@ -16,6 +17,7 @@ export function PlanificacionMetrics({
   totalAdvisors,
   totalSectors,
   totalJornadas,
+  realizedJornadas,
   totalSolicitudes = 0,
   totalInstallations = 0,
   predominantActivity,
@@ -71,11 +73,13 @@ export function PlanificacionMetrics({
             {formatNumber(totalJornadas)}
           </span>
           <span className="text-[11px] text-neutral-400 font-mono">
-            asignaciones
+            turnos
           </span>
         </div>
         <p className="text-[11px] text-neutral-400 font-mono">
-          Total de turnos programados
+          {realizedJornadas !== undefined
+            ? `${formatNumber(realizedJornadas)} realizadas a la fecha`
+            : "Total de turnos programados"}
         </p>
       </div>
 

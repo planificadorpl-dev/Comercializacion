@@ -89,6 +89,25 @@ function getAdvisorInstallationsCount(advName: string, instMap: Map<string, numb
   return total;
 }
 
+function checkIsRealizada(
+  r: PlanificacionRecord,
+  todayIso: string,
+  advisorActiveDates?: Set<string>
+): boolean {
+  const iso = toStandardIsoDate(r.fecha);
+  if (!iso || iso > todayIso) return false;
+
+  const act = (r.tipo_actividad || r.plan || "").toLowerCase();
+  if (act.includes("inasistencia") || act.includes("permiso")) {
+    return false;
+  }
+
+  const hasSector = Boolean(r.sector && r.sector !== "N/A" && r.sector.trim() !== "");
+  const hasActivity = advisorActiveDates ? advisorActiveDates.has(iso) : false;
+
+  return hasSector || hasActivity;
+}
+
 export function PlanificacionMonthlyView({
   month,
   year = 2026,
@@ -106,6 +125,39 @@ export function PlanificacionMonthlyView({
   const [internalSector, setInternalSector] = useState<string | null>(null);
   const [showAllAdvisors, setShowAllAdvisors] = useState(false);
   const [internalMobileDay, setInternalMobileDay] = useState<string | null>(null);
+  const [jornadaMode, setJornadaMode] = useState<"realizadas" | "planificadas">("realizadas");
+
+  const todayIso = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Caracas" }).format(new Date());
+    } catch {
+      return new Date().toISOString().slice(0, 10);
+    }
+  }, []);
+
+  // Mapeo previo de fechas con actividad real (solicitudes o instalaciones) por asesor
+  const advisorActiveDatesMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    solicitudes.forEach((s) => {
+      if (!s.asesor || s.asesor === "Sin Asesor") return;
+      const k = normAdvKey(s.asesor);
+      const iso = toStandardIsoDate(s.fecha);
+      if (k && iso) {
+        if (!map.has(k)) map.set(k, new Set());
+        map.get(k)!.add(iso);
+      }
+    });
+    installations.forEach((i) => {
+      if (!i.asesor || i.asesor === "Sin Asesor") return;
+      const k = normAdvKey(i.asesor);
+      const iso = toStandardIsoDate(i.fecha);
+      if (k && iso) {
+        if (!map.has(k)) map.set(k, new Set());
+        map.get(k)!.add(iso);
+      }
+    });
+    return map;
+  }, [solicitudes, installations]);
 
   const selectedMobileDay = selectedDateFilter !== undefined ? selectedDateFilter : internalMobileDay;
   const setSelectedMobileDay = (d: string | null) => {
@@ -251,8 +303,6 @@ export function PlanificacionMonthlyView({
       });
     }
 
-    const todayIso = new Date().toISOString().split("T")[0];
-
     // Días del mes
     for (let d = 1; d <= totalDays; d++) {
       const dateStr = `${year}-${String(monthIdx + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -334,14 +384,29 @@ export function PlanificacionMonthlyView({
       });
     }
 
-    // 3. Top sectores del mes y resultados de gestión en el sector
-    const sectorStats = new Map<string, { count: number; parroquia?: string; municipio?: string }>();
+    // 3. Top sectores del mes y resultados de gestión en el sector (discriminando realizadas vs planificadas)
+    const sectorStats = new Map<
+      string,
+      { plannedCount: number; realizedCount: number; parroquia?: string; municipio?: string }
+    >();
     records.forEach((r) => {
-      if (!r.sector || r.sector === "N/A") return;
+      if (!r.sector || r.sector === "N/A" || r.sector.trim() === "") return;
       if (!sectorStats.has(r.sector)) {
-        sectorStats.set(r.sector, { count: 0, parroquia: r.parroquia, municipio: r.municipio });
+        sectorStats.set(r.sector, {
+          plannedCount: 0,
+          realizedCount: 0,
+          parroquia: r.parroquia,
+          municipio: r.municipio,
+        });
       }
-      sectorStats.get(r.sector)!.count += 1;
+      const item = sectorStats.get(r.sector)!;
+      item.plannedCount += 1;
+
+      const advKey = normAdvKey(r.asesor);
+      const activeDates = advKey ? advisorActiveDatesMap.get(advKey) : undefined;
+      if (checkIsRealizada(r, todayIso, activeDates)) {
+        item.realizedCount += 1;
+      }
     });
 
     const sortedTopSectors = Array.from(sectorStats.entries())
@@ -374,11 +439,19 @@ export function PlanificacionMonthlyView({
         return {
           name,
           ...data,
+          count: jornadaMode === "realizadas" ? data.realizedCount : data.plannedCount,
           solicitudesCount: solCount,
           installationsCount: instCount,
         };
       })
-      .sort((a, b) => b.count - a.count)
+      .sort((a, b) => {
+        if (jornadaMode === "realizadas") {
+          if (b.realizedCount !== a.realizedCount) return b.realizedCount - a.realizedCount;
+          return b.plannedCount - a.plannedCount;
+        }
+        if (b.plannedCount !== a.plannedCount) return b.plannedCount - a.plannedCount;
+        return b.realizedCount - a.realizedCount;
+      })
       .slice(0, 8);
 
     // 4. Mapeo previo de instalaciones del mes por asesor
@@ -391,20 +464,26 @@ export function PlanificacionMonthlyView({
       }
     });
 
-    // 5. Top asesores del mes (ordenados de mayor a menor según cantidad de instalaciones, manteniendo jornadas)
+    // 5. Top asesores del mes (ordenados según instalaciones y jornadas realizadas/planificadas)
     const advisorStats = new Map<
       string,
-      { count: number; sectors: Set<string>; installationsCount: number }
+      { plannedCount: number; realizedCount: number; sectors: Set<string>; installationsCount: number }
     >();
 
     records.forEach((r) => {
       if (!r.asesor || r.asesor === "Sin Asesor") return;
       if (!advisorStats.has(r.asesor)) {
-        advisorStats.set(r.asesor, { count: 0, sectors: new Set(), installationsCount: 0 });
+        advisorStats.set(r.asesor, { plannedCount: 0, realizedCount: 0, sectors: new Set(), installationsCount: 0 });
       }
       const entry = advisorStats.get(r.asesor)!;
-      entry.count += 1;
-      if (r.sector) entry.sectors.add(r.sector);
+      entry.plannedCount += 1;
+      if (r.sector && r.sector !== "N/A" && r.sector.trim() !== "") entry.sectors.add(r.sector);
+
+      const advKey = normAdvKey(r.asesor);
+      const activeDates = advKey ? advisorActiveDatesMap.get(advKey) : undefined;
+      if (checkIsRealizada(r, todayIso, activeDates)) {
+        entry.realizedCount += 1;
+      }
     });
 
     advisorStats.forEach((entry, advName) => {
@@ -414,7 +493,9 @@ export function PlanificacionMonthlyView({
     const sortedTopAdvisors = Array.from(advisorStats.entries())
       .map(([name, data]) => ({
         name,
-        count: data.count,
+        count: jornadaMode === "realizadas" ? data.realizedCount : data.plannedCount,
+        realizedCount: data.realizedCount,
+        plannedCount: data.plannedCount,
         sectorsCount: data.sectors.size,
         installationsCount: data.installationsCount,
       }))
@@ -423,7 +504,7 @@ export function PlanificacionMonthlyView({
         if (b.installationsCount !== a.installationsCount) {
           return b.installationsCount - a.installationsCount;
         }
-        // Desempate por jornadas asignadas
+        // Desempate por jornadas según modo activo
         if (b.count !== a.count) {
           return b.count - a.count;
         }
@@ -435,7 +516,7 @@ export function PlanificacionMonthlyView({
       topSectors: sortedTopSectors,
       topAdvisors: sortedTopAdvisors,
     };
-  }, [records, monthIdx, year, solByDate, instByDate, solByMonthDay, instByMonthDay, solBySector, instBySector, solicitudes, installations]);
+  }, [records, monthIdx, year, solByDate, instByDate, solByMonthDay, instByMonthDay, solBySector, instBySector, solicitudes, installations, jornadaMode, todayIso, advisorActiveDatesMap]);
 
   // Asesores a mostrar a la derecha (filtrados por sector si se seleccionó uno, o top asesores generales)
   const displayedAdvisors = useMemo(() => {
@@ -452,23 +533,31 @@ export function PlanificacionMonthlyView({
       return topAdvisors.map((adv) => ({
         name: adv.name,
         count: adv.count,
+        realizedCount: adv.realizedCount,
+        plannedCount: adv.plannedCount,
         installationsCount: adv.installationsCount,
         subtext: `${adv.sectorsCount} ${adv.sectorsCount === 1 ? "sector cubierto" : "sectores cubiertos"}`,
       }));
     }
 
     const secKey = activeSector.trim().toLowerCase();
-    const map = new Map<string, { count: number; dates: Set<string> }>();
+    const map = new Map<string, { plannedCount: number; realizedCount: number; dates: Set<string> }>();
 
     records.forEach((r) => {
       if (!r.asesor || r.asesor === "Sin Asesor") return;
       if (r.sector && r.sector.trim().toLowerCase() === secKey) {
         if (!map.has(r.asesor)) {
-          map.set(r.asesor, { count: 0, dates: new Set() });
+          map.set(r.asesor, { plannedCount: 0, realizedCount: 0, dates: new Set() });
         }
         const item = map.get(r.asesor)!;
-        item.count += 1;
+        item.plannedCount += 1;
         if (r.fecha) item.dates.add(r.fecha);
+
+        const advKey = normAdvKey(r.asesor);
+        const activeDates = advKey ? advisorActiveDatesMap.get(advKey) : undefined;
+        if (checkIsRealizada(r, todayIso, activeDates)) {
+          item.realizedCount += 1;
+        }
       }
     });
 
@@ -477,9 +566,11 @@ export function PlanificacionMonthlyView({
         const instCount = getAdvisorInstallationsCount(name, instCountByAdv);
         return {
           name,
-          count: data.count,
+          count: jornadaMode === "realizadas" ? data.realizedCount : data.plannedCount,
+          realizedCount: data.realizedCount,
+          plannedCount: data.plannedCount,
           installationsCount: instCount,
-          subtext: `${data.dates.size} ${data.dates.size === 1 ? "día de actividad" : "días de actividad"}`,
+          subtext: `${data.dates.size} ${data.dates.size === 1 ? "día asignado" : "días asignados"}`,
         };
       })
       .sort((a, b) => {
@@ -491,7 +582,7 @@ export function PlanificacionMonthlyView({
         }
         return a.name.localeCompare(b.name);
       });
-  }, [activeSector, topAdvisors, records, installations]);
+  }, [activeSector, topAdvisors, records, installations, jornadaMode, todayIso, advisorActiveDatesMap]);
 
   return (
     <div className="space-y-8 pt-2">
@@ -865,7 +956,11 @@ export function PlanificacionMonthlyView({
               {selectedAdvisor ? "Sectores con cobertura del asesor" : "Sectores con mayor cobertura mensual"}
             </h3>
             <span className="text-[11px] text-neutral-400 font-mono">
-              {selectedAdvisor ? "Jornadas y resultados" : "Frecuencia de visitas"}
+              {selectedAdvisor
+                ? "Jornadas y resultados"
+                : jornadaMode === "realizadas"
+                ? "Jornadas realizadas"
+                : "Jornadas planificadas"}
             </span>
           </div>
 
@@ -910,7 +1005,14 @@ export function PlanificacionMonthlyView({
 
                   {selectedAdvisor ? (
                     <div className="flex flex-col items-end shrink-0 pl-3">
-                      <span className="font-mono text-xs text-neutral-800">
+                      <span
+                        className="font-mono text-xs text-neutral-800"
+                        title={
+                          jornadaMode === "realizadas"
+                            ? `${sec.realizedCount} jornadas realizadas de ${sec.plannedCount} planificadas`
+                            : `${sec.plannedCount} jornadas planificadas`
+                        }
+                      >
                         {sec.count} {sec.count === 1 ? "jornada" : "jornadas"}
                       </span>
                       <div className="flex items-center gap-1.5 text-[11px] font-mono pt-0.5">
@@ -948,7 +1050,14 @@ export function PlanificacionMonthlyView({
                       </div>
                     </div>
                   ) : (
-                    <span className="font-mono text-xs text-neutral-800 shrink-0">
+                    <span
+                      className="font-mono text-xs text-neutral-800 shrink-0"
+                      title={
+                        jornadaMode === "realizadas"
+                          ? `${sec.realizedCount} jornadas realizadas de ${sec.plannedCount} planificadas en el mes`
+                          : `${sec.plannedCount} jornadas planificadas en el mes`
+                      }
+                    >
                       {sec.count} {sec.count === 1 ? "jornada" : "jornadas"}
                     </span>
                   )}
@@ -976,11 +1085,40 @@ export function PlanificacionMonthlyView({
                 </button>
               )}
             </div>
-            <span className="text-[11px] text-neutral-400 font-mono">
-              {activeSector
-                ? `${displayedAdvisors.length} ${displayedAdvisors.length === 1 ? "asesor asignado" : "asesores asignados"}`
-                : "Instalaciones · Jornadas"}
-            </span>
+            <div className="flex items-center gap-2 text-[11px] font-mono">
+              <span className="text-neutral-400">
+                {activeSector
+                  ? `${displayedAdvisors.length} ${displayedAdvisors.length === 1 ? "asesor" : "asesores"} ·`
+                  : "Instalaciones ·"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setJornadaMode("realizadas")}
+                className={cn(
+                  "cursor-pointer transition-colors",
+                  jornadaMode === "realizadas"
+                    ? "font-semibold text-neutral-950"
+                    : "text-neutral-400 hover:text-neutral-600"
+                )}
+                title="Mostrar jornadas realizadas a la fecha"
+              >
+                Realizadas
+              </button>
+              <span className="text-neutral-300">/</span>
+              <button
+                type="button"
+                onClick={() => setJornadaMode("planificadas")}
+                className={cn(
+                  "cursor-pointer transition-colors",
+                  jornadaMode === "planificadas"
+                    ? "font-semibold text-neutral-950"
+                    : "text-neutral-400 hover:text-neutral-600"
+                )}
+                title="Mostrar jornadas planificadas del mes completo"
+              >
+                Planificadas
+              </button>
+            </div>
           </div>
 
           {displayedAdvisors.length === 0 ? (
@@ -1027,7 +1165,14 @@ export function PlanificacionMonthlyView({
                         <span className="text-neutral-400 font-normal">inst</span>
                       </span>
                       <span className="text-neutral-300">·</span>
-                      <span className="text-neutral-600 font-normal">
+                      <span
+                        className="text-neutral-600 font-normal"
+                        title={
+                          jornadaMode === "realizadas"
+                            ? `${adv.realizedCount} jornadas realizadas de ${adv.plannedCount} planificadas en el mes`
+                            : `${adv.plannedCount} jornadas planificadas en el mes`
+                        }
+                      >
                         {adv.count} {adv.count === 1 ? "jornada" : "jornadas"}
                       </span>
                     </div>
