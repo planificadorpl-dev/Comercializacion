@@ -6,11 +6,7 @@ import { cn } from "@/lib/utils";
 import { CustomDropdown } from "@/components/ui/custom-dropdown";
 import { SPANISH_MONTHS } from "@/lib/planificacion-types";
 
-export type PlanificadorTab = "crear" | "matriz" | "tabla";
-
 interface PlanificadorHeaderProps {
-  activeTab: PlanificadorTab;
-  onSelectTab: (tab: PlanificadorTab) => void;
   selectedMonth: string;
   onMonthChange: (month: string) => void;
   onRefresh: () => void;
@@ -19,8 +15,6 @@ interface PlanificadorHeaderProps {
 }
 
 export function PlanificadorHeader({
-  activeTab,
-  onSelectTab,
   selectedMonth,
   onMonthChange,
   onRefresh,
@@ -33,7 +27,7 @@ export function PlanificadorHeader({
   }));
 
   return (
-    <div className="space-y-4 pb-2 border-b border-neutral-100">
+    <div className="space-y-2 pb-3 border-b border-neutral-100">
       {/* Top row: Title and utilities */}
       <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-3">
         <div>
@@ -41,7 +35,7 @@ export function PlanificadorHeader({
             Planificador de Asesores
           </h1>
           <p className="text-xs text-neutral-500 mt-0.5">
-            Asignación de jornadas en campo y sincronización directa con la hoja Data ({totalRecordsCount} registros)
+            Asignación de parroquia, sector y actividad sincronizada directamente con la hoja Data ({totalRecordsCount} registros)
           </p>
         </div>
 
@@ -85,58 +79,6 @@ export function PlanificadorHeader({
           </Link>
         </div>
       </div>
-
-      {/* Navigation tabs row - Pure text typography, zero boxes or buttons with borders */}
-      <div className="flex items-center gap-5 sm:gap-6 pt-1 overflow-x-auto no-scrollbar whitespace-nowrap">
-        <button
-          type="button"
-          onClick={() => onSelectTab("crear")}
-          className={cn(
-            "text-xs transition-colors cursor-pointer py-1 relative",
-            activeTab === "crear"
-              ? "text-neutral-900 font-medium"
-              : "text-neutral-400 hover:text-neutral-700 font-normal"
-          )}
-        >
-          Crear planificación
-          {activeTab === "crear" && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onSelectTab("matriz")}
-          className={cn(
-            "text-xs transition-colors cursor-pointer py-1 relative",
-            activeTab === "matriz"
-              ? "text-neutral-900 font-medium"
-              : "text-neutral-400 hover:text-neutral-700 font-normal"
-          )}
-        >
-          Matriz semanal
-          {activeTab === "matriz" && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onSelectTab("tabla")}
-          className={cn(
-            "text-xs transition-colors cursor-pointer py-1 relative",
-            activeTab === "tabla"
-              ? "text-neutral-900 font-medium"
-              : "text-neutral-400 hover:text-neutral-700 font-normal"
-          )}
-        >
-          Registros en Sheet Data
-          {activeTab === "tabla" && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-900" />
-          )}
-        </button>
-      </div>
     </div>
   );
 }
-

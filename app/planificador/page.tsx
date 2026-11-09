@@ -6,29 +6,17 @@ import {
   SidebarOpenButton,
   SidebarMobileButton,
 } from "@/components/providers/sidebar-provider";
-import {
-  PlanificadorHeader,
-  PlanificadorTab,
-} from "@/components/planificador/planificador-header";
-import { PlanificadorMetricsBar } from "@/components/planificador/planificador-metrics-bar";
-import { PlanificadorCreateForm } from "@/components/planificador/planificador-create-form";
-import { PlanificadorMatrixView } from "@/components/planificador/planificador-matrix-view";
-import { PlanificadorTableView } from "@/components/planificador/planificador-table-view";
-import { PlanificadorEditDialog } from "@/components/planificador/planificador-edit-dialog";
+import { PlanificadorHeader } from "@/components/planificador/planificador-header";
+import { PlanificadorDailySheet } from "@/components/planificador/planificador-daily-sheet";
 import {
   PlanningSheetRecord,
   PlanningMetadata,
-  NewPlanningItem,
   SPANISH_MONTHS,
-  getMonthFromDate,
-  toIsoDateString,
 } from "@/lib/planificacion-types";
 import { clearDashboardDataCache } from "@/lib/dashboard-data";
 import { Loader2 } from "lucide-react";
 
 export default function PlanificadorPage() {
-  const [activeTab, setActiveTab] = useState<PlanificadorTab>("crear");
-
   // Default month: Current month in uppercase Spanish
   const currentMonthInitial = useMemo(() => {
     const m = new Date().getMonth();
@@ -40,9 +28,6 @@ export default function PlanificadorPage() {
   const [records, setRecords] = useState<PlanningSheetRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-
-  // Edit record dialog state
-  const [editingRecord, setEditingRecord] = useState<PlanningSheetRecord | null>(null);
 
   // Subtle toast indicator
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -87,116 +72,12 @@ export default function PlanificadorPage() {
     loadPlanningData();
   }, [loadPlanningData]);
 
-  // Handle successful creation of records
-  const handleCreateSuccess = (count: number) => {
+  // Handle successful creation or update of records
+  const handleSuccess = (count: number) => {
     showToast(
-      `${count} ${count === 1 ? "jornada guardada" : "jornadas guardadas"} exitosamente en la hoja Data.`
+      `${count} ${count === 1 ? "jornada sincronizada" : "jornadas sincronizadas"} con la hoja Data.`
     );
     loadPlanningData(true);
-  };
-
-  // Handle edit save
-  const handleSaveEdit = async (
-    sheetRowIndex: number,
-    updatedItem: NewPlanningItem
-  ): Promise<boolean> => {
-    try {
-      const res = await fetch("/api/planificacion", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sheetRowIndex, item: updatedItem }),
-      });
-
-      const json = await res.json();
-      if (json.success) {
-        showToast(`Fila ${sheetRowIndex} actualizada correctamente.`);
-        loadPlanningData(true);
-        return true;
-      } else {
-        showToast(json.error || "Error al actualizar registro.");
-        return false;
-      }
-    } catch {
-      showToast("Error de conexión al actualizar en Google Sheets.");
-      return false;
-    }
-  };
-
-  // Handle delete record
-  const handleDeleteRecord = async (record: PlanningSheetRecord): Promise<boolean> => {
-    try {
-      const res = await fetch(`/api/planificacion?sheetRowIndex=${record.sheetRowIndex}`, {
-        method: "DELETE",
-      });
-
-      const json = await res.json();
-      if (json.success) {
-        showToast(`Jornada eliminada de la hoja Data.`);
-        loadPlanningData(true);
-        return true;
-      } else {
-        showToast(json.error || "Error al eliminar registro.");
-        return false;
-      }
-    } catch {
-      showToast("Error de conexión al eliminar de Google Sheets.");
-      return false;
-    }
-  };
-
-  // Quick add from matrix cell (switches to create tab)
-  const handleQuickAdd = (advisor: string, isoDate: string) => {
-    setActiveTab("crear");
-    showToast(`Asignando para ${advisor} en fecha ${isoDate}.`);
-  };
-
-  // Handle day replication
-  const handleReplicateDay = async (
-    sourceIsoDate: string,
-    targetIsoDate: string
-  ): Promise<boolean> => {
-    // Find all records from source date
-    const sourceRecords = records.filter((r) => r.isoFecha === sourceIsoDate);
-    if (sourceRecords.length === 0) {
-      showToast("No existen registros en la fecha de origen para replicar.");
-      return false;
-    }
-
-    const targetMonth = getMonthFromDate(targetIsoDate);
-    const newItems: NewPlanningItem[] = sourceRecords.map((r) => ({
-      fecha: targetIsoDate,
-      mes: targetMonth,
-      asesor: r.asesor,
-      estado: r.estado,
-      municipio: r.municipio,
-      parroquia: r.parroquia,
-      sector: r.sector,
-      tipo_actividad: r.tipo_actividad,
-      estatus: "Planificado",
-    }));
-
-    try {
-      const res = await fetch("/api/planificacion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: newItems }),
-      });
-
-      const json = await res.json();
-      if (json.success) {
-        showToast(
-          `Se replicaron ${newItems.length} asignaciones para el ${targetIsoDate}.`
-        );
-        loadPlanningData(true);
-        return true;
-      } else {
-        showToast(json.error || "Error al replicar planificación.");
-        return false;
-      }
-    } catch {
-      showToast("Error de red al replicar planificación.");
-      return false;
-    }
   };
 
   return (
@@ -229,10 +110,8 @@ export default function PlanificadorPage() {
 
         {/* Content area */}
         <main className="p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
-          {/* Header & Tabs */}
+          {/* Header */}
           <PlanificadorHeader
-            activeTab={activeTab}
-            onSelectTab={setActiveTab}
             selectedMonth={selectedMonth}
             onMonthChange={setSelectedMonth}
             onRefresh={() => loadPlanningData(true)}
@@ -244,51 +123,16 @@ export default function PlanificadorPage() {
             <div className="py-20 flex flex-col items-center justify-center gap-2 text-neutral-400">
               <Loader2 className="w-5 h-5 animate-spin stroke-[1.25]" />
               <span className="text-xs font-mono">
-                Cargando registros de la hoja Data...
+                Cargando asesores y registros de la hoja Data...
               </span>
             </div>
           ) : metadata ? (
-            <>
-              {/* Metrics bar */}
-              <PlanificadorMetricsBar
-                records={records}
-                activeMonth={selectedMonth}
-                totalAdvisorsCount={metadata.advisors.length}
-              />
-
-              {/* Tab 1: Crear Planificación */}
-              {activeTab === "crear" && (
-                <PlanificadorCreateForm
-                  metadata={metadata}
-                  existingRecords={records}
-                  onSuccess={handleCreateSuccess}
-                  defaultMonth={selectedMonth}
-                />
-              )}
-
-              {/* Tab 2: Matriz Semanal */}
-              {activeTab === "matriz" && (
-                <PlanificadorMatrixView
-                  records={records}
-                  metadata={metadata}
-                  onEditRecord={(r) => setEditingRecord(r)}
-                  onDeleteRecord={handleDeleteRecord}
-                  onQuickAdd={handleQuickAdd}
-                  onReplicateDay={handleReplicateDay}
-                />
-              )}
-
-              {/* Tab 3: Registros en Sheet Data */}
-              {activeTab === "tabla" && (
-                <PlanificadorTableView
-                  records={records}
-                  metadata={metadata}
-                  selectedMonth={selectedMonth}
-                  onEditRecord={(r) => setEditingRecord(r)}
-                  onDeleteRecord={handleDeleteRecord}
-                />
-              )}
-            </>
+            <PlanificadorDailySheet
+              metadata={metadata}
+              existingRecords={records}
+              onSuccess={handleSuccess}
+              defaultMonth={selectedMonth}
+            />
           ) : (
             <div className="py-12 text-center text-xs text-neutral-400">
               No se pudo inicializar la conexión con Google Sheets.
@@ -296,18 +140,6 @@ export default function PlanificadorPage() {
           )}
         </main>
       </div>
-
-      {/* Edit Record Modal Dialog */}
-      {metadata && (
-        <PlanificadorEditDialog
-          record={editingRecord}
-          metadata={metadata}
-          isOpen={Boolean(editingRecord)}
-          onClose={() => setEditingRecord(null)}
-          onSave={handleSaveEdit}
-        />
-      )}
     </div>
   );
 }
-
