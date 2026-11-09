@@ -796,7 +796,7 @@ export function PlanificadorDailySheet({
       </div>
 
       {/* ── LISTA DE ASESORES EN PANTALLA (OPTIMIZADA PARA MÓVILES Y DESKTOP) ── */}
-      <div className="divide-y divide-neutral-100">
+      <div className="divide-y divide-neutral-100 pb-32">
         {displayAdvisors.length === 0 ? (
           <div className="py-12 text-center text-xs text-neutral-400">
             No se encontraron asesores con los filtros seleccionados.

@@ -109,7 +109,7 @@ export default function PlanificadorPage() {
         </header>
 
         {/* Content area */}
-        <main className="p-4 sm:p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6 pb-48">
+        <main className="p-4 sm:p-6 md:p-8 pb-36 sm:pb-40 md:pb-48 xl:pb-12 max-w-7xl w-full mx-auto space-y-6">
           {/* Header */}
           <PlanificadorHeader
             selectedMonth={selectedMonth}

@@ -427,14 +427,14 @@ export function MobileBottomNav() {
                 onClick={(e) => handleNavigate(e, "/planificacion")}
                 className={cn(
                   "flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-colors cursor-pointer touch-manipulation",
-                  pathname.startsWith("/planificacion")
+                  pathname.startsWith("/planificacion") || pathname.startsWith("/planificador")
                     ? "text-neutral-950 font-bold"
                     : "text-neutral-400 hover:text-neutral-700"
                 )}
               >
                 <Calendar className="w-4 h-4 stroke-[1.25]" />
                 <span className="text-[10px] mt-0.5 leading-none">Planificación</span>
-                {pathname.startsWith("/planificacion") && (
+                {(pathname.startsWith("/planificacion") || pathname.startsWith("/planificador")) && (
                   <span className="w-1 h-1 rounded-full bg-neutral-900 mt-1" />
                 )}
               </button>
