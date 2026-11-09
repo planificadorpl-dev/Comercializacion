@@ -9,6 +9,10 @@ import { runSheetsSync } from "@/lib/sheets-sync-service";
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const sheetsMemoryCache = new Map();
 
+export function clearSheetsCache() {
+  sheetsMemoryCache.clear();
+}
+
 function sendOptimizedResponse(request, payload, fromCache = false, preGzipped = null) {
   const acceptEncoding = request.headers.get("accept-encoding") || "";
   const supportsGzip = acceptEncoding.includes("gzip");

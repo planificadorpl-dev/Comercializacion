@@ -37,6 +37,17 @@ export const DEFAULT_SYSTEM_MODULES: SystemModule[] = [
     updatedAt: new Date().toISOString(),
   },
   {
+    id: "planificador",
+    name: "Planificador de Asesores",
+    route: "/planificador",
+    short: "PA",
+    description: "Creación, asignación y sincronización de la planificación de jornadas de asesores con la hoja Data.",
+    category: "Supervisión y Estrategia",
+    targetRoles: ["supervisor", "impulsador"],
+    enabledForUsers: true,
+    updatedAt: new Date().toISOString(),
+  },
+  {
     id: "competencia",
     name: "Estudio de Mercado",
     route: "/competencia",

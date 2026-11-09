@@ -51,6 +51,7 @@ export function MobileBottomNav() {
     try {
       router.prefetch("/");
       router.prefetch("/planificacion");
+      router.prefetch("/planificador");
       router.prefetch("/evaluaciones");
       router.prefetch("/evaluaciones/nueva");
       router.prefetch("/evaluaciones/rendimiento");

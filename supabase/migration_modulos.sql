@@ -17,6 +17,7 @@ COMMENT ON TABLE public.configuracion_modulos IS 'Configuración de disponibilid
 INSERT INTO public.configuracion_modulos (id, enabled_for_users, updated_at, updated_by)
 VALUES 
   ('planificacion', false, NOW(), 'sistema'),
+  ('planificador', true, NOW(), 'sistema'),
   ('competencia', false, NOW(), 'sistema'),
   ('evaluaciones', true, NOW(), 'sistema'),
   ('actividades', true, NOW(), 'sistema'),

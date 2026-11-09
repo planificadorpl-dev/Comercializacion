@@ -29,6 +29,21 @@
     "updatedBy": "sistema"
   },
   {
+    "id": "planificador",
+    "name": "Planificador de Asesores",
+    "route": "/planificador",
+    "short": "PA",
+    "description": "Creación, asignación y sincronización de la planificación de jornadas de asesores con la hoja Data.",
+    "category": "Supervisión y Estrategia",
+    "targetRoles": [
+      "supervisor",
+      "impulsador"
+    ],
+    "enabledForUsers": true,
+    "updatedAt": "2026-11-09T14:53:34.665Z",
+    "updatedBy": "sistema"
+  },
+  {
     "id": "competencia",
     "name": "Estudio de Mercado",
     "route": "/competencia",

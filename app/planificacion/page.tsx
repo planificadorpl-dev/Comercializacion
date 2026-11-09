@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
 import {
   RotateCw,
   Search,
   X,
   ChevronLeft,
   ChevronRight,
+  ArrowRight,
 } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { SidebarOpenButton, SidebarMobileButton } from "@/components/providers/sidebar-provider";
@@ -545,6 +547,15 @@ export default function PlanificacionPage() {
           </div>
 
           <div className="flex items-center gap-4">
+            <Link
+              href="/planificador"
+              className="text-xs text-neutral-500 hover:text-neutral-900 transition-colors flex items-center gap-1 font-normal"
+              title="Crear y asignar planificación en la hoja Data"
+            >
+              <span>Crear planificación</span>
+              <ArrowRight className="w-3 h-3 stroke-[1.25]" />
+            </Link>
+            <span className="text-neutral-300">·</span>
             <span className="text-[11px] text-neutral-400 font-mono hidden sm:inline">
               {formatNumber(records.length)} jornadas planificadas
             </span>

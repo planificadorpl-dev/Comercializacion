@@ -33,12 +33,13 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 // Route permission definitions
 const FIELD_OPERATIONS_ROUTES = ["/actividades", "/solicitudes", "/competencia", "/factibilidad"];
-const SUPERVISION_ROUTES = ["/", "/planificacion", "/evaluaciones"];
+const SUPERVISION_ROUTES = ["/", "/planificacion", "/planificador", "/evaluaciones"];
 const ADMIN_ROUTES = ["/admin"];
 
 const MODULE_ROUTES_MAP: Record<string, string> = {
   principal: "/",
   planificacion: "/planificacion",
+  planificador: "/planificador",
   evaluaciones: "/evaluaciones",
   actividades: "/actividades",
   solicitudes: "/solicitudes",
