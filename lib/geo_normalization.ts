@@ -609,15 +609,65 @@ export const DEFAULT_GEO_ALIASES: Record<string, GeoAliasTarget> = {
 // 4. MAPAS INTERNOS EN MEMORIA PARA BÚSQUEDA O(1)
 // ============================================================================
 
-// Map de normalizedSectorKey -> { canonicalSector, canonicalZone }
-const canonicalLookup = new Map<string, { sector: string; zone: string }>();
+// Map de normalizedSectorKey -> Array<{ sector: string; zone: string }> para soportar sectores homónimos
+const canonicalLookup = new Map<string, Array<{ sector: string; zone: string }>>();
 
 // Populate canonical lookup
 Object.entries(CANONICAL_SECTORS_BY_ZONE).forEach(([zone, sectors]) => {
   sectors.forEach((sec) => {
-    canonicalLookup.set(normGeoKey(sec), { sector: sec, zone });
+    const k = normGeoKey(sec);
+    if (!canonicalLookup.has(k)) {
+      canonicalLookup.set(k, []);
+    }
+    canonicalLookup.get(k)!.push({ sector: sec, zone });
   });
 });
+
+/**
+ * Cuando un sector existe en múltiples zonas canónicas (ej. "Casco Central" en Carrizal, San Diego y Tejerías),
+ * selecciona la zona canónica correcta basándose en el contexto de zona, parroquia, municipio o estado provistos.
+ */
+function resolveBestCanonicalMatch(
+  matches: Array<{ sector: string; zone: string }>,
+  rawZone: string,
+  rawPar: string,
+  rawMun: string,
+  rawEst: string
+): { sector: string; zone: string } {
+  if (matches.length === 1) return matches[0];
+
+  const normZ = normGeoKey(rawZone);
+  const normP = normGeoKey(rawPar);
+  const normM = normGeoKey(rawMun);
+  const normE = normGeoKey(rawEst);
+
+  // 1. Coincidencia directa con rawZone provisto (ej. "CARRIZAL" -> coincide con Carrizal)
+  if (normZ) {
+    const byZone = matches.find((m) => {
+      const cz = normGeoKey(m.zone);
+      return cz === normZ || normZ.includes(cz) || cz.includes(normZ);
+    });
+    if (byZone) return byZone;
+  }
+
+  // 2. Coincidencia por municipio o parroquia
+  for (const m of matches) {
+    const zConfig = CANONICAL_ZONES_CONFIG[m.zone];
+    if (zConfig) {
+      if (normM && (normGeoKey(zConfig.municipio).includes(normM) || normM.includes(normGeoKey(zConfig.municipio)))) {
+        return m;
+      }
+      if (normP && (normGeoKey(zConfig.parroquiaDefault).includes(normP) || normP.includes(normGeoKey(zConfig.parroquiaDefault)))) {
+        return m;
+      }
+      if (normE && normGeoKey(zConfig.estado) === normE) {
+        return m;
+      }
+    }
+  }
+
+  return matches[0];
+}
 
 /**
  * Limpia prefijos comunes para búsqueda difusa (ej. "Urb.", "Res.", "C.C.", "Sector")
@@ -665,9 +715,10 @@ export function normalizeLocation(
       };
     }
 
-    // B) En padrón canónico de sectores
+    // B) En padrón canónico de sectores (desambiguando por zona si existe en múltiples)
     if (canonicalLookup.has(nkCandidate)) {
-      const match = canonicalLookup.get(nkCandidate)!;
+      const matches = canonicalLookup.get(nkCandidate)!;
+      const match = resolveBestCanonicalMatch(matches, rawZone, rawPar, rawMun, rawEst);
       const zConfig = CANONICAL_ZONES_CONFIG[match.zone];
       return {
         sector: match.sector,
@@ -698,7 +749,8 @@ export function normalizeLocation(
         };
       }
       if (canonicalLookup.has(nkStripped)) {
-        const match = canonicalLookup.get(nkStripped)!;
+        const matches = canonicalLookup.get(nkStripped)!;
+        const match = resolveBestCanonicalMatch(matches, rawZone, rawPar, rawMun, rawEst);
         const zConfig = CANONICAL_ZONES_CONFIG[match.zone];
         return {
           sector: match.sector,
@@ -732,8 +784,9 @@ export function normalizeLocation(
     }
 
     // Probar si contiene algún sector canónico directamente
-    for (const [secNorm, match] of canonicalLookup.entries()) {
+    for (const [secNorm, matches] of canonicalLookup.entries()) {
       if (secNorm.length >= 5 && normGeoKey(ubiUpper).includes(secNorm)) {
+        const match = resolveBestCanonicalMatch(matches, rawZone, rawPar, rawMun, rawEst);
         const zConfig = CANONICAL_ZONES_CONFIG[match.zone];
         return {
           sector: match.sector,
