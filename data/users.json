@@ -211,16 +211,5 @@
     "activo": true,
     "passwordHash": "22941835dbb257e4f41be179253cb643:e50ac91109060eddfeeed04863fc309a7511254639a1438e1765c99677a2a62440204625ba61e75bf53b56a4fc581d7574fac12aa52a2ff63c2bf851bef7ec17",
     "createdAt": "2026-10-27T17:14:08.475Z"
-  },
-  {
-    "id": "usr-99999999",
-    "email": "demo.asesor@powerlink.com",
-    "nombre": "Asesor Demostracion",
-    "rol": "asesor",
-    "colaboradorId": "Asesor Demo",
-    "activo": true,
-    "passwordHash": "c760053feb10f57adf9262bf2599365f:4bb6cc88ae84a0b68a42e84700b8ebc4df436339288812a327c53eedbf396ea1d1e7a18568759b8b454d69dc1c8fcd9e6da99a9b105ab43e13b0efd76718f092",
-    "createdAt": "2026-11-04T22:33:36.825Z",
-    "lastLogin": "2026-11-05T15:49:13.257Z"
   }
 ]

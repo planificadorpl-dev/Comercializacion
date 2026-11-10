@@ -242,6 +242,7 @@ export const ADVISOR_CANONICAL: Record<string, string> = {
   // Yosmery Hernández
   "yosmery hernández": "Yosmery Hernández",
   "yosmery hernandez": "Yosmery Hernández",
+  "yosmery": "Yosmery Hernández",
 
   // Yeniffer Torres
   "yeniffer torres": "Yeniffer Torres",

@@ -39,13 +39,124 @@ import {
 export { getCaracasTodayIso, getCaracasDateIso, normalizeDateToIso };
 
 export async function getPlantillaAsesores(): Promise<Array<{ nombre: string; nombreCompleto?: string }>> {
+  // 1. Gather ex-collaborators and non-commercial overrides
+  const exAdvisors = new Set<string>();
   try {
-    const usersPath = path.join(process.cwd(), "data", "users.json");
-    const content = await fs.readFile(usersPath, "utf-8");
-    const users = JSON.parse(content);
-    if (Array.isArray(users)) {
-      const asesores = users
-        .filter((u: any) => u.rol === "asesor" && u.activo !== false)
+    const { query } = await import("@/lib/db");
+    const rows = await query<any>("SELECT data FROM public.personal_config WHERE key = 'main_config' LIMIT 1");
+    if (rows.length > 0 && rows[0].data?.overrides) {
+      for (const [key, val] of Object.entries(rows[0].data.overrides as Record<string, any>)) {
+        if (val?.isExCollaborator === true || val?.status === "ex" || (val?.type && val.type !== "comercial")) {
+          exAdvisors.add(key.toLowerCase().trim());
+        }
+      }
+    }
+  } catch {}
+
+  if (exAdvisors.size === 0) {
+    try {
+      const configPath = path.join(process.cwd(), "data", "advisor-config.json");
+      const configRaw = await fs.readFile(configPath, "utf-8");
+      const configJson = JSON.parse(configRaw);
+      if (configJson?.overrides) {
+        for (const [key, val] of Object.entries(configJson.overrides as Record<string, any>)) {
+          if (val?.isExCollaborator === true || val?.status === "ex" || (val?.type && val.type !== "comercial")) {
+            exAdvisors.add(key.toLowerCase().trim());
+          }
+        }
+      }
+    } catch {}
+  }
+
+  const isExcluded = (name?: string, email?: string): boolean => {
+    if (!name) return true;
+    const lower = name.toLowerCase().trim();
+    if (
+      lower.includes("demostracion") ||
+      lower.includes("demo") ||
+      lower.includes("prueba") ||
+      lower === "planificación" ||
+      lower === "planificacion"
+    ) {
+      return true;
+    }
+    if (email && email.toLowerCase().includes("demo")) {
+      return true;
+    }
+    const can = normalizeAdvisorName(name);
+    const canLower = can.toLowerCase().trim();
+    if (exAdvisors.has(lower) || exAdvisors.has(canLower)) {
+      return true;
+    }
+    return false;
+  };
+
+  // 2. Try PostgreSQL Native asesores_config or usuarios
+  try {
+    const { query } = await import("@/lib/db");
+    // Check asesores_config first if populated
+    const cfgRows = await query<any>(
+      "SELECT nombre, activo FROM public.asesores_config WHERE activo = true ORDER BY nombre ASC"
+    );
+    if (Array.isArray(cfgRows) && cfgRows.length > 0) {
+      const valid = cfgRows
+        .filter((r) => r.nombre && !isExcluded(r.nombre))
+        .map((r) => {
+          const canonical = normalizeAdvisorName(r.nombre);
+          return {
+            nombre: canonical && canonical !== "Sin Asesor" ? canonical : r.nombre,
+            nombreCompleto: r.nombre,
+          };
+        });
+      if (valid.length > 0) {
+        const seen = new Set<string>();
+        return valid.filter((a) => {
+          const k = a.nombre.toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+      }
+    }
+
+    // Check usuarios where rol = 'asesor' and activo = true
+    const rows = await query<any>(
+      "SELECT id, nombre, email, rol, activo FROM public.usuarios WHERE rol = 'asesor' AND activo = true ORDER BY nombre ASC"
+    );
+    if (Array.isArray(rows) && rows.length > 0) {
+      const valid = rows
+        .filter((u) => !isExcluded(u.nombre, u.email))
+        .map((u) => {
+          const canonical = normalizeAdvisorName(u.nombre);
+          return {
+            nombre: canonical && canonical !== "Sin Asesor" ? canonical : u.nombre,
+            nombreCompleto: u.nombre,
+          };
+        });
+      if (valid.length > 0) {
+        const seen = new Set<string>();
+        return valid.filter((a) => {
+          const k = a.nombre.toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+      }
+    }
+  } catch {}
+
+  // 3. Try Supabase fallback
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("id, nombre, email, rol, activo")
+      .eq("rol", "asesor")
+      .eq("activo", true);
+    if (!error && Array.isArray(data) && data.length > 0) {
+      const valid = data
+        .filter((u: any) => !isExcluded(u.nombre, u.email))
         .map((u: any) => {
           const canonical = normalizeAdvisorName(u.nombre);
           return {
@@ -53,19 +164,57 @@ export async function getPlantillaAsesores(): Promise<Array<{ nombre: string; no
             nombreCompleto: u.nombre,
           };
         });
-      if (asesores.length > 0) return asesores;
+      if (valid.length > 0) {
+        const seen = new Set<string>();
+        return valid.filter((a) => {
+          const k = a.nombre.toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+      }
     }
   } catch {}
 
+  // 4. Try local data/users.json
+  try {
+    const usersPath = path.join(process.cwd(), "data", "users.json");
+    const content = await fs.readFile(usersPath, "utf-8");
+    const users = JSON.parse(content);
+    if (Array.isArray(users)) {
+      const valid = users
+        .filter((u: any) => u.rol === "asesor" && u.activo !== false && !isExcluded(u.nombre, u.email))
+        .map((u: any) => {
+          const canonical = normalizeAdvisorName(u.nombre);
+          return {
+            nombre: canonical && canonical !== "Sin Asesor" ? canonical : u.nombre,
+            nombreCompleto: u.nombre,
+          };
+        });
+      if (valid.length > 0) {
+        const seen = new Set<string>();
+        return valid.filter((a) => {
+          const k = a.nombre.toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+      }
+    }
+  } catch {}
+
+  // 5. Ultimate Fallback (only known active commercial advisors, never demo)
   const fallback = [
     "Gabriela Marrero", "Lorena Esqueda", "Patricia Mendoza", "Génesis Ochoa",
-    "Yesenia Terán", "Branin Berroteran", "Daiana Torres", "Stephany Manrique",
+    "Yesenia Terán", "Daiana Torres", "Stephany Manrique",
     "Cindy Infante", "Yuliana Carvajal", "María Azuaje", "Yilda González",
     "Yamery Rodríguez", "Arianna Montaña", "Diarnelis Mendoza", "Andrea Plaza",
-    "Danyelis Muñoz", "Naomi Tovar", "Asesor Demostracion"
+    "Danyelis Muñoz", "Naomi Tovar"
   ];
 
-  return fallback.map((n) => ({ nombre: n, nombreCompleto: n }));
+  return fallback
+    .filter((n) => !isExcluded(n))
+    .map((n) => ({ nombre: n, nombreCompleto: n }));
 }
 
 export function formatIsoToDisplayDate(isoDate: string): string {
