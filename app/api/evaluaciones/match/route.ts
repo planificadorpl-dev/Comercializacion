@@ -11,6 +11,7 @@ export async function GET(req: Request) {
     const asesor = searchParams.get("asesor") || undefined;
     const evaluador = searchParams.get("evaluador") || undefined;
     const status = searchParams.get("status") || undefined;
+    const preset = searchParams.get("preset") || undefined;
     const from = searchParams.get("from") || undefined;
     const to = searchParams.get("to") || undefined;
     const search = searchParams.get("search") || undefined;
@@ -19,6 +20,7 @@ export async function GET(req: Request) {
       asesor,
       evaluador,
       status,
+      preset,
       from,
       to,
       search,

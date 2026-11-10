@@ -71,6 +71,12 @@ export interface MatchItem {
     checklistCumplidos: number;
     checklistTotal: number;
     checklistFactorScores?: Record<string, { cumplidos: number; total: number; pct: number }>;
+    territorioPrincipal?: {
+      estado?: string;
+      municipio?: string;
+      parroquia?: string;
+      sector?: string;
+    };
   };
 
   // 2. Evaluación en campo del impulsador / supervisor
@@ -127,6 +133,7 @@ export interface MatchFilterParams {
   asesor?: string;
   evaluador?: string;
   status?: string; // "todos" | "conciliado" | "solo_reporte" | "solo_evaluacion"
+  preset?: string; // "hoy" | "7dias" | "mes" | "todos"
   from?: string; // YYYY-MM-DD
   to?: string; // YYYY-MM-DD
   search?: string;

@@ -5,25 +5,40 @@ import {
   getLatestChecklistForAdvisor,
 } from "@/lib/advisor-checklists-store";
 import { calculateChecklistScores, AdvisorChecklistRecord } from "@/lib/evaluaciones-data";
+import { areSameAdvisorName, normalizeDateToIso } from "@/lib/match-service";
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const asesor = searchParams.get("asesor");
+    const fecha = searchParams.get("fecha");
     const latestOnly = searchParams.get("latest") === "true";
-
-    if (asesor && latestOnly) {
-      const latest = await getLatestChecklistForAdvisor(asesor);
-      return NextResponse.json({ success: true, checklist: latest });
-    }
 
     const all = await readAdvisorChecklists();
     let filtered = all;
 
     if (asesor) {
+      const q = asesor.trim().toLowerCase();
       filtered = filtered.filter(
-        (c) => c.asesor.trim().toLowerCase() === asesor.trim().toLowerCase()
+        (c) =>
+          c.asesor.trim().toLowerCase() === q ||
+          areSameAdvisorName(c.asesor, asesor)
       );
+    }
+
+    if (fecha) {
+      const targetIso = normalizeDateToIso(fecha);
+      const matchExactFecha = filtered.filter(
+        (c) => normalizeDateToIso(c.fecha) === targetIso
+      );
+      if (matchExactFecha.length > 0) {
+        return NextResponse.json({ success: true, checklist: matchExactFecha[0] });
+      }
+    }
+
+    if (asesor && latestOnly) {
+      const latest = filtered[0] || (await getLatestChecklistForAdvisor(asesor));
+      return NextResponse.json({ success: true, checklist: latest });
     }
 
     return NextResponse.json({ success: true, checklists: filtered });

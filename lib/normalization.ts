@@ -973,3 +973,53 @@ export function normalizeTechnician(
 
   return { name: baseName, team: baseTeam, isEx: false, status: "fijo", department: "tecnico" };
 }
+
+const ADVISOR_STOPWORDS = new Set(["de", "del", "la", "las", "los", "san", "santa", "el"]);
+
+function getAdvisorTokens(str: string): string[] {
+  return stripAccents(str)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !ADVISOR_STOPWORDS.has(w));
+}
+
+/**
+ * Robust advisor name matcher:
+ * Handles legal full names vs commercial short names (e.g. "Yamery de los Angeles Rodríguez Mezones" vs "Yamery Rodriguez")
+ */
+export function areSameAdvisorName(nameA?: string | null, nameB?: string | null): boolean {
+  if (!nameA || !nameB) return false;
+  const cleanA = stripAccents(nameA);
+  const cleanB = stripAccents(nameB);
+  if (cleanA === cleanB) return true;
+
+  // 1. Check canonical normalized strings
+  const normA = normalizeAdvisorName(nameA);
+  const normB = normalizeAdvisorName(nameB);
+  if (normA && normB && normA !== "Sin Asesor" && normA === normB) {
+    return true;
+  }
+
+  // 2. Token overlap: If one name's tokens are a subset of the other's tokens
+  const tokensA = getAdvisorTokens(nameA);
+  const tokensB = getAdvisorTokens(nameB);
+  if (tokensA.length === 0 || tokensB.length === 0) return false;
+
+  const shorter = tokensA.length <= tokensB.length ? tokensA : tokensB;
+  const longer = tokensA.length <= tokensB.length ? tokensB : tokensA;
+
+  // Check if all tokens of the shorter name are contained in the longer name
+  const allContained = shorter.every((token) => longer.includes(token));
+  if (allContained && shorter.length >= 2) {
+    return true;
+  }
+
+  // Check for at least 2 common significant tokens (e.g., first name + last name)
+  const common = shorter.filter((token) => longer.includes(token));
+  if (common.length >= 2) {
+    return true;
+  }
+
+  return false;
+}
+

@@ -29,6 +29,8 @@ import {
 import { EvaluacionDropdown } from "@/components/evaluaciones/evaluacion-dropdown";
 import { useUser } from "@/components/providers/user-provider";
 import { useAsesor } from "@/components/providers/asesor-provider";
+import { getCaracasTodayIso } from "@/lib/caracas-time";
+import { areSameAdvisorName } from "@/lib/normalization";
 import { cn } from "@/lib/utils";
 
 function NuevaEvaluacionContent() {
@@ -39,6 +41,12 @@ function NuevaEvaluacionContent() {
 
   const editId = searchParams.get("id");
   const preselectedAsesor = searchParams.get("asesor") || "";
+  const preselectedFecha = searchParams.get("fecha") || "";
+  const preselectedEstado = searchParams.get("estado") || "";
+  const preselectedMunicipio = searchParams.get("municipio") || "";
+  const preselectedParroquia = searchParams.get("parroquia") || "";
+  const preselectedSector = searchParams.get("sector") || "";
+  const returnTo = searchParams.get("returnTo") || "";
 
   // Helper for administrator testing
   const handlePrefillTestData = () => {
@@ -55,7 +63,7 @@ function NuevaEvaluacionContent() {
   // Form State
   const [asesor, setAsesor] = useState(preselectedAsesor);
   const [frecuencia, setFrecuencia] = useState<EvaluacionFrecuencia>("Diaria");
-  const [fecha, setFecha] = useState(() => new Date().toISOString().split("T")[0]);
+  const [fecha, setFecha] = useState(() => preselectedFecha || getCaracasTodayIso());
   const [observacionesGenerales, setObservacionesGenerales] = useState("");
 
   // Evaluator from session
@@ -68,10 +76,10 @@ function NuevaEvaluacionContent() {
   }, [user?.rol]);
 
   // Geographic Territory
-  const [estado, setEstado] = useState("");
-  const [municipio, setMunicipio] = useState("");
-  const [parroquia, setParroquia] = useState("");
-  const [sector, setSector] = useState("");
+  const [estado, setEstado] = useState(preselectedEstado);
+  const [municipio, setMunicipio] = useState(preselectedMunicipio);
+  const [parroquia, setParroquia] = useState(preselectedParroquia);
+  const [sector, setSector] = useState(preselectedSector);
 
   // Items State (default all items to 5: cumple = true)
   const [items, setItems] = useState<Record<string, EvaluacionItemState>>(() => {
@@ -104,7 +112,16 @@ function NuevaEvaluacionContent() {
       .then((data) => {
         if (data.success) {
           const fetchedAdvisors = Array.isArray(data.advisors) ? data.advisors : [];
-          const combined = Array.from(new Set([...fetchedAdvisors, ...availableAsesores])).sort();
+          let combined = Array.from(new Set([...fetchedAdvisors, ...availableAsesores])).sort();
+          if (preselectedAsesor) {
+            const matched = combined.find((adv) => areSameAdvisorName(adv, preselectedAsesor));
+            if (matched) {
+              setAsesor(matched);
+            } else {
+              combined = Array.from(new Set([...combined, preselectedAsesor])).sort();
+              setAsesor(preselectedAsesor);
+            }
+          }
           setAdvisorsList(combined);
 
           if (editId && Array.isArray(data.evaluaciones)) {
@@ -112,7 +129,7 @@ function NuevaEvaluacionContent() {
             if (found) {
               setAsesor(found.asesor || "");
               setFrecuencia(found.frecuencia || "Diaria");
-              setFecha(found.fecha || new Date().toISOString().split("T")[0]);
+              setFecha(found.fecha || getCaracasTodayIso());
               setEstado(found.estado || "");
               setMunicipio(found.municipio || "");
               setParroquia(found.parroquia || "");
@@ -129,20 +146,35 @@ function NuevaEvaluacionContent() {
       .finally(() => setLoadingInitial(false));
   }, [editId, availableAsesores]);
 
-  // Load advisor's latest self-reported checklist
+  // Load advisor's self-reported checklist (prioritizing the selected date)
   useEffect(() => {
     if (!asesor) {
       setLatestAdvisorChecklist(null);
       return;
     }
     let active = true;
-    fetch(`/api/advisor-checklists?asesor=${encodeURIComponent(asesor)}&latest=true`)
+    const url = fecha
+      ? `/api/advisor-checklists?asesor=${encodeURIComponent(asesor)}&fecha=${encodeURIComponent(fecha)}`
+      : `/api/advisor-checklists?asesor=${encodeURIComponent(asesor)}&latest=true`;
+
+    fetch(url)
       .then((r) => r.json())
       .then((data) => {
         if (active && data.success && data.checklist) {
           setLatestAdvisorChecklist(data.checklist);
+        } else if (active && data.success && Array.isArray(data.checklists) && data.checklists.length > 0) {
+          setLatestAdvisorChecklist(data.checklists[0]);
         } else if (active) {
-          setLatestAdvisorChecklist(null);
+          // Fallback to latest
+          fetch(`/api/advisor-checklists?asesor=${encodeURIComponent(asesor)}&latest=true`)
+            .then((r) => r.json())
+            .then((fallbackData) => {
+              if (active && fallbackData.success && fallbackData.checklist) {
+                setLatestAdvisorChecklist(fallbackData.checklist);
+              } else if (active) {
+                setLatestAdvisorChecklist(null);
+              }
+            });
         }
       })
       .catch(() => {
@@ -151,7 +183,7 @@ function NuevaEvaluacionContent() {
     return () => {
       active = false;
     };
-  }, [asesor]);
+  }, [asesor, fecha]);
 
   // Geographic Cascading Options
   const estadoOptions = useMemo(() => {
@@ -308,7 +340,7 @@ function NuevaEvaluacionContent() {
       if (res.success) {
         setSaveSuccess(true);
         setTimeout(() => {
-          router.push("/evaluaciones");
+          router.push(returnTo || "/evaluaciones");
         }, 600);
       } else {
         setFormError(res.error || "Ocurrió un error al guardar la evaluación");
@@ -341,9 +373,9 @@ function NuevaEvaluacionContent() {
       <header className="sticky top-0 z-20 h-14 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 px-4 sm:px-6 flex items-center justify-between select-none">
         <div className="flex items-center gap-3">
           <Link
-            href="/evaluaciones"
+            href={returnTo || "/evaluaciones"}
             className="min-w-[40px] min-h-[40px] -ml-2 p-2 text-neutral-500 hover:text-neutral-900 transition-colors flex items-center justify-center cursor-pointer"
-            title="Volver a Registro de Evaluaciones"
+            title={returnTo ? "Volver" : "Volver a Registro de Evaluaciones"}
           >
             <ChevronLeft className="w-5 h-5 stroke-[2]" />
           </Link>
@@ -366,6 +398,21 @@ function NuevaEvaluacionContent() {
 
       {/* Main Page Container */}
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-5 pb-32 space-y-6">
+        {/* Subheader when responding directly to an activity report */}
+        {returnTo && (
+          <div className="flex items-center justify-between text-xs text-neutral-500 border-b border-neutral-100 pb-2">
+            <span>
+              Respondiendo al reporte de <strong className="text-neutral-900 font-medium">{asesor || preselectedAsesor}</strong> ({fecha})
+            </span>
+            <Link
+              href={returnTo}
+              className="text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer select-none"
+            >
+              Cancelar
+            </Link>
+          </div>
+        )}
+
         {formError && (
           <div className="py-2 flex items-center gap-2 text-xs text-neutral-900 border-b border-neutral-100 animate-in fade-in">
             <span className="w-1.5 h-1.5 rounded-full bg-neutral-900 shrink-0" />

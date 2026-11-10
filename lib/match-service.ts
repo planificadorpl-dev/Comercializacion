@@ -7,7 +7,7 @@ import {
   AdvisorChecklistRecord,
   EvaluacionRecord,
 } from "@/lib/evaluaciones-data";
-import { normalizeAdvisorName, stripAccents } from "@/lib/normalization";
+import { normalizeAdvisorName, stripAccents, areSameAdvisorName } from "@/lib/normalization";
 import {
   MatchItem,
   MatchMetrics,
@@ -16,45 +16,7 @@ import {
   MatchDivergencia,
   MatchFactorComparison,
 } from "./match-types";
-
-const STOPWORDS = new Set(["de", "del", "la", "las", "los", "san", "santa", "el"]);
-
-function getTokens(str: string): string[] {
-  return stripAccents(str)
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length > 2 && !STOPWORDS.has(w));
-}
-
-/**
- * Robust advisor name matcher:
- * Handles legal full names vs commercial short names (e.g. "Yamery de los Angeles Rodríguez Mezones" vs "Yamery Rodriguez")
- */
-export function areSameAdvisorName(nameA?: string | null, nameB?: string | null): boolean {
-  if (!nameA || !nameB) return false;
-  const cleanA = stripAccents(nameA);
-  const cleanB = stripAccents(nameB);
-  if (cleanA === cleanB) return true;
-
-  // 1. Check canonical normalized strings
-  const normA = normalizeAdvisorName(nameA);
-  const normB = normalizeAdvisorName(nameB);
-  if (normA && normB && normA !== "Sin Asesor" && normB !== "Sin Asesor") {
-    if (stripAccents(normA) === stripAccents(normB)) return true;
-  }
-
-  // 2. Token subset matching
-  const tokA = getTokens(nameA);
-  const tokB = getTokens(nameB);
-  if (tokA.length === 0 || tokB.length === 0) return false;
-
-  const [shorter, longer] = tokA.length <= tokB.length ? [tokA, tokB] : [tokB, tokA];
-  const longerSet = new Set(longer);
-  const matchCount = shorter.filter((t) => longerSet.has(t)).length;
-  if (shorter.length >= 2 && matchCount === shorter.length) return true;
-
-  return false;
-}
+export { areSameAdvisorName };
 
 export function canonicalAdvisorKey(name?: string | null): string {
   if (!name) return "";
@@ -65,32 +27,13 @@ export function canonicalAdvisorKey(name?: string | null): string {
   return stripAccents(name);
 }
 
-// Date normalization helpers
-export function normalizeDateToIso(dateStr?: string | null): string {
-  if (!dateStr) return "";
-  const clean = String(dateStr).trim();
+import {
+  getCaracasTodayIso,
+  getCaracasDateIso,
+  normalizeDateToIso,
+} from "@/lib/caracas-time";
 
-  // If already YYYY-MM-DD or contains T
-  if (clean.includes("T")) {
-    return clean.split("T")[0];
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
-    return clean;
-  }
-  // If DD/MM/YYYY or DD-MM-YYYY
-  if (clean.includes("/")) {
-    const parts = clean.split("/");
-    if (parts.length === 3) {
-      if (parts[0].length === 4) {
-        // YYYY/MM/DD
-        return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
-      }
-      // DD/MM/YYYY
-      return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
-    }
-  }
-  return clean;
-}
+export { getCaracasTodayIso, getCaracasDateIso, normalizeDateToIso };
 
 export function formatIsoToDisplayDate(isoDate: string): string {
   if (!isoDate) return "";
@@ -388,6 +331,21 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
       });
     }
 
+    let firstGeo: { estado?: string; municipio?: string; parroquia?: string; sector?: string } | undefined;
+    if (actGroup) {
+      for (const act of actGroup.rows) {
+        if (act.estado || act.municipio || act.parroquia || act.sector) {
+          firstGeo = {
+            estado: act.estado || undefined,
+            municipio: act.municipio || undefined,
+            parroquia: act.parroquia || undefined,
+            sector: act.sector || undefined,
+          };
+          break;
+        }
+      }
+    }
+
     const item: MatchItem = {
       id: `${isoDate}_${advisorDisplayName.replace(/\s+/g, "_")}`,
       fecha: isoDate,
@@ -414,6 +372,7 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
         checklistCumplidos: chkCumplidos,
         checklistTotal: chkTotal,
         checklistFactorScores: chk?.factorScores,
+        territorioPrincipal: firstGeo,
       },
       evaluacion: {
         presente: hasEvaluacion,
@@ -471,12 +430,16 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
     filtered = filtered.filter((i) => stripAccents(i.evaluacion.evaluador || "").includes(qEvaluador));
   }
 
-  if (filters?.from) {
-    filtered = filtered.filter((i) => i.fecha >= filters.from!);
-  }
-
-  if (filters?.to) {
-    filtered = filtered.filter((i) => i.fecha <= filters.to!);
+  if (filters?.preset === "hoy") {
+    const todayCaracas = getCaracasTodayIso();
+    filtered = filtered.filter((i) => i.fecha === todayCaracas);
+  } else {
+    if (filters?.from) {
+      filtered = filtered.filter((i) => i.fecha >= filters.from!);
+    }
+    if (filters?.to) {
+      filtered = filtered.filter((i) => i.fecha <= filters.to!);
+    }
   }
 
   if (filters?.search) {

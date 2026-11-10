@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { X, Printer, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { X, Printer, ChevronRight, PenLine } from "lucide-react";
 import { MatchItem } from "@/lib/match-types";
 import { EVALUACION_FACTORES } from "@/lib/evaluaciones-data";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,28 @@ export function MatchDetailModal({ isOpen, onClose, item }: MatchDetailModalProp
           </div>
 
           <div className="flex items-center gap-4 text-xs">
+            {item.status === "solo_reporte" && (
+              <Link
+                href={`/evaluaciones/nueva?asesor=${encodeURIComponent(item.asesor)}&fecha=${item.fecha}&estado=${encodeURIComponent(item.reporte.territorioPrincipal?.estado || "")}&municipio=${encodeURIComponent(item.reporte.territorioPrincipal?.municipio || "")}&parroquia=${encodeURIComponent(item.reporte.territorioPrincipal?.parroquia || "")}&sector=${encodeURIComponent(item.reporte.territorioPrincipal?.sector || "")}&returnTo=/evaluaciones/match`}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-950 hover:text-neutral-500 transition-colors cursor-pointer select-none"
+              >
+                <PenLine className="w-3.5 h-3.5 stroke-[1.25]" />
+                <span className="hidden sm:inline">Responder con evaluación</span>
+                <span className="sm:hidden">Evaluar</span>
+              </Link>
+            )}
+
+            {item.status === "conciliado" && item.evaluacion.id && (
+              <Link
+                href={`/evaluaciones/nueva?id=${encodeURIComponent(item.evaluacion.id)}&returnTo=/evaluaciones/match`}
+                className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer select-none"
+              >
+                <PenLine className="w-3.5 h-3.5 stroke-[1.25]" />
+                <span className="hidden sm:inline">Editar evaluación</span>
+                <span className="sm:hidden">Editar</span>
+              </Link>
+            )}
+
             <button
               type="button"
               onClick={handlePrint}
@@ -485,7 +508,27 @@ export function MatchDetailModal({ isOpen, onClose, item }: MatchDetailModalProp
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3 border-t border-neutral-100 flex items-center justify-end bg-neutral-50/50 shrink-0 print:hidden">
+        <div className="px-6 py-3 border-t border-neutral-100 flex items-center justify-between bg-neutral-50/50 shrink-0 print:hidden">
+          {item.status === "solo_reporte" ? (
+            <Link
+              href={`/evaluaciones/nueva?asesor=${encodeURIComponent(item.asesor)}&fecha=${item.fecha}&estado=${encodeURIComponent(item.reporte.territorioPrincipal?.estado || "")}&municipio=${encodeURIComponent(item.reporte.territorioPrincipal?.municipio || "")}&parroquia=${encodeURIComponent(item.reporte.territorioPrincipal?.parroquia || "")}&sector=${encodeURIComponent(item.reporte.territorioPrincipal?.sector || "")}&returnTo=/evaluaciones/match`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-950 hover:text-neutral-500 transition-colors cursor-pointer select-none"
+            >
+              <PenLine className="w-3.5 h-3.5 stroke-[1.25]" />
+              <span>Evaluar este reporte</span>
+            </Link>
+          ) : item.status === "conciliado" && item.evaluacion.id ? (
+            <Link
+              href={`/evaluaciones/nueva?id=${encodeURIComponent(item.evaluacion.id)}&returnTo=/evaluaciones/match`}
+              className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer select-none"
+            >
+              <PenLine className="w-3.5 h-3.5 stroke-[1.25]" />
+              <span>Editar evaluación</span>
+            </Link>
+          ) : (
+            <div />
+          )}
+
           <button
             type="button"
             onClick={onClose}

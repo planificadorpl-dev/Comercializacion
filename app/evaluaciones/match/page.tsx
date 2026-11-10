@@ -7,6 +7,7 @@ import {
   RotateCw,
   Search,
   Eye,
+  PenLine,
   ChevronRight,
   Filter,
 } from "lucide-react";
@@ -16,6 +17,7 @@ import { CustomDropdown } from "@/components/ui/custom-dropdown";
 import { ToastPill } from "@/components/ui/toast-pill";
 import { MatchItem, MatchMetrics, MatchStatus } from "@/lib/match-types";
 import { MatchDetailModal } from "@/components/evaluaciones/match-detail-modal";
+import { getCaracasTodayIso, getCaracasDateIso } from "@/lib/caracas-time";
 import { cn } from "@/lib/utils";
 
 type DatePreset = "hoy" | "7dias" | "mes" | "todos";
@@ -46,21 +48,21 @@ function MatchContent() {
     }, 3500);
   }, []);
 
-  // Compute dates based on preset
+  // Compute dates based on preset using Venezuela (Caracas) timezone
   const dateRange = useMemo(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = getCaracasTodayIso();
     if (datePreset === "hoy") {
       return { from: today, to: today };
     }
     if (datePreset === "7dias") {
       const d = new Date();
       d.setDate(d.getDate() - 7);
-      return { from: d.toISOString().split("T")[0], to: today };
+      return { from: getCaracasDateIso(d), to: today };
     }
     if (datePreset === "mes") {
       const d = new Date();
       const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
-      return { from: firstDay.toISOString().split("T")[0], to: today };
+      return { from: getCaracasDateIso(firstDay), to: today };
     }
     return { from: undefined, to: undefined };
   }, [datePreset]);
@@ -73,6 +75,7 @@ function MatchContent() {
       if (selectedAsesor !== "todos") params.set("asesor", selectedAsesor);
       if (selectedEvaluador !== "todos") params.set("evaluador", selectedEvaluador);
       if (selectedStatus !== "todos") params.set("status", selectedStatus);
+      if (datePreset) params.set("preset", datePreset);
       if (dateRange.from) params.set("from", dateRange.from);
       if (dateRange.to) params.set("to", dateRange.to);
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
@@ -537,8 +540,30 @@ function MatchContent() {
                         )}
                       </div>
 
-                      {/* Col 6: Acción (Icon-only subtle eye) */}
-                      <div className="lg:col-span-1 flex items-center justify-end">
+                      {/* Col 6: Acciones (Icon-only: Responder/Editar con PenLine y Detalle con Eye) */}
+                      <div className="lg:col-span-1 flex items-center justify-end gap-0.5">
+                        {item.status === "solo_reporte" && (
+                          <Link
+                            href={`/evaluaciones/nueva?asesor=${encodeURIComponent(item.asesor)}&fecha=${item.fecha}&estado=${encodeURIComponent(item.reporte.territorioPrincipal?.estado || "")}&municipio=${encodeURIComponent(item.reporte.territorioPrincipal?.municipio || "")}&parroquia=${encodeURIComponent(item.reporte.territorioPrincipal?.parroquia || "")}&sector=${encodeURIComponent(item.reporte.territorioPrincipal?.sector || "")}&returnTo=/evaluaciones/match`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 p-1.5 text-neutral-400 hover:text-neutral-900 cursor-pointer"
+                            title="Responder a este reporte con evaluación"
+                          >
+                            <PenLine className="w-4 h-4 stroke-[1.25]" />
+                          </Link>
+                        )}
+
+                        {item.status === "conciliado" && item.evaluacion.id && (
+                          <Link
+                            href={`/evaluaciones/nueva?id=${encodeURIComponent(item.evaluacion.id)}&returnTo=/evaluaciones/match`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 p-1.5 text-neutral-400 hover:text-neutral-900 cursor-pointer"
+                            title="Editar evaluación"
+                          >
+                            <PenLine className="w-4 h-4 stroke-[1.25]" />
+                          </Link>
+                        )}
+
                         <button
                           type="button"
                           onClick={(e) => {
