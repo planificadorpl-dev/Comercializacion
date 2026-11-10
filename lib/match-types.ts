@@ -111,6 +111,23 @@ export interface MatchItem {
   };
 }
 
+export interface MatchMonitorReportes {
+  totalPlantilla: number;
+  reportaronCount: number;
+  noReportaronCount: number;
+  cumplimientoPct: number;
+  ratioText: string; // e.g. "17/19"
+  subText: string; // e.g. "(17 reportes enviados de 19 asesores)"
+  asesoresReportaron: Array<{
+    nombre: string;
+    nombreCompleto?: string;
+  }>;
+  asesoresSinReporte: Array<{
+    nombre: string;
+    nombreCompleto?: string;
+  }>;
+}
+
 export interface MatchMetrics {
   totalJornadas: number;
   conciliadasCount: number;
@@ -127,6 +144,7 @@ export interface MatchMetrics {
     evaluadorAvgPct: number;
     gapPct: number;
   }>;
+  monitorReportes: MatchMonitorReportes;
 }
 
 export interface MatchFilterParams {

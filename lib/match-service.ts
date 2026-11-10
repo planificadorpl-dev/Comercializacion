@@ -1,3 +1,5 @@
+import fs from "fs/promises";
+import path from "path";
 import { readAllActividades } from "@/lib/actividades-store";
 import { readAdvisorChecklists } from "@/lib/advisor-checklists-store";
 import { readEvaluaciones } from "@/lib/evaluaciones-store";
@@ -15,6 +17,7 @@ import {
   MatchStatus,
   MatchDivergencia,
   MatchFactorComparison,
+  MatchMonitorReportes,
 } from "./match-types";
 export { areSameAdvisorName };
 
@@ -34,6 +37,36 @@ import {
 } from "@/lib/caracas-time";
 
 export { getCaracasTodayIso, getCaracasDateIso, normalizeDateToIso };
+
+export async function getPlantillaAsesores(): Promise<Array<{ nombre: string; nombreCompleto?: string }>> {
+  try {
+    const usersPath = path.join(process.cwd(), "data", "users.json");
+    const content = await fs.readFile(usersPath, "utf-8");
+    const users = JSON.parse(content);
+    if (Array.isArray(users)) {
+      const asesores = users
+        .filter((u: any) => u.rol === "asesor" && u.activo !== false)
+        .map((u: any) => {
+          const canonical = normalizeAdvisorName(u.nombre);
+          return {
+            nombre: canonical && canonical !== "Sin Asesor" ? canonical : u.nombre,
+            nombreCompleto: u.nombre,
+          };
+        });
+      if (asesores.length > 0) return asesores;
+    }
+  } catch {}
+
+  const fallback = [
+    "Gabriela Marrero", "Lorena Esqueda", "Patricia Mendoza", "Génesis Ochoa",
+    "Yesenia Terán", "Branin Berroteran", "Daiana Torres", "Stephany Manrique",
+    "Cindy Infante", "Yuliana Carvajal", "María Azuaje", "Yilda González",
+    "Yamery Rodríguez", "Arianna Montaña", "Diarnelis Mendoza", "Andrea Plaza",
+    "Danyelis Muñoz", "Naomi Tovar", "Asesor Demostracion"
+  ];
+
+  return fallback.map((n) => ({ nombre: n, nombreCompleto: n }));
+}
 
 export function formatIsoToDisplayDate(isoDate: string): string {
   if (!isoDate) return "";
@@ -409,8 +442,63 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
     return a.asesor.localeCompare(b.asesor);
   });
 
-  // ── Apply Filters ──────────────────────────────────────────────────────────
-  let filtered = allItems;
+  // ── Apply Date Filters First (for accurate Monitor de Reportes) ────────────
+  let dateFiltered = allItems;
+
+  if (filters?.preset === "hoy") {
+    const todayCaracas = getCaracasTodayIso();
+    dateFiltered = dateFiltered.filter((i) => i.fecha === todayCaracas);
+  } else {
+    if (filters?.from) {
+      dateFiltered = dateFiltered.filter((i) => i.fecha >= filters.from!);
+    }
+    if (filters?.to) {
+      dateFiltered = dateFiltered.filter((i) => i.fecha <= filters.to!);
+    }
+  }
+
+  // ── Monitor de Reportes (Plantilla de Asesores vs Reportes Enviados) ───────
+  const plantilla = await getPlantillaAsesores();
+  const totalPlantilla = plantilla.length;
+
+  const asesoresReportaron: Array<{ nombre: string; nombreCompleto?: string }> = [];
+  const asesoresSinReporte: Array<{ nombre: string; nombreCompleto?: string }> = [];
+
+  for (const adv of plantilla) {
+    const hasReport = dateFiltered.some(
+      (item) =>
+        item.reporte.presente &&
+        (areSameAdvisorName(adv.nombre, item.asesor) ||
+          areSameAdvisorName(adv.nombreCompleto || "", item.asesor) ||
+          (item.asesorCompleto && areSameAdvisorName(adv.nombreCompleto || "", item.asesorCompleto)))
+    );
+
+    if (hasReport) {
+      asesoresReportaron.push(adv);
+    } else {
+      asesoresSinReporte.push(adv);
+    }
+  }
+
+  const reportaronCount = asesoresReportaron.length;
+  const noReportaronCount = asesoresSinReporte.length;
+  const cumplimientoPct = totalPlantilla > 0 ? Math.round((reportaronCount / totalPlantilla) * 100) : 0;
+  const ratioText = `${reportaronCount}/${totalPlantilla}`;
+  const subText = `(${reportaronCount} reportes enviados de ${totalPlantilla} asesores)`;
+
+  const monitorReportes: MatchMonitorReportes = {
+    totalPlantilla,
+    reportaronCount,
+    noReportaronCount,
+    cumplimientoPct,
+    ratioText,
+    subText,
+    asesoresReportaron,
+    asesoresSinReporte,
+  };
+
+  // ── Apply Remaining Filters (status, asesor, evaluador, search) ────────────
+  let filtered = dateFiltered;
 
   if (filters?.status && filters.status !== "todos") {
     filtered = filtered.filter((i) => i.status === filters.status);
@@ -428,18 +516,6 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
   if (filters?.evaluador && filters.evaluador !== "todos") {
     const qEvaluador = stripAccents(filters.evaluador);
     filtered = filtered.filter((i) => stripAccents(i.evaluacion.evaluador || "").includes(qEvaluador));
-  }
-
-  if (filters?.preset === "hoy") {
-    const todayCaracas = getCaracasTodayIso();
-    filtered = filtered.filter((i) => i.fecha === todayCaracas);
-  } else {
-    if (filters?.from) {
-      filtered = filtered.filter((i) => i.fecha >= filters.from!);
-    }
-    if (filters?.to) {
-      filtered = filtered.filter((i) => i.fecha <= filters.to!);
-    }
   }
 
   if (filters?.search) {
@@ -529,6 +605,7 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
     promedioSolicitudesConImpulsador,
     promedioSolicitudesSinImpulsador,
     factorSummary,
+    monitorReportes,
   };
 
   return {

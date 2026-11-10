@@ -20,7 +20,7 @@ import { MatchDetailModal } from "@/components/evaluaciones/match-detail-modal";
 import { getCaracasTodayIso, getCaracasDateIso } from "@/lib/caracas-time";
 import { cn } from "@/lib/utils";
 
-type DatePreset = "hoy" | "7dias" | "mes" | "todos";
+type DatePreset = "hoy" | "7dias" | "mes" | "todos" | "custom";
 
 function MatchContent() {
   const [items, setItems] = useState<MatchItem[]>([]);
@@ -36,6 +36,8 @@ function MatchContent() {
   const [selectedEvaluador, setSelectedEvaluador] = useState<string>("todos");
   const [selectedStatus, setSelectedStatus] = useState<string>("todos");
   const [datePreset, setDatePreset] = useState<DatePreset>("todos");
+  const [customFrom, setCustomFrom] = useState<string>("");
+  const [customTo, setCustomTo] = useState<string>("");
 
   // Detail Modal
   const [selectedItemForModal, setSelectedItemForModal] = useState<MatchItem | null>(null);
@@ -48,24 +50,44 @@ function MatchContent() {
     }, 3500);
   }, []);
 
-  // Compute dates based on preset using Venezuela (Caracas) timezone
-  const dateRange = useMemo(() => {
+  // Preset Selection Helper
+  const selectPreset = (preset: DatePreset) => {
+    setDatePreset(preset);
     const today = getCaracasTodayIso();
-    if (datePreset === "hoy") {
-      return { from: today, to: today };
-    }
-    if (datePreset === "7dias") {
+    if (preset === "hoy") {
+      setCustomFrom(today);
+      setCustomTo(today);
+    } else if (preset === "7dias") {
       const d = new Date();
       d.setDate(d.getDate() - 7);
-      return { from: getCaracasDateIso(d), to: today };
-    }
-    if (datePreset === "mes") {
+      setCustomFrom(getCaracasDateIso(d));
+      setCustomTo(today);
+    } else if (preset === "mes") {
       const d = new Date();
       const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
-      return { from: getCaracasDateIso(firstDay), to: today };
+      setCustomFrom(getCaracasDateIso(firstDay));
+      setCustomTo(today);
+    } else if (preset === "todos") {
+      setCustomFrom("");
+      setCustomTo("");
     }
-    return { from: undefined, to: undefined };
-  }, [datePreset]);
+  };
+
+  const handleFromChange = (val: string) => {
+    setCustomFrom(val);
+    setDatePreset("custom");
+  };
+
+  const handleToChange = (val: string) => {
+    setCustomTo(val);
+    setDatePreset("custom");
+  };
+
+  const handleClearDates = () => {
+    setDatePreset("todos");
+    setCustomFrom("");
+    setCustomTo("");
+  };
 
   // Load dataset
   const loadData = useCallback(async (silent = false) => {
@@ -75,9 +97,14 @@ function MatchContent() {
       if (selectedAsesor !== "todos") params.set("asesor", selectedAsesor);
       if (selectedEvaluador !== "todos") params.set("evaluador", selectedEvaluador);
       if (selectedStatus !== "todos") params.set("status", selectedStatus);
-      if (datePreset) params.set("preset", datePreset);
-      if (dateRange.from) params.set("from", dateRange.from);
-      if (dateRange.to) params.set("to", dateRange.to);
+
+      if (datePreset === "hoy") {
+        params.set("preset", "hoy");
+      } else {
+        if (customFrom) params.set("from", customFrom);
+        if (customTo) params.set("to", customTo);
+      }
+
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
       params.set("t", Date.now().toString());
 
@@ -103,7 +130,7 @@ function MatchContent() {
     } finally {
       setLoading(false);
     }
-  }, [selectedAsesor, selectedEvaluador, selectedStatus, dateRange, searchQuery, showToast]);
+  }, [selectedAsesor, selectedEvaluador, selectedStatus, datePreset, customFrom, customTo, searchQuery, showToast]);
 
   useEffect(() => {
     loadData();
@@ -215,7 +242,26 @@ function MatchContent() {
 
           {/* KPI Metrics Line (Strict Rule 5 & 6: Zero framed cards, no uppercase, no decorative icons) */}
           <div className="border-b border-neutral-100 pb-5 pt-1">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 sm:gap-8">
+              {/* Metric 1: Monitor de reportes */}
+              <div className="space-y-1">
+                <span className="text-xs text-neutral-500 font-sans block">
+                  Monitor de reportes
+                </span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold text-neutral-950 font-mono tracking-tight">
+                    {metrics?.monitorReportes?.ratioText ?? "0/0"}
+                  </span>
+                  <span className="text-[11px] text-neutral-400 font-sans">
+                    {metrics?.monitorReportes?.cumplimientoPct ?? 0}%
+                  </span>
+                </div>
+                <p className="text-[10px] text-neutral-400 font-mono truncate" title={metrics?.monitorReportes?.subText}>
+                  {metrics?.monitorReportes?.subText ?? "Sin datos"}
+                </p>
+              </div>
+
+              {/* Metric 2: Jornadas analizadas */}
               <div className="space-y-1">
                 <span className="text-xs text-neutral-500 font-sans block">
                   Jornadas analizadas
@@ -228,8 +274,12 @@ function MatchContent() {
                     ({metrics?.conciliadasCount ?? 0} con match)
                   </span>
                 </div>
+                <p className="text-[10px] text-neutral-400 font-mono">
+                  {metrics?.soloReporteCount ?? 0} sin supervisar
+                </p>
               </div>
 
+              {/* Metric 3: Cobertura de supervisión */}
               <div className="space-y-1">
                 <span className="text-xs text-neutral-500 font-sans block">
                   Cobertura de supervisión
@@ -242,8 +292,12 @@ function MatchContent() {
                     en campo
                   </span>
                 </div>
+                <p className="text-[10px] text-neutral-400 font-mono">
+                  Acompañamiento
+                </p>
               </div>
 
+              {/* Metric 4: Brecha de autoevaluación */}
               <div className="space-y-1">
                 <span className="text-xs text-neutral-500 font-sans block">
                   Brecha de autoevaluación
@@ -265,8 +319,12 @@ function MatchContent() {
                     diferencia media
                   </span>
                 </div>
+                <p className="text-[10px] text-neutral-400 font-mono">
+                  Asesor vs. Evaluador
+                </p>
               </div>
 
+              {/* Metric 5: Impacto en ventas */}
               <div className="space-y-1">
                 <span className="text-xs text-neutral-500 font-sans block">
                   Impacto en ventas
@@ -276,12 +334,69 @@ function MatchContent() {
                     {metrics?.promedioSolicitudesConImpulsador ?? 0}
                   </span>
                   <span className="text-[11px] text-neutral-400 font-sans">
-                    vs. {metrics?.promedioSolicitudesSinImpulsador ?? 0} en solitario
+                    vs. {metrics?.promedioSolicitudesSinImpulsador ?? 0}
                   </span>
                 </div>
+                <p className="text-[10px] text-neutral-400 font-mono">
+                  Promedio solicitudes
+                </p>
               </div>
             </div>
           </div>
+
+          {/* Monitor de Asesores sin Reporte (Open layout, pure typography, no colored banners) */}
+          {metrics?.monitorReportes && (
+            <div className="border-b border-neutral-100 pb-5 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-neutral-900 font-sans">
+                    Asesores sin reporte ({metrics.monitorReportes.noReportaronCount})
+                  </span>
+                  <span className="text-[11px] text-neutral-400 font-mono">
+                    · {metrics.monitorReportes.subText}
+                  </span>
+                </div>
+                {selectedAsesor !== "todos" && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAsesor("todos")}
+                    className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer select-none self-start sm:self-auto"
+                  >
+                    Ver todos los asesores
+                  </button>
+                )}
+              </div>
+
+              {metrics.monitorReportes.noReportaronCount === 0 ? (
+                <p className="text-[11px] text-neutral-500 font-sans">
+                  Todos los asesores de la plantilla ({metrics.monitorReportes.totalPlantilla}) enviaron su reporte de actividad para el período seleccionado.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2 pt-0.5">
+                  {metrics.monitorReportes.asesoresSinReporte.map((adv) => {
+                    const isSelected = selectedAsesor === adv.nombre;
+                    return (
+                      <button
+                        key={adv.nombre}
+                        type="button"
+                        onClick={() => setSelectedAsesor(isSelected ? "todos" : adv.nombre)}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 py-1 px-2 text-xs transition-colors cursor-pointer select-none border-b",
+                          isSelected
+                            ? "border-neutral-950 text-neutral-950 font-semibold"
+                            : "border-neutral-200/80 text-neutral-600 hover:text-neutral-950 hover:border-neutral-900"
+                        )}
+                        title={`Filtrar jornadas de ${adv.nombre}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-neutral-300 shrink-0" />
+                        <span className="truncate max-w-[220px]">{adv.nombre}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Factor Gap Overview Strip */}
           {metrics && metrics.factorSummary.length > 0 && (
@@ -315,9 +430,9 @@ function MatchContent() {
             </div>
           )}
 
-          {/* Filter Bar (CustomDropdown, clean baseline input, date preset pills) */}
+          {/* Filter Bar (CustomDropdown, clean baseline input, date preset pills & date inputs) */}
           <div className="space-y-3 pt-1">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               {/* Search input with baseline style */}
               <div className="relative flex-1 max-w-sm">
                 <input
@@ -329,33 +444,67 @@ function MatchContent() {
                 />
               </div>
 
-              {/* Date Presets */}
-              <div className="flex items-center gap-4 text-xs font-sans shrink-0">
-                <span className="text-neutral-400 text-[11px]">Período:</span>
-                {(["todos", "hoy", "7dias", "mes"] as DatePreset[]).map((preset) => {
-                  const labels: Record<DatePreset, string> = {
-                    todos: "Todos",
-                    hoy: "Hoy",
-                    "7dias": "Últimos 7 días",
-                    mes: "Este mes",
-                  };
-                  const isSelected = datePreset === preset;
-                  return (
+              {/* Date Presets & Custom Date Range / Día específico */}
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs font-sans shrink-0">
+                <div className="flex items-center gap-3">
+                  <span className="text-neutral-400 text-[11px]">Período:</span>
+                  {(["todos", "hoy", "7dias", "mes"] as DatePreset[]).map((preset) => {
+                    const labels: Record<string, string> = {
+                      todos: "Todos",
+                      hoy: "Hoy",
+                      "7dias": "Últimos 7 días",
+                      mes: "Este mes",
+                    };
+                    const isSelected = datePreset === preset;
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => selectPreset(preset)}
+                        className={cn(
+                          "transition-colors cursor-pointer select-none",
+                          isSelected
+                            ? "text-neutral-950 font-semibold border-b border-neutral-950"
+                            : "text-neutral-400 hover:text-neutral-700"
+                        )}
+                      >
+                        {labels[preset]}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <span className="text-neutral-200 hidden sm:inline">|</span>
+
+                {/* Date range inputs */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-[11px] text-neutral-400 font-mono">Desde:</span>
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => handleFromChange(e.target.value)}
+                    className="py-0.5 px-1 text-xs border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent font-mono text-neutral-900 transition-colors"
+                  />
+
+                  <span className="text-[11px] text-neutral-400 font-mono">Hasta:</span>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => handleToChange(e.target.value)}
+                    className="py-0.5 px-1 text-xs border-b border-neutral-200 focus:border-neutral-900 outline-none bg-transparent font-mono text-neutral-900 transition-colors"
+                  />
+
+                  {(customFrom || customTo) && (
                     <button
-                      key={preset}
                       type="button"
-                      onClick={() => setDatePreset(preset)}
-                      className={cn(
-                        "transition-colors cursor-pointer select-none",
-                        isSelected
-                          ? "text-neutral-950 font-semibold border-b border-neutral-950"
-                          : "text-neutral-400 hover:text-neutral-700"
-                      )}
+                      onClick={handleClearDates}
+                      className="text-[11px] text-neutral-400 hover:text-neutral-900 transition-colors cursor-pointer select-none ml-1"
+                      title="Limpiar fechas y ver todos"
                     >
-                      {labels[preset]}
+                      Limpiar
                     </button>
-                  );
-                })}
+                  )}
+                </div>
               </div>
             </div>
 
