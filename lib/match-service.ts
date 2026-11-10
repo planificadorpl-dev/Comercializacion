@@ -7,6 +7,7 @@ import {
   AdvisorChecklistRecord,
   EvaluacionRecord,
 } from "@/lib/evaluaciones-data";
+import { normalizeAdvisorName, stripAccents } from "@/lib/normalization";
 import {
   MatchItem,
   MatchMetrics,
@@ -15,6 +16,54 @@ import {
   MatchDivergencia,
   MatchFactorComparison,
 } from "./match-types";
+
+const STOPWORDS = new Set(["de", "del", "la", "las", "los", "san", "santa", "el"]);
+
+function getTokens(str: string): string[] {
+  return stripAccents(str)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !STOPWORDS.has(w));
+}
+
+/**
+ * Robust advisor name matcher:
+ * Handles legal full names vs commercial short names (e.g. "Yamery de los Angeles Rodríguez Mezones" vs "Yamery Rodriguez")
+ */
+export function areSameAdvisorName(nameA?: string | null, nameB?: string | null): boolean {
+  if (!nameA || !nameB) return false;
+  const cleanA = stripAccents(nameA);
+  const cleanB = stripAccents(nameB);
+  if (cleanA === cleanB) return true;
+
+  // 1. Check canonical normalized strings
+  const normA = normalizeAdvisorName(nameA);
+  const normB = normalizeAdvisorName(nameB);
+  if (normA && normB && normA !== "Sin Asesor" && normB !== "Sin Asesor") {
+    if (stripAccents(normA) === stripAccents(normB)) return true;
+  }
+
+  // 2. Token subset matching
+  const tokA = getTokens(nameA);
+  const tokB = getTokens(nameB);
+  if (tokA.length === 0 || tokB.length === 0) return false;
+
+  const [shorter, longer] = tokA.length <= tokB.length ? [tokA, tokB] : [tokB, tokA];
+  const longerSet = new Set(longer);
+  const matchCount = shorter.filter((t) => longerSet.has(t)).length;
+  if (shorter.length >= 2 && matchCount === shorter.length) return true;
+
+  return false;
+}
+
+export function canonicalAdvisorKey(name?: string | null): string {
+  if (!name) return "";
+  const norm = normalizeAdvisorName(name);
+  if (norm && norm !== "Sin Asesor") {
+    return stripAccents(norm);
+  }
+  return stripAccents(name);
+}
 
 // Date normalization helpers
 export function normalizeDateToIso(dateStr?: string | null): string {
@@ -52,10 +101,6 @@ export function formatIsoToDisplayDate(isoDate: string): string {
   return isoDate;
 }
 
-function normalizeName(name?: string | null): string {
-  return (name || "").trim().toLowerCase();
-}
-
 /**
  * Checks if two location strings have any territorial overlap
  */
@@ -89,20 +134,21 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
     readEvaluaciones().catch(() => []),
   ]);
 
-  // Map of advisor checklists by `${isoDate}_${advisorLower}`
+  // Map of advisor checklists by `${isoDate}_${canonicalAdvisorKey}`
   const checklistMap = new Map<string, AdvisorChecklistRecord>();
   checklistsRaw.forEach((chk) => {
     const iso = normalizeDateToIso(chk.fecha);
-    const key = `${iso}_${normalizeName(chk.asesor)}`;
+    const key = `${iso}_${canonicalAdvisorKey(chk.asesor)}`;
     checklistMap.set(key, chk);
   });
 
-  // Group activities by `${isoDate}_${advisorLower}`
+  // Group activities by `${isoDate}_${canonicalAdvisorKey}`
   const activitiesByDayAndAdvisor = new Map<
     string,
     {
       isoDate: string;
       advisorOriginal: string;
+      canonicalKey: string;
       rows: typeof actividadesRaw;
     }
   >();
@@ -110,25 +156,59 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
   actividadesRaw.forEach((act) => {
     const iso = normalizeDateToIso(act.fecha);
     if (!iso || !act.asesor) return;
-    const key = `${iso}_${normalizeName(act.asesor)}`;
+    const cKey = canonicalAdvisorKey(act.asesor);
+    const key = `${iso}_${cKey}`;
     const cur = activitiesByDayAndAdvisor.get(key) || {
       isoDate: iso,
       advisorOriginal: act.asesor,
+      canonicalKey: cKey,
       rows: [],
     };
     cur.rows.push(act);
     activitiesByDayAndAdvisor.set(key, cur);
   });
 
-  // Group evaluations by `${isoDate}_${advisorLower}`
-  const evaluacionesByDayAndAdvisor = new Map<string, EvaluacionRecord>();
+  // Group evaluations by `${isoDate}_${canonicalAdvisorKey}`
+  const evaluacionesByDayAndAdvisor = new Map<
+    string,
+    {
+      isoDate: string;
+      advisorOriginal: string;
+      canonicalKey: string;
+      record: EvaluacionRecord;
+    }
+  >();
+
   evaluacionesRaw.forEach((ev) => {
     const iso = normalizeDateToIso(ev.fecha);
     if (!iso || !ev.asesor) return;
-    const key = `${iso}_${normalizeName(ev.asesor)}`;
-    // Keep most recent if duplicate
-    evaluacionesByDayAndAdvisor.set(key, ev);
+    const cKey = canonicalAdvisorKey(ev.asesor);
+    const key = `${iso}_${cKey}`;
+    evaluacionesByDayAndAdvisor.set(key, {
+      isoDate: iso,
+      advisorOriginal: ev.asesor,
+      canonicalKey: cKey,
+      record: ev,
+    });
   });
+
+  // Secondary fuzzy pass:
+  // If an evaluation has no exact key match with activities on the same date,
+  // check if any activity on that same date refers to the same advisor via areSameAdvisorName!
+  for (const [evKey, evObj] of Array.from(evaluacionesByDayAndAdvisor.entries())) {
+    if (!activitiesByDayAndAdvisor.has(evKey)) {
+      for (const [actKey, actObj] of Array.from(activitiesByDayAndAdvisor.entries())) {
+        if (actObj.isoDate === evObj.isoDate) {
+          if (areSameAdvisorName(evObj.advisorOriginal, actObj.advisorOriginal)) {
+            // Remap evaluation to the activity key so they merge!
+            evaluacionesByDayAndAdvisor.delete(evKey);
+            evaluacionesByDayAndAdvisor.set(actKey, evObj);
+            break;
+          }
+        }
+      }
+    }
+  }
 
   // Collect all unique keys
   const allKeys = new Set<string>([
@@ -144,14 +224,23 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
 
   allKeys.forEach((key) => {
     const actGroup = activitiesByDayAndAdvisor.get(key);
-    const evRecord = evaluacionesByDayAndAdvisor.get(key);
+    const evEntry = evaluacionesByDayAndAdvisor.get(key);
+    const evRecord = evEntry?.record;
 
-    const isoDate = actGroup?.isoDate || normalizeDateToIso(evRecord?.fecha) || "";
-    const advisorName = actGroup?.advisorOriginal || evRecord?.asesor || "";
+    const isoDate = actGroup?.isoDate || evEntry?.isoDate || "";
+    const rawAdvisorName = actGroup?.advisorOriginal || evEntry?.advisorOriginal || "";
 
-    if (!isoDate || !advisorName) return;
+    if (!isoDate || !rawAdvisorName) return;
 
-    advisorSet.add(advisorName);
+    // Resolve clean canonical display name (e.g. "Yamery Rodríguez")
+    const norm = normalizeAdvisorName(rawAdvisorName);
+    const advisorDisplayName = norm && norm !== "Sin Asesor" ? norm : rawAdvisorName;
+    const asesorCompleto =
+      rawAdvisorName.toLowerCase() !== advisorDisplayName.toLowerCase()
+        ? rawAdvisorName
+        : undefined;
+
+    advisorSet.add(advisorDisplayName);
     if (evRecord?.evaluador) {
       evaluadorSet.add(evRecord.evaluador);
     }
@@ -300,10 +389,11 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
     }
 
     const item: MatchItem = {
-      id: `${isoDate}_${advisorName.replace(/\s+/g, "_")}`,
+      id: `${isoDate}_${advisorDisplayName.replace(/\s+/g, "_")}`,
       fecha: isoDate,
       fechaDisplay: formatIsoToDisplayDate(isoDate),
-      asesor: advisorName,
+      asesor: advisorDisplayName,
+      asesorCompleto,
       status,
       statusLabel,
       reporte: {
@@ -368,13 +458,17 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
   }
 
   if (filters?.asesor && filters.asesor !== "todos") {
-    const qAsesor = filters.asesor.toLowerCase().trim();
-    filtered = filtered.filter((i) => i.asesor.toLowerCase().includes(qAsesor));
+    const qAsesor = stripAccents(filters.asesor);
+    filtered = filtered.filter(
+      (i) =>
+        stripAccents(i.asesor).includes(qAsesor) ||
+        (i.asesorCompleto && stripAccents(i.asesorCompleto).includes(qAsesor))
+    );
   }
 
   if (filters?.evaluador && filters.evaluador !== "todos") {
-    const qEvaluador = filters.evaluador.toLowerCase().trim();
-    filtered = filtered.filter((i) => (i.evaluacion.evaluador || "").toLowerCase().includes(qEvaluador));
+    const qEvaluador = stripAccents(filters.evaluador);
+    filtered = filtered.filter((i) => stripAccents(i.evaluacion.evaluador || "").includes(qEvaluador));
   }
 
   if (filters?.from) {
@@ -386,14 +480,15 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
   }
 
   if (filters?.search) {
-    const q = filters.search.toLowerCase().trim();
+    const q = stripAccents(filters.search);
     filtered = filtered.filter(
       (i) =>
-        i.asesor.toLowerCase().includes(q) ||
-        (i.evaluacion.evaluador || "").toLowerCase().includes(q) ||
-        i.reporte.ubicacionResumen.toLowerCase().includes(q) ||
-        i.evaluacion.ubicacionResumen.toLowerCase().includes(q) ||
-        (i.evaluacion.observacionesGenerales || "").toLowerCase().includes(q)
+        stripAccents(i.asesor).includes(q) ||
+        (i.asesorCompleto && stripAccents(i.asesorCompleto).includes(q)) ||
+        stripAccents(i.evaluacion.evaluador || "").includes(q) ||
+        stripAccents(i.reporte.ubicacionResumen).includes(q) ||
+        stripAccents(i.evaluacion.ubicacionResumen).includes(q) ||
+        stripAccents(i.evaluacion.observacionesGenerales || "").includes(q)
     );
   }
 
@@ -480,4 +575,3 @@ export async function getMatchDataset(filters?: MatchFilterParams): Promise<{
     evaluadoresList: Array.from(evaluadorSet).sort((a, b) => a.localeCompare(b, "es")),
   };
 }
-

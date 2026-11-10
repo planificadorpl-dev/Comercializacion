@@ -424,10 +424,15 @@ function MatchContent() {
                     >
                       {/* Col 1: Fecha y asesor */}
                       <div className="lg:col-span-2 space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-neutral-950">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-neutral-950 leading-snug">
                             {item.asesor}
                           </span>
+                          {item.asesorCompleto && item.asesorCompleto.toLowerCase() !== item.asesor.toLowerCase() && (
+                            <span className="text-[10px] text-neutral-400 font-sans truncate" title={item.asesorCompleto}>
+                              {item.asesorCompleto}
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-neutral-400 font-mono flex items-center gap-2">
                           <span>{item.fechaDisplay}</span>

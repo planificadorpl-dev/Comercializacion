@@ -90,6 +90,11 @@ export function MatchDetailModal({ isOpen, onClose, item }: MatchDetailModalProp
                 <h2 className="text-lg font-bold text-neutral-950 font-sans">
                   {item.asesor}
                 </h2>
+                {item.asesorCompleto && item.asesorCompleto.toLowerCase() !== item.asesor.toLowerCase() && (
+                  <p className="text-[11px] text-neutral-400 font-sans">
+                    Nombre registrado: {item.asesorCompleto}
+                  </p>
+                )}
                 <p className="text-xs text-neutral-500 font-sans mt-0.5">
                   Fecha: {item.fechaDisplay}
                   {item.evaluacion.evaluador && ` · Supervisado por: ${item.evaluacion.evaluador} (${item.evaluacion.evaluadorRol || "Impulsador"})`}

@@ -37,6 +37,7 @@ export interface MatchItem {
   fecha: string; // YYYY-MM-DD
   fechaDisplay: string; // DD/MM/YYYY
   asesor: string;
+  asesorCompleto?: string;
   status: MatchStatus;
   statusLabel: string;
 
