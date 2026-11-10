@@ -37,7 +37,6 @@ const DEFAULT_NAV_GROUPS: NavGroup[] = [
       { id: "planificacion", label: "Planificación Comercial", short: "PC", href: "/planificacion", badge: null },
       { id: "planificador", label: "Planificador de Asesores", short: "PA", href: "/planificador", badge: null },
       { id: "evaluaciones", label: "Evaluación y Supervisión", short: "ES", href: "/evaluaciones", badge: null },
-      { id: "match-actividades", label: "Match de Actividades", short: "MA", href: "/evaluaciones/match", badge: null },
     ],
   },
   {
@@ -116,7 +115,6 @@ export function Sidebar({
       { id: "planificacion", label: "Planificación Comercial", short: "PC", href: "/planificacion", badge: null },
       { id: "planificador", label: "Planificador de Asesores", short: "PA", href: "/planificador", badge: null },
       { id: "evaluaciones", label: "Evaluación y Supervisión", short: "ES", href: "/evaluaciones", badge: null },
-      { id: "match-actividades", label: "Match de Actividades", short: "MA", href: "/evaluaciones/match", badge: null },
     ]);
 
     const fieldItems = filterAndEnrichItems([
