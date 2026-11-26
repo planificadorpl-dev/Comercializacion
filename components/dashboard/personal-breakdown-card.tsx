@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Search, X } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { cn, formatNumber, formatProperCase } from "@/lib/utils";
 import { Installation, Solicitud, PlanificacionRecord, fetchPlanificacionData, MONTH_ORDER } from "@/lib/dashboard-data";
 import { AdvisorType } from "@/lib/normalization";
@@ -22,6 +23,18 @@ const CATEGORY_TABS: { id: CategoryFilter; label: string }[] = [
 const normKey = (str: string | null | undefined): string =>
   (str || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
+// Sophisticated monochrome palette matching project aesthetic
+const DONUT_COLORS = [
+  "#171717", // Neutral 900
+  "#383838", // Neutral 800
+  "#525252", // Neutral 600
+  "#737373", // Neutral 500
+  "#8a8a8a", // Neutral 400
+  "#a3a3a3", // Neutral 400 soft
+  "#c4c4c4", // Neutral 300
+  "#e0e0e0", // Neutral 200
+];
+
 interface PersonalBreakdownCardProps {
   installations: Installation[];
   solicitudes: Solicitud[];
@@ -41,6 +54,8 @@ export function PersonalBreakdownCard({
 }: PersonalBreakdownCardProps) {
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("comercial");
   const [activeMetric, setActiveMetric] = useState<MetricType>("instalaciones");
+  const [viewMode, setViewMode] = useState<"lista" | "torta">("torta");
+  const [hoveredPieIndex, setHoveredPieIndex] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [planRecords, setPlanRecords] = useState<PlanificacionRecord[]>([]);
@@ -468,6 +483,66 @@ export function PersonalBreakdownCard({
     return (totalInstalaciones / advisorBreakdown.length).toFixed(1);
   }, [totalInstalaciones, advisorBreakdown.length]);
 
+  const grandTotal = useMemo(() => {
+    return activeMetric === "instalaciones" ? installations.length : solicitudes.length;
+  }, [activeMetric, installations.length, solicitudes.length]);
+
+  const totalMetricAdvisors = useMemo(() => {
+    return advisorBreakdown.reduce((sum, a) => {
+      return sum + (activeMetric === "instalaciones" ? a.instalaciones : a.solicitudes);
+    }, 0);
+  }, [advisorBreakdown, activeMetric]);
+
+  const pctRepresented = useMemo(() => {
+    if (grandTotal === 0) return "0.0";
+    return ((totalMetricAdvisors / grandTotal) * 100).toFixed(1);
+  }, [totalMetricAdvisors, grandTotal]);
+
+  const pieChartData = useMemo(() => {
+    const validAdvisors = advisorBreakdown
+      .map((a) => ({
+        name: a.name,
+        normName: a.normName,
+        value: activeMetric === "instalaciones" ? a.instalaciones : a.solicitudes,
+      }))
+      .filter((a) => a.value > 0);
+
+    const totalValid = validAdvisors.reduce((sum, a) => sum + a.value, 0) || 1;
+
+    // Mostrar hasta 6 asesores de mayor volumen y agrupar el resto en "Otros asesores"
+    if (validAdvisors.length <= 6) {
+      return validAdvisors.map((a) => ({
+        ...a,
+        percentage: ((a.value / (grandTotal || totalValid)) * 100).toFixed(1),
+        shareOfAdvisors: ((a.value / totalValid) * 100).toFixed(1),
+      }));
+    }
+
+    const top6 = validAdvisors.slice(0, 6);
+    const others = validAdvisors.slice(6);
+    const othersSum = others.reduce((sum, a) => sum + a.value, 0);
+
+    const result = top6.map((a) => ({
+      ...a,
+      percentage: ((a.value / (grandTotal || totalValid)) * 100).toFixed(1),
+      shareOfAdvisors: ((a.value / totalValid) * 100).toFixed(1),
+    }));
+
+    if (othersSum > 0) {
+      result.push({
+        name: `Otros asesores (${others.length})`,
+        normName: "__OTROS__",
+        value: othersSum,
+        percentage: ((othersSum / (grandTotal || totalValid)) * 100).toFixed(1),
+        shareOfAdvisors: ((othersSum / totalValid) * 100).toFixed(1),
+      });
+    }
+
+    return result;
+  }, [advisorBreakdown, activeMetric, grandTotal]);
+
+  const activePieItem = hoveredPieIndex !== null ? pieChartData[hoveredPieIndex] : null;
+
   return (
     <div className={cn("p-4 sm:p-6 bg-white flex flex-col justify-between h-full select-none", className)}>
       <div className="flex-1 flex flex-col min-h-0">
@@ -480,11 +555,46 @@ export function PersonalBreakdownCard({
             <p className="text-[11px] text-neutral-500 font-mono mt-0.5 truncate">
               {selectedAdvisor
                 ? `Filtro activo: ${formatProperCase(selectedAdvisor)} • Haz clic para limpiar`
+                : viewMode === "torta"
+                ? `Representan ${formatNumber(totalMetricAdvisors)} de ${formatNumber(grandTotal)} ${activeMetric === "instalaciones" ? "instalaciones" : "solicitudes"} (${pctRepresented}%)`
                 : "Selecciona un asesor para filtrar las métricas"}
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
+            {/* Alternador de Vista: Lista vs Torta (Tipográfico sin marcos) */}
+            <div className="flex items-center gap-1.5 text-xs font-mono">
+              <button
+                type="button"
+                onClick={() => setViewMode("lista")}
+                className={cn(
+                  "transition-colors text-xs cursor-pointer pb-0.5",
+                  viewMode === "lista"
+                    ? "text-neutral-950 font-semibold border-b border-neutral-900"
+                    : "text-neutral-400 hover:text-neutral-900"
+                )}
+                title="Ver lista detallada"
+              >
+                Lista
+              </button>
+              <span className="text-neutral-300">·</span>
+              <button
+                type="button"
+                onClick={() => setViewMode("torta")}
+                className={cn(
+                  "transition-colors text-xs cursor-pointer pb-0.5",
+                  viewMode === "torta"
+                    ? "text-neutral-950 font-semibold border-b border-neutral-900"
+                    : "text-neutral-400 hover:text-neutral-900"
+                )}
+                title="Ver gráfico de torta de cuota de instalaciones"
+              >
+                Torta
+              </button>
+            </div>
+
+            <span className="text-neutral-200">|</span>
+
             {/* Alternador de Métrica: puramente tipográfico */}
             <div className="flex items-center gap-1.5 text-xs font-mono">
               <span className="text-[10px] text-neutral-400 hidden sm:inline">Ordenar:</span>
@@ -583,99 +693,225 @@ export function PersonalBreakdownCard({
           })}
         </div>
 
-        {/* Lista / Desglose de Personal (Abierto, con separadores sutiles y scroll fluido sin scrollbar visible) */}
-        <div className="divide-y divide-neutral-100/70 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden max-h-[220px] sm:max-h-[240px] pr-1 flex-1 mt-1 text-xs font-mono">
-          {advisorBreakdown.length === 0 ? (
-            <div className="py-8 text-center text-xs text-neutral-400 font-mono">
-              No se encontró personal en esta categoría o filtro
-            </div>
-          ) : (
-            advisorBreakdown.map((adv, idx) => {
-              const isSelected = selectedAdvisor && normKey(selectedAdvisor) === adv.normName;
+        {viewMode === "torta" ? (
+          /* VISTA TORTA: Gráfico Donut minimalista y desglose de cuota */
+          <div className="flex-1 flex flex-col min-h-0 mt-1">
+            {pieChartData.length === 0 ? (
+              <div className="py-12 text-center text-xs text-neutral-400 font-mono">
+                No hay {activeMetric === "instalaciones" ? "instalaciones" : "solicitudes"} registradas en esta categoría
+              </div>
+            ) : (
+              <>
+                {/* Donut Chart minimalista con KPI central */}
+                <div className="relative w-full min-w-0 h-32 flex items-center justify-center my-0.5 overflow-hidden shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieChartData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={36}
+                        outerRadius={52}
+                        paddingAngle={3}
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                        onClick={(entry: any) => {
+                          if (entry?.name && entry?.normName !== "__OTROS__" && onSelectAdvisor) {
+                            onSelectAdvisor(entry.name);
+                          }
+                        }}
+                      >
+                        {pieChartData.map((entry, idx) => (
+                          <Cell
+                            key={`cell-${entry.normName || idx}`}
+                            fill={DONUT_COLORS[idx % DONUT_COLORS.length]}
+                            opacity={
+                              hoveredPieIndex !== null && hoveredPieIndex !== idx ? 0.4 : 1
+                            }
+                            className="transition-opacity duration-200 cursor-pointer"
+                            onMouseEnter={() => setHoveredPieIndex(idx)}
+                            onMouseLeave={() => setHoveredPieIndex(null)}
+                          />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
 
-              return (
-                <div
-                  key={adv.normName}
-                  onClick={() => {
-                    if (onSelectAdvisor) {
-                      onSelectAdvisor(adv.name);
-                    }
-                  }}
-                  className={cn(
-                    "group flex items-center justify-between py-1.5 text-xs transition-colors px-1 cursor-pointer rounded",
-                    isSelected ? "bg-neutral-100/80 font-medium" : "hover:bg-neutral-50/70"
-                  )}
-                >
-                  <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 pr-2">
-                    <span className="text-[10px] font-mono text-neutral-400 w-4 shrink-0">
-                      {String(idx + 1).padStart(2, "0")}
+                  {/* Dynamic Center Label */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center select-none z-0">
+                    <span className="text-[10px] font-mono text-neutral-400 leading-none">
+                      {activePieItem ? `${activePieItem.percentage}%` : `${pctRepresented}%`}
                     </span>
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span
-                          className={cn(
-                            "truncate font-medium",
-                            isSelected ? "font-bold text-neutral-950" : "text-neutral-900"
-                          )}
-                        >
-                          {adv.name}
-                        </span>
-                        {adv.isEx && (
-                          <span className="text-[9px] font-mono text-neutral-400 shrink-0">
-                            · Ex
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-neutral-400 font-mono truncate">
-                        {adv.isActiveCommercial
-                          ? "Asesor comercial activo"
-                          : adv.sede && adv.sede !== "N/A" && adv.sede !== "OTROS"
-                          ? `Sede: ${adv.sede}`
-                          : adv.tipoLabel}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0 font-mono text-right">
-                    <div className="text-right min-w-[36px]">
-                      <span className="text-[9px] text-neutral-400 block font-sans leading-tight">
-                        Inst.
-                      </span>
-                      <span
-                        className={cn(
-                          "text-xs font-semibold tabular-nums",
-                          activeMetric === "instalaciones" ? "text-emerald-700" : "text-neutral-700"
-                        )}
-                      >
-                        {formatNumber(adv.instalaciones)}
-                      </span>
-                    </div>
-
-                    <div className="text-right min-w-[36px]">
-                      <span className="text-[9px] text-neutral-400 block font-sans leading-tight">
-                        Sol.
-                      </span>
-                      <span
-                        className={cn(
-                          "text-xs font-semibold tabular-nums",
-                          activeMetric === "solicitudes" ? "text-sky-700" : "text-neutral-700"
-                        )}
-                      >
-                        {formatNumber(adv.solicitudes)}
-                      </span>
-                    </div>
+                    <span className="text-xs font-bold font-mono text-neutral-900 tracking-tight leading-tight mt-0.5">
+                      {formatNumber(activePieItem ? activePieItem.value : totalMetricAdvisors)}
+                    </span>
+                    <span className="text-[9px] font-sans text-neutral-500 truncate max-w-[70px] leading-tight">
+                      {activePieItem ? formatProperCase(activePieItem.name) : "Asesores"}
+                    </span>
                   </div>
                 </div>
-              );
-            })
-          )}
-        </div>
+
+                {/* Leyenda interactiva con porcentajes sobre el total */}
+                <div className="divide-y divide-neutral-100/70 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden max-h-[140px] pr-1 flex-1 mt-1 text-xs font-mono">
+                  {pieChartData.map((item, idx) => {
+                    const isSelected = selectedAdvisor && normKey(selectedAdvisor) === item.normName;
+                    const isHovered = hoveredPieIndex === idx;
+
+                    return (
+                      <div
+                        key={item.normName}
+                        onClick={() => {
+                          if (item.normName !== "__OTROS__" && onSelectAdvisor) {
+                            onSelectAdvisor(item.name);
+                          }
+                        }}
+                        onMouseEnter={() => setHoveredPieIndex(idx)}
+                        onMouseLeave={() => setHoveredPieIndex(null)}
+                        className={cn(
+                          "flex items-center justify-between py-1 px-1 transition-colors text-xs cursor-pointer rounded",
+                          isHovered
+                            ? "bg-neutral-100/80 font-medium"
+                            : isSelected
+                            ? "bg-neutral-100/80 font-semibold"
+                            : "hover:bg-neutral-50/70"
+                        )}
+                        title={
+                          item.normName !== "__OTROS__"
+                            ? `Filtrar por ${item.name} (${item.value} inst. • ${item.percentage}% del total)`
+                            : `${item.value} inst. acumuladas en otros asesores`
+                        }
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0 transition-transform"
+                            style={{
+                              backgroundColor: DONUT_COLORS[idx % DONUT_COLORS.length],
+                              transform: isHovered ? "scale(1.25)" : "scale(1)",
+                            }}
+                          />
+                          <span className="truncate font-medium text-neutral-900">
+                            {item.name}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 font-mono text-right">
+                          <span className="text-[11px] text-neutral-400 tabular-nums">
+                            {formatNumber(item.value)}
+                          </span>
+                          <span className="text-neutral-900 font-bold tabular-nums min-w-[38px] text-right">
+                            {item.percentage}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          /* VISTA LISTA: Desglose completo de Personal */
+          <div className="divide-y divide-neutral-100/70 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden max-h-[220px] sm:max-h-[240px] pr-1 flex-1 mt-1 text-xs font-mono">
+            {advisorBreakdown.length === 0 ? (
+              <div className="py-8 text-center text-xs text-neutral-400 font-mono">
+                No se encontró personal en esta categoría o filtro
+              </div>
+            ) : (
+              advisorBreakdown.map((adv, idx) => {
+                const isSelected = selectedAdvisor && normKey(selectedAdvisor) === adv.normName;
+
+                return (
+                  <div
+                    key={adv.normName}
+                    onClick={() => {
+                      if (onSelectAdvisor) {
+                        onSelectAdvisor(adv.name);
+                      }
+                    }}
+                    className={cn(
+                      "group flex items-center justify-between py-1.5 text-xs transition-colors px-1 cursor-pointer rounded",
+                      isSelected ? "bg-neutral-100/80 font-medium" : "hover:bg-neutral-50/70"
+                    )}
+                  >
+                    <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 pr-2">
+                      <span className="text-[10px] font-mono text-neutral-400 w-4 shrink-0">
+                        {String(idx + 1).padStart(2, "0")}
+                      </span>
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className={cn(
+                              "truncate font-medium",
+                              isSelected ? "font-bold text-neutral-950" : "text-neutral-900"
+                            )}
+                          >
+                            {adv.name}
+                          </span>
+                          {adv.isEx && (
+                            <span className="text-[9px] font-mono text-neutral-400 shrink-0">
+                              · Ex
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-neutral-400 font-mono truncate">
+                          {adv.isActiveCommercial
+                            ? "Asesor comercial activo"
+                            : adv.sede && adv.sede !== "N/A" && adv.sede !== "OTROS"
+                            ? `Sede: ${adv.sede}`
+                            : adv.tipoLabel}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0 font-mono text-right">
+                      <div className="text-right min-w-[36px]">
+                        <span className="text-[9px] text-neutral-400 block font-sans leading-tight">
+                          Inst.
+                        </span>
+                        <span
+                          className={cn(
+                            "text-xs font-semibold tabular-nums",
+                            activeMetric === "instalaciones" ? "text-emerald-700" : "text-neutral-700"
+                          )}
+                        >
+                          {formatNumber(adv.instalaciones)}
+                        </span>
+                      </div>
+
+                      <div className="text-right min-w-[36px]">
+                        <span className="text-[9px] text-neutral-400 block font-sans leading-tight">
+                          Sol.
+                        </span>
+                        <span
+                          className={cn(
+                            "text-xs font-semibold tabular-nums",
+                            activeMetric === "solicitudes" ? "text-sky-700" : "text-neutral-700"
+                          )}
+                        >
+                          {formatNumber(adv.solicitudes)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
       <div className="pt-2.5 border-t border-neutral-100 text-[11px] font-mono text-neutral-500 mt-2 flex items-center justify-between">
         <span>Total: {advisorBreakdown.length} integrantes</span>
-        <span className="text-neutral-900 font-bold">Promedio: {avgInstalaciones} inst.</span>
+        {viewMode === "torta" ? (
+          <span className="text-neutral-900 font-bold">
+            Cuota: {pctRepresented}% ({formatNumber(totalMetricAdvisors)} {activeMetric === "instalaciones" ? "inst." : "sol."})
+          </span>
+        ) : (
+          <span className="text-neutral-900 font-bold">Promedio: {avgInstalaciones} inst.</span>
+        )}
       </div>
     </div>
   );
