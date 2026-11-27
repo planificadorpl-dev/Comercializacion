@@ -39,8 +39,10 @@ credentials*.json
 database_backup/
 .mcp.json
 
-# vercel
+# vercel & cloudflare
 .vercel
+.wrangler/
+/.open-next/
 
 # typescript
 *.tsbuildinfo

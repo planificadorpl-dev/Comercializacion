@@ -1,19 +1,38 @@
 import { Pool, PoolClient, PoolConfig } from "pg";
+import { getRuntimeEnv, isCloudflareWorkers } from "@/lib/runtime-env";
 
 /**
- * PostgreSQL Client and Connection Pool for Vercel Serverless & Supabase Cloud.
+ * PostgreSQL Client and Connection Pool for Vercel Serverless, Cloudflare Workers & Supabase Cloud.
  * Configured via process.env.DATABASE_URL.
  */
 
 declare global {
   var __pgPool: Pool | undefined;
+  var __pgWorkerFailure: { message: string; until: number } | undefined;
+}
+
+function getConnectionString(): string | undefined {
+  const cfCtx = (globalThis as any)[Symbol.for("__cloudflare-context__")];
+  const hyperdriveUrl = cfCtx?.env?.HYPERDRIVE?.connectionString;
+  if (typeof hyperdriveUrl === "string" && hyperdriveUrl.trim() !== "") {
+    return hyperdriveUrl;
+  }
+  return getRuntimeEnv("DATABASE_URL") || getRuntimeEnv("POSTGRES_URL");
+}
+
+function isWorkerTransportError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("unknownissuer") ||
+    lower.includes("tls handshake failed") ||
+    lower.includes("internal error") ||
+    lower.includes("econnrefused") ||
+    lower.includes("timeout")
+  );
 }
 
 export function isDatabaseConfigured(): boolean {
-  return Boolean(
-    (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== "") ||
-    (process.env.POSTGRES_URL && process.env.POSTGRES_URL.trim() !== "")
-  );
+  return Boolean(getConnectionString());
 }
 
 export function getPool(): Pool {
@@ -22,22 +41,23 @@ export function getPool(): Pool {
   }
 
   const connectionString =
-    process.env.DATABASE_URL ||
-    process.env.POSTGRES_URL ||
+    getConnectionString() ||
     "postgresql://postgres:postgres@localhost:5432/ventas_intranet";
 
   const isLocalhost =
     connectionString.includes("localhost") ||
     connectionString.includes("127.0.0.1");
 
+  const inWorkers = isCloudflareWorkers();
+
   const poolConfig: PoolConfig = {
     connectionString,
     // Supabase and cloud PostgreSQL require SSL
     ssl: isLocalhost ? false : { rejectUnauthorized: false },
-    // Optimized for Vercel serverless functions and Supabase pooler
-    max: process.env.NODE_ENV === "production" ? 10 : 20,
+    // Optimized for Vercel serverless functions, Workers and Supabase pooler
+    max: inWorkers ? 3 : process.env.NODE_ENV === "production" ? 10 : 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: inWorkers ? 3000 : 10000,
     statement_timeout: 8000, // Prevent serverless queries from hanging indefinitely
   };
 
@@ -55,15 +75,27 @@ export function getPool(): Pool {
  * Execute a parameterized SQL query returning an array of rows.
  */
 export async function query<T = any>(text: string, params: any[] = []): Promise<T[]> {
+  const inWorkers = isCloudflareWorkers();
+  if (inWorkers && globalThis.__pgWorkerFailure && Date.now() < globalThis.__pgWorkerFailure.until) {
+    throw new Error(globalThis.__pgWorkerFailure.message);
+  }
+
   const p = getPool();
   try {
     const result = await p.query(text, params);
     return (result.rows as T[]) || [];
   } catch (error: any) {
+    const msg = error?.message || String(error);
+    if (inWorkers && isWorkerTransportError(msg)) {
+      globalThis.__pgWorkerFailure = {
+        message: msg,
+        until: Date.now() + 60_000,
+      };
+    }
     console.error("Error ejecutando consulta PostgreSQL:", {
       text,
       params,
-      message: error.message,
+      message: msg,
     });
     throw error;
   }

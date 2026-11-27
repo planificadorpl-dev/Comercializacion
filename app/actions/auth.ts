@@ -2,11 +2,12 @@
 
 import fs from "fs/promises";
 import path from "path";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { query, queryRow } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
+import { getRuntimeEnv, isCloudflareWorkers } from "@/lib/runtime-env";
 
 export type AppUserRole = "admin" | "supervisor" | "impulsador" | "asesor";
 
@@ -33,7 +34,15 @@ interface StoredUser extends AppUser {
 const USERS_FILE_PATH = path.join(process.cwd(), "data", "users.json");
 const SESSION_COOKIE_NAME = "ventas_auth_session";
 const IMPERSONATOR_COOKIE_NAME = "ventas_auth_impersonator";
-const SESSION_SECRET = process.env.AUTH_SECRET || "powerlink-super-secure-auth-secret-key-2026";
+const DEFAULT_SESSION_SECRET = "powerlink-super-secure-auth-secret-key-2026";
+
+function getSessionSecret(): string {
+  return getRuntimeEnv("AUTH_SECRET") || DEFAULT_SESSION_SECRET;
+}
+
+function isCookieSecure(): boolean {
+  return getRuntimeEnv("COOKIE_SECURE") === "true";
+}
 
 function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString("hex");
@@ -53,7 +62,7 @@ function verifyPassword(password: string, storedHash: string): boolean {
 }
 
 function signSession(userId: string): string {
-  const hmac = crypto.createHmac("sha256", SESSION_SECRET).update(userId).digest("hex");
+  const hmac = crypto.createHmac("sha256", getSessionSecret()).update(userId).digest("hex");
   return `${userId}.${hmac}`;
 }
 
@@ -62,7 +71,7 @@ function verifySession(token: string): string | null {
     const parts = token.split(".");
     if (parts.length !== 2) return null;
     const [userId, hmac] = parts;
-    const expected = crypto.createHmac("sha256", SESSION_SECRET).update(userId).digest("hex");
+    const expected = crypto.createHmac("sha256", getSessionSecret()).update(userId).digest("hex");
     if (hmac !== expected) return null;
     return userId;
   } catch {
@@ -128,7 +137,7 @@ async function readUsersLocal(): Promise<StoredUser[]> {
 }
 
 async function writeUsersLocal(users: StoredUser[]): Promise<void> {
-  if (process.env.VERCEL) return;
+  if (process.env.VERCEL || isCloudflareWorkers()) return;
   try {
     await fs.mkdir(path.dirname(USERS_FILE_PATH), { recursive: true });
     await fs.writeFile(USERS_FILE_PATH, JSON.stringify(users, null, 2), "utf-8");
@@ -137,25 +146,30 @@ async function writeUsersLocal(users: StoredUser[]): Promise<void> {
   }
 }
 
-// ─── DATA RETRIEVAL (POSTGRESQL FIRST, SUPABASE/LOCAL FALLBACK) ───────────
+// ─── DATA RETRIEVAL (POSTGRESQL / SUPABASE / LOCAL FALLBACK) ───────────────
 
-async function readUsers(): Promise<StoredUser[]> {
-  // 1. Try Native PostgreSQL First
+async function loadUsersFromPostgres(skipDdl = false): Promise<{ users: StoredUser[]; error?: string }> {
   try {
-    try {
-      await query("ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS custom_access BOOLEAN DEFAULT false;");
-      await query("ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS allowed_modules TEXT[];");
-    } catch {}
+    if (!skipDdl) {
+      try {
+        await query("ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS custom_access BOOLEAN DEFAULT false;");
+        await query("ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS allowed_modules TEXT[];");
+      } catch {}
+    }
 
     const rows = await query("SELECT * FROM public.usuarios ORDER BY created_at ASC");
     if (Array.isArray(rows) && rows.length > 0) {
       const parsed = rows.map(rowToStoredUser);
       writeUsersLocal(parsed).catch(() => {});
-      return parsed;
+      return { users: parsed };
     }
-  } catch (pgErr) {}
+    return { users: [], error: "tabla public.usuarios vacía en PostgreSQL" };
+  } catch (err: any) {
+    return { users: [], error: err?.message || String(err) };
+  }
+}
 
-  // 2. Try Supabase fallback
+async function loadUsersFromSupabase(): Promise<{ users: StoredUser[]; error?: string }> {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -163,16 +177,55 @@ async function readUsers(): Promise<StoredUser[]> {
       .select("*")
       .order("created_at", { ascending: true });
 
-    if (!error && Array.isArray(data) && data.length > 0) {
+    if (error) {
+      return { users: [], error: error.message || "error de consulta en Supabase" };
+    }
+    if (Array.isArray(data) && data.length > 0) {
       const parsed = data.map(rowToStoredUser);
       writeUsersLocal(parsed).catch(() => {});
-      return parsed;
+      return { users: parsed };
     }
-  } catch (err) {
+    return { users: [], error: "tabla usuarios vacía en Supabase" };
+  } catch (err: any) {
     console.warn("Supabase read failed, reading from local cache:", err);
+    return { users: [], error: err?.message || String(err) };
+  }
+}
+
+async function readUsersWithDiagnostics(): Promise<{
+  users: StoredUser[];
+  pgError?: string;
+  supaError?: string;
+}> {
+  let pgError: string | undefined;
+  let supaError: string | undefined;
+
+  if (isCloudflareWorkers()) {
+    // In Cloudflare Workers, Supabase HTTPS REST works natively and fast without raw TCP TLS issues
+    const supaRes = await loadUsersFromSupabase();
+    if (supaRes.users.length > 0) return { users: supaRes.users };
+    supaError = supaRes.error;
+
+    const pgRes = await loadUsersFromPostgres(true);
+    if (pgRes.users.length > 0) return { users: pgRes.users, supaError };
+    pgError = pgRes.error;
+  } else {
+    const pgRes = await loadUsersFromPostgres(false);
+    if (pgRes.users.length > 0) return { users: pgRes.users };
+    pgError = pgRes.error;
+
+    const supaRes = await loadUsersFromSupabase();
+    if (supaRes.users.length > 0) return { users: supaRes.users, pgError };
+    supaError = supaRes.error;
   }
 
-  return readUsersLocal();
+  const localUsers = await readUsersLocal();
+  return { users: localUsers, pgError, supaError };
+}
+
+async function readUsers(): Promise<StoredUser[]> {
+  const { users } = await readUsersWithDiagnostics();
+  return users;
 }
 
 // ─── AUTHENTICATION ACTIONS ───────────────────────────────────────────────
@@ -183,7 +236,17 @@ export async function loginUser(credentials: {
 }): Promise<{ success: boolean; user?: AppUser; error?: string }> {
   try {
     const cleanIdentifier = credentials.emailOrUsername.toLowerCase().trim();
-    const users = await readUsers();
+    const { users, pgError, supaError } = await readUsersWithDiagnostics();
+
+    if (users.length === 0) {
+      const supaUrlSet = Boolean(
+        getRuntimeEnv("NEXT_PUBLIC_SUPABASE_URL") || getRuntimeEnv("SUPABASE_URL")
+      );
+      return {
+        success: false,
+        error: `No se pudo cargar la base de datos de usuarios (${supaUrlSet ? `Supabase: ${supaError || "sin datos"}` : "falta NEXT_PUBLIC_SUPABASE_URL en Runtime"}; PG: ${pgError || "no disponible"}).`,
+      };
+    }
 
     const user = users.find((u) => {
       const email = u.email.toLowerCase().trim();
@@ -219,28 +282,28 @@ export async function loginUser(credentials: {
 
     // Update lastLogin
     user.lastLogin = new Date().toISOString();
+    const inWorkers = isCloudflareWorkers();
 
-    // 1. Update in PostgreSQL
-    try {
-      await query("UPDATE public.usuarios SET last_login = NOW() WHERE id = $1", [user.id]);
-    } catch {}
+    if (!inWorkers) {
+      try {
+        await query("UPDATE public.usuarios SET last_login = NOW() WHERE id = $1", [user.id]);
+      } catch {}
+    }
 
-    // 2. Update in Supabase
     try {
       const supabase = await createClient();
       await supabase
         .from("usuarios")
         .update({ last_login: user.lastLogin })
         .eq("id", user.id);
-    } catch (e) {}
+    } catch {}
 
-    // 3. Update local cache
     await writeUsersLocal(users);
 
     // Set signed HTTP-only cookie
     const token = signSession(user.id);
     const cookieStore = await cookies();
-    const isExplicitSecure = process.env.COOKIE_SECURE === "true";
+    const isExplicitSecure = isCookieSecure();
     cookieStore.set(SESSION_COOKIE_NAME, token, {
       httpOnly: true,
       secure: isExplicitSecure, // Crucial: must be false on HTTP / LAN IP (http://192.168.x.x:3001) so mobile browsers don't discard it
@@ -275,6 +338,37 @@ export async function logoutUser(): Promise<{ success: boolean }> {
   }
 }
 
+async function findActiveUserById(userId: string): Promise<AppUser | null> {
+  const fromPostgres = async () => {
+    try {
+      const row = await queryRow("SELECT * FROM public.usuarios WHERE id = $1 AND activo = true", [userId]);
+      return row ? sanitizeUser(rowToStoredUser(row)) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const fromSupabase = async () => {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("usuarios")
+        .select("*")
+        .eq("id", userId)
+        .eq("activo", true)
+        .single();
+      return !error && data ? sanitizeUser(rowToStoredUser(data)) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  if (isCloudflareWorkers()) {
+    return (await fromSupabase()) || (await fromPostgres());
+  }
+  return (await fromPostgres()) || (await fromSupabase());
+}
+
 export async function getCurrentSessionUser(): Promise<AppUser | null> {
   try {
     const cookieStore = await cookies();
@@ -284,34 +378,9 @@ export async function getCurrentSessionUser(): Promise<AppUser | null> {
     const userId = verifySession(token);
     if (!userId) return null;
 
-    let targetUser: AppUser | null = null;
+    let targetUser: AppUser | null = await findActiveUserById(userId);
 
-    // 1. Try PostgreSQL first
-    try {
-      const row = await queryRow("SELECT * FROM public.usuarios WHERE id = $1 AND activo = true", [userId]);
-      if (row) {
-        targetUser = sanitizeUser(rowToStoredUser(row));
-      }
-    } catch {}
-
-    // 2. Try Supabase
-    if (!targetUser) {
-      try {
-        const supabase = await createClient();
-        const { data, error } = await supabase
-          .from("usuarios")
-          .select("*")
-          .eq("id", userId)
-          .eq("activo", true)
-          .single();
-
-        if (!error && data) {
-          targetUser = sanitizeUser(rowToStoredUser(data));
-        }
-      } catch {}
-    }
-
-    // 3. Fallback to local cache
+    // Fallback to local cache
     if (!targetUser) {
       const users = await readUsersLocal();
       const user = users.find((u) => u.id === userId && u.activo);
@@ -329,13 +398,10 @@ export async function getCurrentSessionUser(): Promise<AppUser | null> {
       if (adminId) {
         targetUser.isImpersonated = true;
         targetUser.impersonatorAdminId = adminId;
-        // Lookup admin name
-        try {
-          const adminRow = await queryRow("SELECT nombre FROM public.usuarios WHERE id = $1", [adminId]);
-          if (adminRow?.nombre) {
-            targetUser.impersonatorAdminName = adminRow.nombre;
-          }
-        } catch {}
+        const adminUser = await findActiveUserById(adminId);
+        if (adminUser?.nombre) {
+          targetUser.impersonatorAdminName = adminUser.nombre;
+        }
       }
     }
 
@@ -383,7 +449,7 @@ export async function impersonateUser(targetUserId: string): Promise<{
       return { success: false, error: "Este usuario se encuentra inactivo" };
     }
 
-    const isExplicitSecure = process.env.COOKIE_SECURE === "true";
+    const isExplicitSecure = isCookieSecure();
 
     // Store real admin in impersonator cookie
     cookieStore.set(IMPERSONATOR_COOKIE_NAME, signSession(adminUser.id), {
@@ -440,7 +506,7 @@ export async function stopImpersonation(): Promise<{
       return { success: false, error: "Usuario administrador no encontrado" };
     }
 
-    const isExplicitSecure = process.env.COOKIE_SECURE === "true";
+    const isExplicitSecure = isCookieSecure();
 
     // Restore session cookie to admin
     cookieStore.set(SESSION_COOKIE_NAME, signSession(adminUser.id), {
