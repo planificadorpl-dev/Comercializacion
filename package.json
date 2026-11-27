@@ -36,7 +36,7 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^1.54.0",
     "motion": "^14.0.0",
-    "next": "^16.4.3",
+    "next": "^16.4.6",
     "pg": "^8.23.1",
     "postcss": "^8.5.29",
     "react": "19.3.0",
@@ -54,7 +54,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "19.3.0",
     "eslint": "^9",
-    "eslint-config-next": "^16.4.3",
+    "eslint-config-next": "^16.4.6",
     "tailwindcss": "^4",
     "wrangler": "^4.169.0"
   }
