@@ -11,6 +11,7 @@
     "binding": "ASSETS"
   },
   "upload_source_maps": false,
+  "keep_vars": true,
   "observability": {
     "enabled": true
   }
