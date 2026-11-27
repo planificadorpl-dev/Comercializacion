@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "comercializacion",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-11-27",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "upload_source_maps": false,
+  "observability": {
+    "enabled": true
+  }
+}
