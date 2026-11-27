@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { query } from "@/lib/db";
 import { createClient } from "@/lib/supabase/server";
+import { isCloudflareWorkers } from "@/lib/runtime-env";
 import {
   SystemModule,
   DEFAULT_SYSTEM_MODULES,
@@ -34,7 +35,7 @@ export async function readModulesLocal(): Promise<SystemModule[]> {
 }
 
 export async function writeModulesLocal(modules: SystemModule[]): Promise<void> {
-  if (process.env.VERCEL) return;
+  if (process.env.VERCEL || isCloudflareWorkers()) return;
   try {
     await fs.mkdir(path.dirname(MODULES_FILE_PATH), { recursive: true });
     await fs.writeFile(MODULES_FILE_PATH, JSON.stringify(modules, null, 2), "utf-8");
@@ -43,8 +44,28 @@ export async function writeModulesLocal(modules: SystemModule[]): Promise<void> 
   }
 }
 
-export async function fetchAllModules(): Promise<{ success: boolean; modules: SystemModule[]; error?: string }> {
-  // 1. Try Native PostgreSQL First
+function mergeModuleRows(rows: any[]): SystemModule[] {
+  return DEFAULT_SYSTEM_MODULES.map((def) => {
+    const row = rows.find((r: any) => r.id === def.id);
+    if (!row) return def;
+    const roles =
+      Array.isArray(row.target_roles) && row.target_roles.length > 0
+        ? (row.target_roles as AppUserRole[])
+        : def.targetRoles;
+    return {
+      ...def,
+      targetRoles: roles,
+      enabledForUsers:
+        row.enabled_for_users !== undefined
+          ? Boolean(row.enabled_for_users)
+          : def.enabledForUsers,
+      updatedAt: row.updated_at || def.updatedAt,
+      updatedBy: row.updated_by || undefined,
+    };
+  });
+}
+
+async function fetchModulesFromPostgres(): Promise<SystemModule[] | null> {
   try {
     try {
       await query("ALTER TABLE public.configuracion_modulos ADD COLUMN IF NOT EXISTS target_roles text[];");
@@ -59,30 +80,13 @@ export async function fetchAllModules(): Promise<{ success: boolean; modules: Sy
     }>("SELECT id, enabled_for_users, target_roles, updated_at, updated_by FROM public.configuracion_modulos ORDER BY id ASC");
 
     if (Array.isArray(rows) && rows.length > 0) {
-      const merged = DEFAULT_SYSTEM_MODULES.map((def) => {
-        const row = rows.find((r) => r.id === def.id);
-        if (row) {
-          const roles = Array.isArray(row.target_roles) && row.target_roles.length > 0
-            ? (row.target_roles as AppUserRole[])
-            : def.targetRoles;
-          return {
-            ...def,
-            targetRoles: roles,
-            enabledForUsers: row.enabled_for_users !== undefined ? Boolean(row.enabled_for_users) : def.enabledForUsers,
-            updatedAt: row.updated_at || def.updatedAt,
-            updatedBy: row.updated_by || undefined,
-          };
-        }
-        return def;
-      });
-      writeModulesLocal(merged).catch(() => {});
-      return { success: true, modules: merged };
+      return mergeModuleRows(rows);
     }
-  } catch {
-    // Fallback if Postgres not yet reachable
-  }
+  } catch {}
+  return null;
+}
 
-  // 2. Try Supabase fallback
+async function fetchModulesFromSupabase(): Promise<SystemModule[] | null> {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -91,27 +95,20 @@ export async function fetchAllModules(): Promise<{ success: boolean; modules: Sy
       .order("id", { ascending: true });
 
     if (!error && Array.isArray(data) && data.length > 0) {
-      const merged = DEFAULT_SYSTEM_MODULES.map((def) => {
-        const row = data.find((r: any) => r.id === def.id);
-        if (row) {
-          const roles = Array.isArray(row.target_roles) && row.target_roles.length > 0
-            ? (row.target_roles as AppUserRole[])
-            : def.targetRoles;
-          return {
-            ...def,
-            targetRoles: roles,
-            enabledForUsers: row.enabled_for_users !== undefined ? Boolean(row.enabled_for_users) : def.enabledForUsers,
-            updatedAt: row.updated_at || def.updatedAt,
-            updatedBy: row.updated_by || undefined,
-          };
-        }
-        return def;
-      });
-      writeModulesLocal(merged).catch(() => {});
-      return { success: true, modules: merged };
+      return mergeModuleRows(data);
     }
-  } catch {
-    // Graceful fallback to local
+  } catch {}
+  return null;
+}
+
+export async function fetchAllModules(): Promise<{ success: boolean; modules: SystemModule[]; error?: string }> {
+  const merged = isCloudflareWorkers()
+    ? (await fetchModulesFromSupabase()) || (await fetchModulesFromPostgres())
+    : (await fetchModulesFromPostgres()) || (await fetchModulesFromSupabase());
+
+  if (merged) {
+    writeModulesLocal(merged).catch(() => {});
+    return { success: true, modules: merged };
   }
 
   const local = await readModulesLocal();

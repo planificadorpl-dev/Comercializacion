@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { query } from "@/lib/db";
+import { createClient } from "@/lib/supabase/server";
+import { isCloudflareWorkers } from "@/lib/runtime-env";
 import {
   EvaluacionRecord,
   EvaluacionItemState,
@@ -46,21 +48,51 @@ async function getAvailableAdvisors(): Promise<string[]> {
     return cachedActiveAdvisors.advisors;
   }
 
-  // 1. Try PostgreSQL asesores_config
-  try {
-    const rows = await query<{ nombre: string }>(
-      "SELECT nombre FROM public.asesores_config WHERE activo = true ORDER BY nombre ASC"
-    );
-    if (rows && rows.length > 0) {
-      const list = rows
-        .map((r) => r.nombre.trim())
-        .filter((n) => n && n.toLowerCase() !== "planificación" && n.toLowerCase() !== "planificacion");
-      if (list.length > 0) {
-        cachedActiveAdvisors = { advisors: list, timestamp: now };
-        return list;
-      }
+  const filterActiveNames = (rows: { nombre: string }[]) =>
+    rows
+      .map((r) => (r.nombre || "").trim())
+      .filter((n) => n && n.toLowerCase() !== "planificación" && n.toLowerCase() !== "planificacion");
+
+  // 1. Try Supabase / PostgreSQL asesores_config
+  const loadAdvisorsPg = async () => {
+    try {
+      const rows = await query<{ nombre: string }>(
+        "SELECT nombre FROM public.asesores_config WHERE activo = true ORDER BY nombre ASC"
+      );
+      return rows ? filterActiveNames(rows) : [];
+    } catch {
+      return [];
     }
-  } catch (pgErr) {}
+  };
+
+  const loadAdvisorsSupabase = async () => {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("asesores_config")
+        .select("nombre")
+        .eq("activo", true)
+        .order("nombre", { ascending: true });
+      return !error && Array.isArray(data) ? filterActiveNames(data) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const primaryAdvisors = isCloudflareWorkers()
+    ? await loadAdvisorsSupabase()
+    : await loadAdvisorsPg();
+  const dbList =
+    primaryAdvisors.length > 0
+      ? primaryAdvisors
+      : isCloudflareWorkers()
+      ? await loadAdvisorsPg()
+      : await loadAdvisorsSupabase();
+
+  if (dbList.length > 0) {
+    cachedActiveAdvisors = { advisors: dbList, timestamp: now };
+    return dbList;
+  }
 
   // 2. Try Google Sheets
   try {
@@ -286,62 +318,96 @@ export async function POST(request: Request) {
       updatedAt: nowIso,
     };
 
-    // 1. Guardar en PostgreSQL
+    // 1. Guardar en PostgreSQL (en Workers omitimos si falla rápido) y Supabase
     let pgSaved = false;
+    let supaSaved = false;
+
+    if (!isCloudflareWorkers()) {
+      try {
+        await query(
+          `INSERT INTO public.evaluaciones (
+             id, asesor, evaluador, evaluador_rol, frecuencia, fecha, estado, municipio, parroquia, sector,
+             items, observaciones_generales, cumplimiento_pct, puntuacion_total, puntuacion_maxima,
+             puntuacion_promedio, items_cumplidos, items_total, factor_scores, created_at, updated_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+           ON CONFLICT (id) DO UPDATE SET
+             asesor = EXCLUDED.asesor,
+             evaluador = EXCLUDED.evaluador,
+             evaluador_rol = EXCLUDED.evaluador_rol,
+             frecuencia = EXCLUDED.frecuencia,
+             fecha = EXCLUDED.fecha,
+             estado = EXCLUDED.estado,
+             municipio = EXCLUDED.municipio,
+             parroquia = EXCLUDED.parroquia,
+             sector = EXCLUDED.sector,
+             items = EXCLUDED.items,
+             observaciones_generales = EXCLUDED.observaciones_generales,
+             cumplimiento_pct = EXCLUDED.cumplimiento_pct,
+             puntuacion_total = EXCLUDED.puntuacion_total,
+             puntuacion_maxima = EXCLUDED.puntuacion_maxima,
+             puntuacion_promedio = EXCLUDED.puntuacion_promedio,
+             items_cumplidos = EXCLUDED.items_cumplidos,
+             items_total = EXCLUDED.items_total,
+             factor_scores = EXCLUDED.factor_scores,
+             updated_at = NOW()`,
+          [
+            record.id,
+            record.asesor,
+            record.evaluador,
+            record.evaluadorRol,
+            record.frecuencia,
+            record.fecha,
+            record.estado,
+            record.municipio,
+            record.parroquia,
+            record.sector,
+            JSON.stringify(record.items),
+            record.observacionesGenerales,
+            record.cumplimientoPct,
+            record.puntuacionTotal,
+            record.puntuacionMaxima,
+            record.puntuacionPromedio,
+            record.itemsCumplidos,
+            record.itemsTotal,
+            JSON.stringify(record.factorScores),
+            record.createdAt,
+            record.updatedAt,
+          ]
+        );
+        pgSaved = true;
+      } catch (pgErr) {
+        console.warn("Postgres save evaluacion aviso:", pgErr);
+      }
+    }
+
     try {
-      await query(
-        `INSERT INTO public.evaluaciones (
-           id, asesor, evaluador, evaluador_rol, frecuencia, fecha, estado, municipio, parroquia, sector,
-           items, observaciones_generales, cumplimiento_pct, puntuacion_total, puntuacion_maxima,
-           puntuacion_promedio, items_cumplidos, items_total, factor_scores, created_at, updated_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-         ON CONFLICT (id) DO UPDATE SET
-           asesor = EXCLUDED.asesor,
-           evaluador = EXCLUDED.evaluador,
-           evaluador_rol = EXCLUDED.evaluador_rol,
-           frecuencia = EXCLUDED.frecuencia,
-           fecha = EXCLUDED.fecha,
-           estado = EXCLUDED.estado,
-           municipio = EXCLUDED.municipio,
-           parroquia = EXCLUDED.parroquia,
-           sector = EXCLUDED.sector,
-           items = EXCLUDED.items,
-           observaciones_generales = EXCLUDED.observaciones_generales,
-           cumplimiento_pct = EXCLUDED.cumplimiento_pct,
-           puntuacion_total = EXCLUDED.puntuacion_total,
-           puntuacion_maxima = EXCLUDED.puntuacion_maxima,
-           puntuacion_promedio = EXCLUDED.puntuacion_promedio,
-           items_cumplidos = EXCLUDED.items_cumplidos,
-           items_total = EXCLUDED.items_total,
-           factor_scores = EXCLUDED.factor_scores,
-           updated_at = NOW()`,
-        [
-          record.id,
-          record.asesor,
-          record.evaluador,
-          record.evaluadorRol,
-          record.frecuencia,
-          record.fecha,
-          record.estado,
-          record.municipio,
-          record.parroquia,
-          record.sector,
-          JSON.stringify(record.items),
-          record.observacionesGenerales,
-          record.cumplimientoPct,
-          record.puntuacionTotal,
-          record.puntuacionMaxima,
-          record.puntuacionPromedio,
-          record.itemsCumplidos,
-          record.itemsTotal,
-          JSON.stringify(record.factorScores),
-          record.createdAt,
-          record.updatedAt,
-        ]
-      );
-      pgSaved = true;
-    } catch (pgErr) {
-      console.warn("Postgres save evaluacion aviso:", pgErr);
+      const supabase = await createClient();
+      const { error } = await supabase.from("evaluaciones").upsert({
+        id: record.id,
+        asesor: record.asesor,
+        evaluador: record.evaluador,
+        evaluador_rol: record.evaluadorRol,
+        frecuencia: record.frecuencia,
+        fecha: record.fecha,
+        estado: record.estado,
+        municipio: record.municipio,
+        parroquia: record.parroquia,
+        sector: record.sector,
+        items: record.items,
+        observaciones_generales: record.observacionesGenerales,
+        cumplimiento_pct: record.cumplimientoPct,
+        puntuacion_total: record.puntuacionTotal,
+        puntuacion_maxima: record.puntuacionMaxima,
+        puntuacion_promedio: record.puntuacionPromedio,
+        items_cumplidos: record.itemsCumplidos,
+        items_total: record.itemsTotal,
+        factor_scores: record.factorScores,
+        created_at: record.createdAt,
+        updated_at: record.updatedAt,
+      });
+      if (!error) supaSaved = true;
+    } catch (supaErr) {
+      console.warn("Supabase save evaluacion aviso:", supaErr);
     }
 
     // 2. Guardar en JSON local para mirror
@@ -355,7 +421,7 @@ export async function POST(request: Request) {
     }
     const localSaved = await writeEvaluacionesLocal(list);
 
-    if (!pgSaved && !localSaved) {
+    if (!pgSaved && !supaSaved && !localSaved) {
       return NextResponse.json(
         { success: false, error: "No se pudo guardar la evaluación" },
         { status: 500 }
@@ -395,10 +461,17 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // 1. Eliminar de PostgreSQL
+    // 1. Eliminar de PostgreSQL y Supabase
+    if (!isCloudflareWorkers()) {
+      try {
+        await query("DELETE FROM public.evaluaciones WHERE id = $1", [id]);
+      } catch (pgErr) {}
+    }
+
     try {
-      await query("DELETE FROM public.evaluaciones WHERE id = $1", [id]);
-    } catch (pgErr) {}
+      const supabase = await createClient();
+      await supabase.from("evaluaciones").delete().eq("id", id);
+    } catch (supaErr) {}
 
     // 2. Eliminar de copia local
     let list = await readEvaluacionesLocal();

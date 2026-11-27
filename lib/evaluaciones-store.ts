@@ -1,6 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { query } from "@/lib/db";
+import { createClient } from "@/lib/supabase/server";
+import { isCloudflareWorkers } from "@/lib/runtime-env";
 import { EvaluacionRecord } from "@/lib/evaluaciones-data";
 
 export const EVALUACIONES_FILE_PATH = path.join(process.cwd(), "data", "evaluaciones.json");
@@ -28,7 +30,7 @@ export async function readEvaluacionesLocal(): Promise<EvaluacionRecord[]> {
 }
 
 export async function writeEvaluacionesLocal(evaluaciones: EvaluacionRecord[]): Promise<boolean> {
-  if (process.env.VERCEL) return true;
+  if (process.env.VERCEL || isCloudflareWorkers()) return true;
   try {
     await ensureDirectory();
     await fs.writeFile(
@@ -42,8 +44,33 @@ export async function writeEvaluacionesLocal(evaluaciones: EvaluacionRecord[]): 
   }
 }
 
-export async function readEvaluaciones(): Promise<EvaluacionRecord[]> {
-  // 1. Try Native PostgreSQL First
+function mapEvaluacionRow(r: any): EvaluacionRecord {
+  return {
+    id: r.id,
+    asesor: r.asesor,
+    evaluador: r.evaluador,
+    evaluadorRol: r.evaluadorRol ?? r.evaluador_rol,
+    frecuencia: r.frecuencia,
+    fecha: typeof r.fecha === "string" ? r.fecha.slice(0, 10) : String(r.fecha || ""),
+    estado: r.estado || "",
+    municipio: r.municipio || "",
+    parroquia: r.parroquia || "",
+    sector: r.sector || "",
+    items: r.items || {},
+    observacionesGenerales: r.observacionesGenerales ?? r.observaciones_generales ?? "",
+    cumplimientoPct: Number(r.cumplimientoPct ?? r.cumplimiento_pct ?? 0),
+    puntuacionTotal: Number(r.puntuacionTotal ?? r.puntuacion_total ?? 0),
+    puntuacionMaxima: Number(r.puntuacionMaxima ?? r.puntuacion_maxima ?? 0),
+    puntuacionPromedio: Number(r.puntuacionPromedio ?? r.puntuacion_promedio ?? 0),
+    itemsCumplidos: Number(r.itemsCumplidos ?? r.items_cumplidos ?? 0),
+    itemsTotal: Number(r.itemsTotal ?? r.items_total ?? 0),
+    factorScores: r.factorScores ?? r.factor_scores ?? {},
+    createdAt: r.createdAt ?? r.created_at,
+    updatedAt: r.updatedAt ?? r.updated_at,
+  };
+}
+
+async function readEvaluacionesFromPostgres(): Promise<EvaluacionRecord[] | null> {
   try {
     const rows = await query<any>(
       `SELECT id, asesor, evaluador, evaluador_rol as "evaluadorRol", frecuencia,
@@ -58,12 +85,38 @@ export async function readEvaluaciones(): Promise<EvaluacionRecord[]> {
     );
 
     if (Array.isArray(rows) && rows.length > 0) {
-      writeEvaluacionesLocal(rows).catch(() => {});
       return rows;
     }
-  } catch (pgErr) {}
+  } catch {}
+  return null;
+}
 
-  // 2. Fallback to local
+async function readEvaluacionesFromSupabase(): Promise<EvaluacionRecord[] | null> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("evaluaciones")
+      .select("*")
+      .order("fecha", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data.map(mapEvaluacionRow);
+    }
+  } catch {}
+  return null;
+}
+
+export async function readEvaluaciones(): Promise<EvaluacionRecord[]> {
+  const rows = isCloudflareWorkers()
+    ? (await readEvaluacionesFromSupabase()) || (await readEvaluacionesFromPostgres())
+    : (await readEvaluacionesFromPostgres()) || (await readEvaluacionesFromSupabase());
+
+  if (rows && rows.length > 0) {
+    writeEvaluacionesLocal(rows).catch(() => {});
+    return rows;
+  }
+
   return readEvaluacionesLocal();
 }
 

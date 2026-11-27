@@ -2,6 +2,8 @@ import { getSheetsClient } from "@/app/lib/googleAuth";
 import { geoHierarchy } from "@/lib/geo_hierarchy";
 import { normGeoKey } from "@/lib/geo_normalization";
 import { query, queryRow, isDatabaseConfigured } from "@/lib/db";
+import { createClient } from "@/lib/supabase/server";
+import { isCloudflareWorkers } from "@/lib/runtime-env";
 export * from "./planificacion-types";
 import {
   PLANIFICACION_SPREADSHEET_ID,
@@ -34,23 +36,60 @@ export function clearPlanningMetadataCache() {
  */
 async function fetchActiveAdvisors(): Promise<string[]> {
   const exSet = new Set<string>();
+  const inWorkers = isCloudflareWorkers();
 
-  // 1. Cargar overrides de ex-colaboradores prioritariamente desde PostgreSQL (personal_config)
-  if (isDatabaseConfigured()) {
+  const collectExFromOverrides = (overrides: Record<string, any> | undefined) => {
+    if (!overrides) return;
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v?.status === "ex" || v?.isExCollaborator === true) {
+        exSet.add(k.toLowerCase().trim());
+      }
+    }
+  };
+
+  // 1. Cargar overrides de ex-colaboradores (Supabase primero en Workers, PostgreSQL primero fuera de Workers)
+  let loadedOverrides = false;
+  if (inWorkers) {
+    try {
+      const supabase = await createClient();
+      const { data } = await supabase
+        .from("personal_config")
+        .select("data")
+        .eq("key", "main_config")
+        .limit(1)
+        .maybeSingle();
+      if (data?.data?.overrides) {
+        collectExFromOverrides(data.data.overrides);
+        loadedOverrides = true;
+      }
+    } catch {}
+  }
+
+  if (!loadedOverrides && isDatabaseConfigured()) {
     try {
       const pc = await queryRow<{ data: any }>(
         "SELECT data FROM public.personal_config WHERE key = 'main_config' LIMIT 1"
       );
       if (pc?.data?.overrides) {
-        for (const [k, v] of Object.entries(pc.data.overrides as Record<string, any>)) {
-          if (v?.status === "ex" || v?.isExCollaborator === true) {
-            exSet.add(k.toLowerCase().trim());
-          }
-        }
+        collectExFromOverrides(pc.data.overrides);
+        loadedOverrides = true;
       }
     } catch (err) {
       console.warn("Could not read ex-collaborators from personal_config:", err);
     }
+  }
+
+  if (!loadedOverrides && !inWorkers) {
+    try {
+      const supabase = await createClient();
+      const { data } = await supabase
+        .from("personal_config")
+        .select("data")
+        .eq("key", "main_config")
+        .limit(1)
+        .maybeSingle();
+      collectExFromOverrides(data?.data?.overrides);
+    } catch {}
   }
 
   // Respaldo secundario desde advisor-config.json local
@@ -60,33 +99,45 @@ async function fetchActiveAdvisors(): Promise<string[]> {
     const configPath = path.join(process.cwd(), "data", "advisor-config.json");
     const raw = await fs.readFile(configPath, "utf-8");
     const parsed = JSON.parse(raw);
-    const overrides = parsed?.overrides || {};
-    for (const [k, v] of Object.entries(overrides as Record<string, any>)) {
-      if (v?.status === "ex" || v?.isExCollaborator === true) {
-        exSet.add(k.toLowerCase().trim());
-      }
-    }
+    collectExFromOverrides(parsed?.overrides);
   } catch (err) {
     // Si no se puede leer el archivo, se continúa
   }
 
-  // 2. Intentar consultar PostgreSQL asesores_config donde activo = true
+  const filterActiveNames = (rows: Array<{ nombre: string }>) =>
+    rows
+      .map((r) => (r.nombre || "").trim())
+      .filter((n) => {
+        if (!n) return false;
+        const lower = n.toLowerCase();
+        if (lower === "planificación" || lower === "planificacion") return false;
+        if (exSet.has(lower)) return false;
+        return true;
+      });
+
+  // 2. Consultar asesores activos (Supabase primero en Workers)
+  if (inWorkers) {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("asesores_config")
+        .select("nombre")
+        .eq("activo", true)
+        .order("nombre", { ascending: true });
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const activeList = filterActiveNames(data);
+        if (activeList.length > 0) return activeList;
+      }
+    } catch {}
+  }
+
   if (isDatabaseConfigured()) {
     try {
       const rows = await query<{ nombre: string }>(
         "SELECT nombre FROM public.asesores_config WHERE activo = true ORDER BY nombre ASC"
       );
       if (rows && rows.length > 0) {
-        const activeList = rows
-          .map((r) => r.nombre.trim())
-          .filter((n) => {
-            if (!n) return false;
-            const lower = n.toLowerCase();
-            if (lower === "planificación" || lower === "planificacion") return false;
-            if (exSet.has(lower)) return false;
-            return true;
-          });
-
+        const activeList = filterActiveNames(rows);
         if (activeList.length > 0) {
           return activeList;
         }
@@ -94,6 +145,21 @@ async function fetchActiveAdvisors(): Promise<string[]> {
     } catch (pgErr) {
       console.warn("Could not query active advisors from PostgreSQL:", pgErr);
     }
+  }
+
+  if (!inWorkers) {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("asesores_config")
+        .select("nombre")
+        .eq("activo", true)
+        .order("nombre", { ascending: true });
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const activeList = filterActiveNames(data);
+        if (activeList.length > 0) return activeList;
+      }
+    } catch {}
   }
 
   // 3. Respaldo curado de asesores activos actuales (excluyendo a Yeilis Puentes y otros ex-colaboradores)
@@ -227,7 +293,44 @@ export async function getPlanningMetadata(forceRefresh = false): Promise<Plannin
  * Fetch all existing planning records from Supabase (fast cache/store) or fallback to sheet 'Data'
  */
 export async function getPlanningSheetRecords(): Promise<PlanningSheetRecord[]> {
-  // 1. Consultar primero en Supabase si está disponible para respuesta ultra-rápida
+  const inWorkers = isCloudflareWorkers();
+
+  // 1a. En Cloudflare Workers consultar Supabase HTTPS primero
+  if (inWorkers) {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("planificacion_jornadas")
+        .select("*")
+        .order("fecha", { ascending: true })
+        .order("id", { ascending: true });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data.map((r: any, i: number) => {
+          const isoFecha = typeof r.fecha === "string" ? r.fecha.slice(0, 10) : toIsoDateString(r.fecha);
+          return {
+            id: String(r.id),
+            sheetRowIndex: r.sheet_row_index || i + 2,
+            mes: r.mes || "NOVIEMBRE",
+            fecha: toSheetDateFormat(isoFecha),
+            isoFecha,
+            asesor: r.asesor,
+            estado: r.estado || "",
+            municipio: r.municipio || "",
+            parroquia: r.parroquia || "",
+            sector: r.sector || "",
+            tipo_actividad: r.tipo_actividad || "Recorrido con Instaladores",
+            estatus: r.estatus || "Planificado",
+            final: r.formula_final || "",
+          };
+        });
+      }
+    } catch (err: any) {
+      console.warn("Aviso al consultar planificacion_jornadas en Supabase REST:", err.message);
+    }
+  }
+
+  // 1b. Consultar en PostgreSQL nativo si está disponible
   if (isDatabaseConfigured()) {
     try {
       const rows = await query<any>(`

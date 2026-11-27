@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { query, queryRow } from "@/lib/db";
+import { createClient } from "@/lib/supabase/server";
+import { isCloudflareWorkers } from "@/lib/runtime-env";
 import {
   AdvisorOverridesMap,
   TechnicianOverridesMap,
@@ -53,7 +55,7 @@ async function readConfigLocal(): Promise<StoredConfig> {
 }
 
 async function writeConfigLocal(config: StoredConfig): Promise<boolean> {
-  if (process.env.VERCEL) return true;
+  if (process.env.VERCEL || isCloudflareWorkers()) return true;
   try {
     await ensureConfigDirectory();
     await fs.writeFile(CONFIG_FILE_PATH, JSON.stringify(config, null, 2), "utf-8");
@@ -64,51 +66,109 @@ async function writeConfigLocal(config: StoredConfig): Promise<boolean> {
   }
 }
 
-async function readConfig(): Promise<StoredConfig> {
-  // 1. Try Native PostgreSQL First
+function normalizeStoredConfig(parsed: any): StoredConfig {
+  return {
+    overrides: parsed?.overrides || {},
+    aliases: parsed?.aliases || {},
+    technicianOverrides: parsed?.technicianOverrides || {},
+    technicianAliases: parsed?.technicianAliases || {},
+  };
+}
+
+async function readConfigFromPostgres(): Promise<StoredConfig | null> {
   try {
     const row = await queryRow<{ data: any }>(
       "SELECT data FROM public.personal_config WHERE key = 'main_config' LIMIT 1"
     );
     if (row && row.data) {
-      const parsed = row.data;
-      const config: StoredConfig = {
-        overrides: parsed.overrides || {},
-        aliases: parsed.aliases || {},
-        technicianOverrides: parsed.technicianOverrides || {},
-        technicianAliases: parsed.technicianAliases || {},
-      };
-      // Keep local file in sync
-      writeConfigLocal(config).catch(() => {});
-      return config;
+      return normalizeStoredConfig(row.data);
     }
-  } catch (pgErr) {}
+  } catch {}
+  return null;
+}
 
-  // 2. Fallback to local
+async function readConfigFromSupabase(): Promise<StoredConfig | null> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("personal_config")
+      .select("data")
+      .eq("key", "main_config")
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data?.data) {
+      return normalizeStoredConfig(data.data);
+    }
+  } catch {}
+  return null;
+}
+
+async function readConfig(): Promise<StoredConfig> {
+  const fromPrimary = isCloudflareWorkers()
+    ? (await readConfigFromSupabase()) || (await readConfigFromPostgres())
+    : (await readConfigFromPostgres()) || (await readConfigFromSupabase());
+
+  if (fromPrimary) {
+    writeConfigLocal(fromPrimary).catch(() => {});
+    return fromPrimary;
+  }
+
   return readConfigLocal();
 }
 
 async function writeConfig(config: StoredConfig): Promise<boolean> {
   let pgSuccess = false;
-  // 1. PostgreSQL
-  try {
-    await query(
-      `INSERT INTO public.personal_config (key, data, updated_at, updated_by)
-       VALUES ('main_config', $1, NOW(), 'admin')
-       ON CONFLICT (key) DO UPDATE SET
-         data = EXCLUDED.data,
-         updated_at = NOW(),
-         updated_by = EXCLUDED.updated_by`,
-      [JSON.stringify(config)]
-    );
-    pgSuccess = true;
-  } catch (pgErr) {
-    console.warn("Postgres writeConfig warning:", pgErr);
+  let supaSuccess = false;
+  const inWorkers = isCloudflareWorkers();
+
+  if (!inWorkers) {
+    try {
+      await query(
+        `INSERT INTO public.personal_config (key, data, updated_at, updated_by)
+         VALUES ('main_config', $1, NOW(), 'admin')
+         ON CONFLICT (key) DO UPDATE SET
+           data = EXCLUDED.data,
+           updated_at = NOW(),
+           updated_by = EXCLUDED.updated_by`,
+        [JSON.stringify(config)]
+      );
+      pgSuccess = true;
+    } catch (pgErr) {
+      console.warn("Postgres writeConfig warning:", pgErr);
+    }
   }
 
-  // 2. Local mirror
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.from("personal_config").upsert({
+      key: "main_config",
+      data: config,
+      updated_at: new Date().toISOString(),
+      updated_by: "admin",
+    });
+    if (!error) supaSuccess = true;
+  } catch (supaErr) {
+    console.warn("Supabase writeConfig warning:", supaErr);
+  }
+
+  if (inWorkers && !supaSuccess) {
+    try {
+      await query(
+        `INSERT INTO public.personal_config (key, data, updated_at, updated_by)
+         VALUES ('main_config', $1, NOW(), 'admin')
+         ON CONFLICT (key) DO UPDATE SET
+           data = EXCLUDED.data,
+           updated_at = NOW(),
+           updated_by = EXCLUDED.updated_by`,
+        [JSON.stringify(config)]
+      );
+      pgSuccess = true;
+    } catch {}
+  }
+
   const localSuccess = await writeConfigLocal(config);
-  return pgSuccess || localSuccess;
+  return pgSuccess || supaSuccess || localSuccess;
 }
 
 export const dynamic = "force-dynamic";
@@ -161,15 +221,24 @@ export async function POST(request: Request) {
     // Sincronizar estado en public.asesores_config para que el planificador y reportes reflejen cambios al instante
     try {
       if (overrides && typeof overrides === "object") {
+        const supabase = await createClient();
         for (const [name, val] of Object.entries(overrides as Record<string, any>)) {
           if (!name || !name.trim()) continue;
           const isEx = val?.status === "ex" || val?.isExCollaborator === true;
-          await query(
-            `UPDATE public.asesores_config 
-             SET activo = $1, updated_at = NOW() 
-             WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($2))`,
-            [!isEx, name.trim()]
-          );
+          const cleanName = name.trim();
+          await supabase
+            .from("asesores_config")
+            .update({ activo: !isEx, updated_at: new Date().toISOString() })
+            .ilike("nombre", cleanName);
+
+          if (!isCloudflareWorkers()) {
+            await query(
+              `UPDATE public.asesores_config 
+               SET activo = $1, updated_at = NOW() 
+               WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($2))`,
+              [!isEx, cleanName]
+            );
+          }
         }
       }
     } catch (syncErr) {

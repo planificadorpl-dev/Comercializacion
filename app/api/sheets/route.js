@@ -4,6 +4,7 @@ import { parseSheetData, buildPivotTable, computeStats } from "@/app/lib/dataPro
 import { getSheetsClient } from "@/app/lib/googleAuth";
 import { query } from "@/lib/db";
 import { runSheetsSync } from "@/lib/sheets-sync-service";
+import { getRuntimeEnv, isCloudflareWorkers } from "@/lib/runtime-env";
 
 // In-memory cache for responses (TTL 15 minutes)
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -15,7 +16,7 @@ export function clearSheetsCache() {
 
 function sendOptimizedResponse(request, payload, fromCache = false, preGzipped = null) {
   const acceptEncoding = request.headers.get("accept-encoding") || "";
-  const supportsGzip = acceptEncoding.includes("gzip");
+  const supportsGzip = !isCloudflareWorkers() && acceptEncoding.includes("gzip");
   const finalPayload = fromCache ? { ...payload, fromCache: true } : payload;
 
   if (supportsGzip) {
@@ -82,7 +83,7 @@ export async function GET(request) {
     const sheetName = searchParams.get("sheetName") || "DATA LIMPIA";
     const confSheet = searchParams.get("confSheet") || "";
     const fullMatrix = searchParams.get("fullMatrix") === "true";
-    const apiKey = searchParams.get("apiKey") || process.env.GOOGLE_API_KEY;
+    const apiKey = searchParams.get("apiKey") || getRuntimeEnv("GOOGLE_API_KEY");
     const forceRefresh = searchParams.get("refresh") === "true";
 
     const now = Date.now();
@@ -197,7 +198,9 @@ export async function GET(request) {
       fetchedAt: new Date().toISOString(),
     };
 
-    const gzippedBuf = zlib.gzipSync(Buffer.from(JSON.stringify(responsePayload)));
+    const gzippedBuf = isCloudflareWorkers()
+      ? null
+      : zlib.gzipSync(Buffer.from(JSON.stringify(responsePayload)));
 
     sheetsMemoryCache.set(cacheKey, {
       timestamp: now,

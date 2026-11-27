@@ -182,6 +182,7 @@ function createSheetsRestClient(credentials) {
       }
 
       const text = await res.text();
+      /** @type {any} */
       let data = {};
       if (text) {
         try {
@@ -193,6 +194,7 @@ function createSheetsRestClient(credentials) {
 
       if (!res.ok) {
         const apiMessage = data?.error?.message || text || `HTTP ${res.status}`;
+        /** @type {any} */
         const err = new Error(apiMessage);
         err.status = res.status;
         err.response = { status: res.status, data };
@@ -205,18 +207,24 @@ function createSheetsRestClient(credentials) {
 
   return {
     spreadsheets: {
-      get({ spreadsheetId, fields, ranges, includeGridData }) {
+      /** @param {Record<string, any>} params */
+      get(params = {}) {
+        const { spreadsheetId, fields, ranges, includeGridData } = params;
         return request('GET', `/${encodeURIComponent(spreadsheetId)}`, {
           query: { fields, ranges, includeGridData },
         });
       },
-      batchUpdate({ spreadsheetId, requestBody, resource }) {
+      /** @param {Record<string, any>} params */
+      batchUpdate(params = {}) {
+        const { spreadsheetId, requestBody, resource } = params;
         return request('POST', `/${encodeURIComponent(spreadsheetId)}:batchUpdate`, {
           body: requestBody ?? resource ?? {},
         });
       },
       values: {
-        get({ spreadsheetId, range, majorDimension, valueRenderOption, dateTimeRenderOption }) {
+        /** @param {Record<string, any>} params */
+        get(params = {}) {
+          const { spreadsheetId, range, majorDimension, valueRenderOption, dateTimeRenderOption } = params;
           return request(
             'GET',
             `/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`,
@@ -225,21 +233,25 @@ function createSheetsRestClient(credentials) {
             }
           );
         },
-        batchGet({ spreadsheetId, ranges, majorDimension, valueRenderOption, dateTimeRenderOption }) {
+        /** @param {Record<string, any>} params */
+        batchGet(params = {}) {
+          const { spreadsheetId, ranges, majorDimension, valueRenderOption, dateTimeRenderOption } = params;
           return request('GET', `/${encodeURIComponent(spreadsheetId)}/values:batchGet`, {
             query: { ranges, majorDimension, valueRenderOption, dateTimeRenderOption },
           });
         },
-        update({
-          spreadsheetId,
-          range,
-          valueInputOption,
-          includeValuesInResponse,
-          responseValueRenderOption,
-          responseDateTimeRenderOption,
-          requestBody,
-          resource,
-        }) {
+        /** @param {Record<string, any>} params */
+        update(params = {}) {
+          const {
+            spreadsheetId,
+            range,
+            valueInputOption,
+            includeValuesInResponse,
+            responseValueRenderOption,
+            responseDateTimeRenderOption,
+            requestBody,
+            resource,
+          } = params;
           return request(
             'PUT',
             `/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`,
@@ -254,17 +266,19 @@ function createSheetsRestClient(credentials) {
             }
           );
         },
-        append({
-          spreadsheetId,
-          range,
-          valueInputOption,
-          insertDataOption,
-          includeValuesInResponse,
-          responseValueRenderOption,
-          responseDateTimeRenderOption,
-          requestBody,
-          resource,
-        }) {
+        /** @param {Record<string, any>} params */
+        append(params = {}) {
+          const {
+            spreadsheetId,
+            range,
+            valueInputOption,
+            insertDataOption,
+            includeValuesInResponse,
+            responseValueRenderOption,
+            responseDateTimeRenderOption,
+            requestBody,
+            resource,
+          } = params;
           return request(
             'POST',
             `/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}:append`,
@@ -280,7 +294,9 @@ function createSheetsRestClient(credentials) {
             }
           );
         },
-        clear({ spreadsheetId, range, requestBody, resource }) {
+        /** @param {Record<string, any>} params */
+        clear(params = {}) {
+          const { spreadsheetId, range, requestBody, resource } = params;
           return request(
             'POST',
             `/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}:clear`,
@@ -289,12 +305,16 @@ function createSheetsRestClient(credentials) {
             }
           );
         },
-        batchUpdate({ spreadsheetId, requestBody, resource }) {
+        /** @param {Record<string, any>} params */
+        batchUpdate(params = {}) {
+          const { spreadsheetId, requestBody, resource } = params;
           return request('POST', `/${encodeURIComponent(spreadsheetId)}/values:batchUpdate`, {
             body: requestBody ?? resource ?? {},
           });
         },
-        batchClear({ spreadsheetId, requestBody, resource }) {
+        /** @param {Record<string, any>} params */
+        batchClear(params = {}) {
+          const { spreadsheetId, requestBody, resource } = params;
           return request('POST', `/${encodeURIComponent(spreadsheetId)}/values:batchClear`, {
             body: requestBody ?? resource ?? {},
           });
